@@ -70,3 +70,45 @@
 
 [first_voxel_engine](https://github.com/TanTanDev/first_voxel_engine)
 - latest not compiling
+
+
+## Prototype
+
+I want to know how the many methods of rendering a voxel grid compare.
+The crate binary will implement each method and render the same voxels.
+
+I think the target would be have a render distance of a sphere of 128 blocks of radius.
+This is 8784522 ~= 9 million blocks.
+
+For a broad comparison, Minecraft beta at 8 chunks render distance would be ~= 8 million.
+``` python
+view_distance_chunks = 8
+side_chunks = view_distance_chunks * 2
+visible_area_chunks = side_chunks*side_chunks
+blocks_in_a_chunk = 16*16*128 # = 32768
+visible_blocks = blocks_in_a_chunk * visible_area_chunks # = 8388608 ~= 8 million
+```
+At view distance of 4 chunks there would be 2097152 ~= 2 million blocks.
+
+### Naive method
+
+Render each cube as its own mesh.
+
+### Benchmark results
+
+The voxels to be rendered are:
+1. filled cube 16x16x16 => 4096 blocks
+2. filled cube 32x32x32 => 32768 blocks
+3. filled cube 64x64x64 => 262144 blocks
+4. filled cube 128x128x128 => 2097152 blocks ~= 2 million
+5. filled cube 256x256x256 => 16777216 blocks ~= 16 million
+
+Current results:
+- naive: 
+    1. 9.555991ms
+    2. 15.248357ms
+    3. 49.935586ms
+    4. 501.284233ms
+    5. gpu i32 overflow
+
+Naive method is way too slow.
