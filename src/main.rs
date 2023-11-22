@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use bevy::{
     app::AppExit,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
@@ -9,9 +7,8 @@ use bevy::{
 
 use bevy_flycam::prelude::*;
 
-const WIDTH: i32 = 64;
-const HEIGHT: i32 = 64;
-const DEPTH: i32 = 64;
+mod instanced_material;
+use instanced_material::*;
 
 fn main() {
     App::new()
@@ -25,8 +22,9 @@ fn main() {
             }),
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
+            NoCameraPlayerPlugin,
+            InstancedMaterialPlugin,
         ))
-        .add_plugins(NoCameraPlayerPlugin)
         .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
         .add_state::<FlowState>()
         .add_systems(Startup, setup)
@@ -61,7 +59,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Camera3dBundle {
             transform: Transform {
-                translation: Vec3::new(16.0, 16.0, 128.0),
+                translation: Vec3::new(60.0, 16.0, 312.0),
                 ..Default::default()
             },
             ..default()
@@ -82,6 +80,7 @@ fn setup(mut commands: Commands) {
 #[derive(Resource)]
 enum RenderMethod {
     Naive,
+    Instanced,
 }
 impl Default for RenderMethod {
     fn default() -> Self {
@@ -89,8 +88,8 @@ impl Default for RenderMethod {
     }
 }
 impl RenderMethod {
-    fn iter() -> impl IntoIterator<Item = Self> {
-        [Self::Naive].into_iter()
+    fn opts() -> impl IntoIterator<Item = Self> {
+        [Self::Naive, Self::Instanced].into_iter()
     }
 }
 
@@ -100,11 +99,11 @@ enum VoxelShape {
 }
 impl Default for VoxelShape {
     fn default() -> Self {
-        Self::FilledCuboid(IVec3::new(WIDTH, HEIGHT, DEPTH))
+        Self::opts().into_iter().next().unwrap()
     }
 }
 impl VoxelShape {
-    fn iter() -> impl IntoIterator<Item = Self> {
+    fn opts() -> impl IntoIterator<Item = Self> {
         [
             Self::FilledCuboid(IVec3::splat(16)),
             Self::FilledCuboid(IVec3::splat(32)),
@@ -113,6 +112,21 @@ impl VoxelShape {
             Self::FilledCuboid(IVec3::splat(256)),
         ]
         .into_iter()
+    }
+    fn iter(&self) -> impl Iterator<Item = IVec3> {
+        let mut vec: Vec<IVec3> = vec![];
+        match self {
+            Self::FilledCuboid(size) => {
+                for x in 0..size.x {
+                    for y in 0..size.y {
+                        for z in 0..size.z {
+                            vec.push(IVec3::new(x, y, z));
+                        }
+                    }
+                }
+            }
+        }
+        vec.into_iter()
     }
 }
 
@@ -135,7 +149,7 @@ fn method_selector(
     if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight) {
         return;
     }
-    for (key, m) in SELECTOR_KEYS.iter().zip(RenderMethod::iter()) {
+    for (key, m) in SELECTOR_KEYS.iter().zip(RenderMethod::opts()) {
         if keys.just_pressed(*key) {
             *method = m;
             next_state.set(FlowState::Transition);
@@ -153,7 +167,7 @@ fn voxels_selector(
         return;
     }
 
-    for (key, v) in SELECTOR_KEYS.iter().zip(VoxelShape::iter()) {
+    for (key, v) in SELECTOR_KEYS.iter().zip(VoxelShape::opts()) {
         if keys.just_pressed(*key) {
             *voxels = v;
             next_state.set(FlowState::Transition);
@@ -178,6 +192,7 @@ fn setup_bench(
 ) {
     match *method {
         RenderMethod::Naive => naive(&mut commands, &mut meshes, material_assets, shape),
+        RenderMethod::Instanced => instanced(&mut commands, &mut meshes, shape),
     }
 }
 
@@ -193,25 +208,37 @@ fn naive(
         base_color: Color::WHITE,
         ..default()
     });
-    match *shape {
-        VoxelShape::FilledCuboid(size) => {
-            for x in 0..size.x {
-                for y in 0..size.y {
-                    for z in 0..size.z {
-                        commands.spawn((
-                            PbrBundle {
-                                mesh: mesh.clone(),
-                                material: material.clone(),
-                                transform: Transform::from_xyz(x as f32, y as f32, z as f32),
-                                ..default()
-                            },
-                            BenchedMesh,
-                        ));
-                    }
-                }
-            }
-        }
+    for pos in shape.iter() {
+        commands.spawn((
+            PbrBundle {
+                mesh: mesh.clone(),
+                material: material.clone(),
+                transform: Transform::from_translation(pos.as_vec3()),
+                ..default()
+            },
+            BenchedMesh,
+        ));
     }
+}
+
+fn instanced(commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, shape: Res<VoxelShape>) {
+    let vec: Vec<InstanceData> = shape
+        .iter()
+        .map(|pos| InstanceData {
+            position: pos.as_vec3() * Vec3::new(1., 1., 1.),
+            scale: 1.0,
+            color: Color::hsla(1.0, 0.0, 0.0, 1.0).as_rgba_f32(),
+        })
+        .collect();
+    let instances = InstanceMaterialData(vec);
+    commands.spawn((
+        meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        SpatialBundle::INHERITED_IDENTITY,
+        instances,
+        // If the camera doesn't see (0, 0, 0) all instances would be called.
+        bevy::render::view::NoFrustumCulling,
+        BenchedMesh,
+    ));
 }
 
 fn teardown_bench(mut commands: Commands, query: Query<(Entity, &BenchedMesh)>) {

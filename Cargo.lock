@@ -3308,6 +3308,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_flycam",
+ "bytemuck",
 ]
 
 [[package]]

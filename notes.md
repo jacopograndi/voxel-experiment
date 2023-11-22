@@ -89,10 +89,16 @@ blocks_in_a_chunk = 16*16*128 # = 32768
 visible_blocks = blocks_in_a_chunk * visible_area_chunks # = 8388608 ~= 8 million
 ```
 At view distance of 4 chunks there would be 2097152 ~= 2 million blocks.
+And Minecraft presumably does it every tick: 2 million / 50ms = 40 million/s.
 
 ### Naive method
 
 Render each cube as its own mesh.
+
+### Instanced method
+
+Taken from the bevy shader_instanced example.
+Render a material which passes to the gpu the positions of the voxels.
 
 ### Benchmark results
 
@@ -111,4 +117,11 @@ Current results:
     4. 501.284233ms
     5. gpu i32 overflow
 
-Naive method is way too slow.
+- instanced:
+    1. 2.437907ms
+    2. 2.974637ms
+    3. 5.860903ms
+    4. 45.032350ms
+    5. 359.028827ms
+
+Naive and instanced methods are way too slow.
