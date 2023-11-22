@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.0"
 bevy_flycam = "0.12.0"
+block-mesh = "0.2.0"
 bytemuck = "1.14.0"

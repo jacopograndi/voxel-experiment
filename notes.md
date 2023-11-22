@@ -100,6 +100,10 @@ Render each cube as its own mesh.
 Taken from the bevy shader_instanced example.
 Render a material which passes to the gpu the positions of the voxels.
 
+### Chunked block-mesh method
+
+Divide the voxel grid in chunks and generate a mesh for each chunk using block-mesh.
+
 ### Benchmark results
 
 The voxels to be rendered are:
