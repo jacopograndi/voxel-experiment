@@ -14,6 +14,7 @@ use bevy_flycam::prelude::*;
 
 mod instanced_material;
 use block_mesh::{
+    greedy_quads,
     ndshape::{ConstShape, ConstShape3u32},
     visible_block_faces,
 };
@@ -90,7 +91,7 @@ fn setup(mut commands: Commands) {
 enum RenderMethod {
     Naive,
     Instanced,
-    ChunkedBlockMesh,
+    ChunkedBlockMesh { greedy: bool },
 }
 impl Default for RenderMethod {
     fn default() -> Self {
@@ -99,13 +100,20 @@ impl Default for RenderMethod {
 }
 impl RenderMethod {
     fn opts() -> impl IntoIterator<Item = Self> {
-        [Self::Naive, Self::Instanced, Self::ChunkedBlockMesh].into_iter()
+        [
+            Self::Naive,
+            Self::Instanced,
+            Self::ChunkedBlockMesh { greedy: false },
+            Self::ChunkedBlockMesh { greedy: true },
+        ]
+        .into_iter()
     }
 }
 
 #[derive(Resource)]
 enum VoxelShape {
     FilledCuboid(IVec3),
+    Sphere(u32),
 }
 impl Default for VoxelShape {
     fn default() -> Self {
@@ -120,6 +128,9 @@ impl VoxelShape {
             Self::FilledCuboid(IVec3::splat(64)),
             Self::FilledCuboid(IVec3::splat(128)),
             Self::FilledCuboid(IVec3::splat(256)),
+            Self::Sphere(8),
+            Self::Sphere(32),
+            Self::Sphere(128),
         ]
         .into_iter()
     }
@@ -131,6 +142,22 @@ impl VoxelShape {
                     for y in 0..size.y {
                         for z in 0..size.z {
                             vec.push(IVec3::new(x, y, z));
+                        }
+                    }
+                }
+            }
+            Self::Sphere(radius) => {
+                let size = IVec3::splat(*radius as i32 * 2);
+                let center = Vec3::splat(*radius as f32);
+                let rad2 = *radius as f32 * *radius as f32;
+                for x in 0..size.x {
+                    for y in 0..size.y {
+                        for z in 0..size.z {
+                            if (Vec3::new(x as f32, y as f32, z as f32) - center).length_squared()
+                                < rad2
+                            {
+                                vec.push(IVec3::new(x, y, z));
+                            }
                         }
                     }
                 }
@@ -203,8 +230,8 @@ fn setup_bench(
     match *method {
         RenderMethod::Naive => naive(&mut commands, &mut meshes, material_assets, shape),
         RenderMethod::Instanced => instanced(&mut commands, &mut meshes, shape),
-        RenderMethod::ChunkedBlockMesh => {
-            chunked_block_mesh(&mut commands, &mut meshes, material_assets, shape)
+        RenderMethod::ChunkedBlockMesh { greedy } => {
+            chunked_block_mesh(&mut commands, &mut meshes, material_assets, shape, greedy)
         }
     }
 }
@@ -289,6 +316,7 @@ fn chunked_block_mesh(
     meshes: &mut ResMut<Assets<Mesh>>,
     material_assets: ResMut<Assets<StandardMaterial>>,
     shape: Res<VoxelShape>,
+    greedy: bool,
 ) {
     let material_assets = material_assets.into_inner();
     let material = material_assets.add(StandardMaterial {
@@ -304,7 +332,7 @@ fn chunked_block_mesh(
     let mut chunks = HashMap::<IVec3, [BoolVoxel; CHUNK_VOLUME as usize]>::new();
     for pos in shape.iter() {
         let chunk_pos = pos / 16;
-        let mut chunk = chunks
+        let chunk = chunks
             .entry(chunk_pos)
             .or_insert([EMPTY; CHUNK_VOLUME as usize]);
         let chunk_offset = pos % 16;
@@ -330,42 +358,81 @@ fn chunked_block_mesh(
 
         let faces = block_mesh::RIGHT_HANDED_Y_UP_CONFIG.faces;
 
-        let mut buffer = block_mesh::UnitQuadBuffer::new();
-        visible_block_faces(
-            &voxels,
-            &SampleShape {},
-            [0; 3],
-            [CHUNK_SIDE_PADDED - 1; 3],
-            &faces,
-            &mut buffer,
-        );
-        let num_indices = buffer.num_quads() * 6;
-        let num_vertices = buffer.num_quads() * 4;
-        let mut indices = Vec::with_capacity(num_indices);
-        let mut positions = Vec::with_capacity(num_vertices);
-        let mut normals = Vec::with_capacity(num_vertices);
-        for (group, face) in buffer.groups.into_iter().zip(faces.into_iter()) {
-            for quad in group.into_iter() {
-                indices.extend_from_slice(&face.quad_mesh_indices(positions.len() as u32));
-                positions.extend_from_slice(&face.quad_mesh_positions(&quad.into(), 1.0));
-                normals.extend_from_slice(&face.quad_mesh_normals());
+        let render_mesh = if greedy {
+            let mut buffer = block_mesh::GreedyQuadsBuffer::new(voxels.len());
+            greedy_quads(
+                &voxels,
+                &SampleShape {},
+                [0; 3],
+                [CHUNK_SIDE_PADDED - 1; 3],
+                &faces,
+                &mut buffer,
+            );
+            let num_indices = buffer.quads.num_quads() * 6;
+            let num_vertices = buffer.quads.num_quads() * 4;
+            let mut indices = Vec::with_capacity(num_indices);
+            let mut positions = Vec::with_capacity(num_vertices);
+            let mut normals = Vec::with_capacity(num_vertices);
+            for (group, face) in buffer.quads.groups.into_iter().zip(faces.into_iter()) {
+                for quad in group.into_iter() {
+                    indices.extend_from_slice(&face.quad_mesh_indices(positions.len() as u32));
+                    positions.extend_from_slice(&face.quad_mesh_positions(&quad.into(), 1.0));
+                    normals.extend_from_slice(&face.quad_mesh_normals());
+                }
             }
-        }
-
-        let mut render_mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        render_mesh.insert_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            VertexAttributeValues::Float32x3(positions),
-        );
-        render_mesh.insert_attribute(
-            Mesh::ATTRIBUTE_NORMAL,
-            VertexAttributeValues::Float32x3(normals),
-        );
-        render_mesh.insert_attribute(
-            Mesh::ATTRIBUTE_UV_0,
-            VertexAttributeValues::Float32x2(vec![[0.0; 2]; num_vertices]),
-        );
-        render_mesh.set_indices(Some(Indices::U32(indices.clone())));
+            let mut render_mesh = Mesh::new(PrimitiveTopology::TriangleList);
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                VertexAttributeValues::Float32x3(positions),
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_NORMAL,
+                VertexAttributeValues::Float32x3(normals),
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_UV_0,
+                VertexAttributeValues::Float32x2(vec![[0.0; 2]; num_vertices]),
+            );
+            render_mesh.set_indices(Some(Indices::U32(indices.clone())));
+            render_mesh
+        } else {
+            let mut buffer = block_mesh::UnitQuadBuffer::new();
+            visible_block_faces(
+                &voxels,
+                &SampleShape {},
+                [0; 3],
+                [CHUNK_SIDE_PADDED - 1; 3],
+                &faces,
+                &mut buffer,
+            );
+            let num_indices = buffer.num_quads() * 6;
+            let num_vertices = buffer.num_quads() * 4;
+            let mut indices = Vec::with_capacity(num_indices);
+            let mut positions = Vec::with_capacity(num_vertices);
+            let mut normals = Vec::with_capacity(num_vertices);
+            for (group, face) in buffer.groups.into_iter().zip(faces.into_iter()) {
+                for quad in group.into_iter() {
+                    indices.extend_from_slice(&face.quad_mesh_indices(positions.len() as u32));
+                    positions.extend_from_slice(&face.quad_mesh_positions(&quad.into(), 1.0));
+                    normals.extend_from_slice(&face.quad_mesh_normals());
+                }
+            }
+            let mut render_mesh = Mesh::new(PrimitiveTopology::TriangleList);
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                VertexAttributeValues::Float32x3(positions),
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_NORMAL,
+                VertexAttributeValues::Float32x3(normals),
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_UV_0,
+                VertexAttributeValues::Float32x2(vec![[0.0; 2]; num_vertices]),
+            );
+            render_mesh.set_indices(Some(Indices::U32(indices.clone())));
+            render_mesh
+        };
 
         // i do not understand why Vec3::splat(1.5) is needed
         let world_pos = pos.as_vec3() * Vec3::splat(CHUNK_SIDE as f32) - Vec3::splat(1.5);

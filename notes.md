@@ -128,4 +128,12 @@ Current results:
     4. 45.032350ms
     5. 359.028827ms
 
+- block-mesh
+    1. 9.870833ms
+    2. 9.756710ms
+    3. 9.875754ms
+    4. 10.626293ms
+    5. 16.542901ms
+
 Naive and instanced methods are way too slow.
+Block-mesh is very fast.
