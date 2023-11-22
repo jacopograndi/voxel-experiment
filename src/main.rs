@@ -1,15 +1,18 @@
 use bevy::{
-    app::AppExit,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
     render::{
-        mesh::{Indices, MeshVertexAttribute, VertexAttributeValues},
+        mesh::{Indices, VertexAttributeValues},
         render_resource::PrimitiveTopology,
     },
     utils::HashMap,
     window::{PresentMode, WindowPlugin},
 };
 
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_flycam::prelude::*;
 
 mod instanced_material;
@@ -34,6 +37,7 @@ fn main() {
             LogDiagnosticsPlugin::default(),
             NoCameraPlayerPlugin,
             InstancedMaterialPlugin,
+            EguiPlugin,
         ))
         .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
         .add_state::<FlowState>()
@@ -41,17 +45,10 @@ fn main() {
         .add_systems(Startup, start_benchmark)
         .add_systems(OnEnter(FlowState::Benchmark), setup_bench)
         .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
-        .add_systems(Update, exit)
         .add_systems(Update, print_mesh_count)
-        .add_systems(Update, (method_selector, voxels_selector))
+        .add_systems(Update, ui)
         .add_systems(OnEnter(FlowState::Transition), start_benchmark)
         .run();
-}
-
-fn exit(keys: Res<Input<KeyCode>>, mut exit: EventWriter<AppExit>) {
-    if keys.pressed(KeyCode::Escape) {
-        exit.send(AppExit);
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
@@ -60,6 +57,39 @@ enum FlowState {
     Base,
     Benchmark,
     Transition,
+}
+
+fn ui(
+    mut contexts: EguiContexts,
+    mut method: ResMut<RenderMethod>,
+    mut shape: ResMut<VoxelShape>,
+    mut next_state: ResMut<NextState<FlowState>>,
+) {
+    egui::SidePanel::new(egui::panel::Side::Right, "Benchmark").show(contexts.ctx_mut(), |ui| {
+        ui.separator();
+        ui.label("CHOOSE RENDER METHOD");
+        for m in RenderMethod::opts() {
+            let sel = if m == *method { "[x]" } else { "[]" };
+            if ui.button(format!("{sel} {:?}", m)).clicked() {
+                *method = m.clone();
+                next_state.set(FlowState::Transition);
+            }
+        }
+        ui.separator();
+        ui.label("CHOOSE VOXEL SHAPE");
+        for s in VoxelShape::opts() {
+            let sel = if s == *shape { "[x]" } else { "[]" };
+            if ui.button(format!("{sel} {:?}", s)).clicked() {
+                *shape = s.clone();
+                next_state.set(FlowState::Transition);
+            }
+        }
+        ui.separator();
+        ui.label("COMMANDS");
+        ui.label("Press esc to use the mouse");
+        ui.label("WASD to move in xz plane");
+        ui.label("EQ to move along y axis");
+    });
 }
 
 fn setup(mut commands: Commands) {
@@ -87,7 +117,7 @@ fn setup(mut commands: Commands) {
     });
 }
 
-#[derive(Resource)]
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
 enum RenderMethod {
     Naive,
     Instanced,
@@ -110,10 +140,11 @@ impl RenderMethod {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
 enum VoxelShape {
     FilledCuboid(IVec3),
     Sphere(u32),
+    Random { size: IVec3, seed: u64 },
 }
 impl Default for VoxelShape {
     fn default() -> Self {
@@ -131,6 +162,10 @@ impl VoxelShape {
             Self::Sphere(8),
             Self::Sphere(32),
             Self::Sphere(128),
+            Self::Random {
+                size: IVec3::splat(256),
+                seed: 69,
+            },
         ]
         .into_iter()
     }
@@ -162,54 +197,20 @@ impl VoxelShape {
                     }
                 }
             }
+            Self::Random { size, seed } => {
+                let mut rng = ChaCha8Rng::seed_from_u64(*seed);
+                for x in 0..size.x {
+                    for y in 0..size.y {
+                        for z in 0..size.z {
+                            if rng.gen_bool(0.5) {
+                                vec.push(IVec3::new(x, y, z))
+                            }
+                        }
+                    }
+                }
+            }
         }
         vec.into_iter()
-    }
-}
-
-const SELECTOR_KEYS: [KeyCode; 9] = [
-    KeyCode::Key1,
-    KeyCode::Key2,
-    KeyCode::Key3,
-    KeyCode::Key4,
-    KeyCode::Key5,
-    KeyCode::Key6,
-    KeyCode::Key7,
-    KeyCode::Key8,
-    KeyCode::Key9,
-];
-fn method_selector(
-    keys: Res<Input<KeyCode>>,
-    mut method: ResMut<RenderMethod>,
-    mut next_state: ResMut<NextState<FlowState>>,
-) {
-    if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight) {
-        return;
-    }
-    for (key, m) in SELECTOR_KEYS.iter().zip(RenderMethod::opts()) {
-        if keys.just_pressed(*key) {
-            *method = m;
-            next_state.set(FlowState::Transition);
-            return;
-        }
-    }
-}
-
-fn voxels_selector(
-    keys: Res<Input<KeyCode>>,
-    mut voxels: ResMut<VoxelShape>,
-    mut next_state: ResMut<NextState<FlowState>>,
-) {
-    if !(keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight)) {
-        return;
-    }
-
-    for (key, v) in SELECTOR_KEYS.iter().zip(VoxelShape::opts()) {
-        if keys.just_pressed(*key) {
-            *voxels = v;
-            next_state.set(FlowState::Transition);
-            return;
-        }
     }
 }
 
