@@ -11,19 +11,23 @@ use bevy::{
     window::{PresentMode, WindowPlugin},
 };
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_flycam::prelude::*;
 
-mod instanced_material;
 use block_mesh::{
     greedy_quads,
     ndshape::{ConstShape, ConstShape3u32},
     visible_block_faces,
 };
+
+mod instanced_material;
 use instanced_material::*;
+
+mod raycast;
+use raycast::*;
+
+mod voxel_shapes;
+use voxel_shapes::*;
 
 fn main() {
     App::new()
@@ -287,80 +291,6 @@ impl RenderMethod {
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq, Eq)]
-enum VoxelShape {
-    FilledCuboid(IVec3),
-    Sphere(u32),
-    Random { size: IVec3, seed: u64 },
-}
-impl Default for VoxelShape {
-    fn default() -> Self {
-        Self::opts().into_iter().next().unwrap()
-    }
-}
-impl VoxelShape {
-    fn opts() -> impl IntoIterator<Item = Self> {
-        [
-            Self::FilledCuboid(IVec3::splat(16)),
-            Self::FilledCuboid(IVec3::splat(32)),
-            Self::FilledCuboid(IVec3::splat(64)),
-            Self::FilledCuboid(IVec3::splat(128)),
-            Self::FilledCuboid(IVec3::splat(256)),
-            Self::Sphere(8),
-            Self::Sphere(32),
-            Self::Sphere(128),
-            Self::Random {
-                size: IVec3::splat(256),
-                seed: 69,
-            },
-        ]
-        .into_iter()
-    }
-    fn iter(&self) -> impl Iterator<Item = IVec3> {
-        let mut vec: Vec<IVec3> = vec![];
-        match self {
-            Self::FilledCuboid(size) => {
-                for x in 0..size.x {
-                    for y in 0..size.y {
-                        for z in 0..size.z {
-                            vec.push(IVec3::new(x, y, z));
-                        }
-                    }
-                }
-            }
-            Self::Sphere(radius) => {
-                let size = IVec3::splat(*radius as i32 * 2);
-                let center = Vec3::splat(*radius as f32);
-                let rad2 = *radius as f32 * *radius as f32;
-                for x in 0..size.x {
-                    for y in 0..size.y {
-                        for z in 0..size.z {
-                            if (Vec3::new(x as f32, y as f32, z as f32) - center).length_squared()
-                                < rad2
-                            {
-                                vec.push(IVec3::new(x, y, z));
-                            }
-                        }
-                    }
-                }
-            }
-            Self::Random { size, seed } => {
-                let mut rng = ChaCha8Rng::seed_from_u64(*seed);
-                for x in 0..size.x {
-                    for y in 0..size.y {
-                        for z in 0..size.z {
-                            if rng.gen_bool(0.5) {
-                                vec.push(IVec3::new(x, y, z))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        vec.into_iter()
-    }
-}
-
 fn start_benchmark(mut next_state: ResMut<NextState<FlowState>>) {
     next_state.set(FlowState::Benchmark);
 }
@@ -423,36 +353,6 @@ fn instanced(commands: &mut Commands, handles: Res<Handles>, shape: Res<VoxelSha
     ));
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-struct BoolVoxel(bool);
-
-impl Default for BoolVoxel {
-    fn default() -> Self {
-        EMPTY
-    }
-}
-
-const EMPTY: BoolVoxel = BoolVoxel(false);
-const FILLED: BoolVoxel = BoolVoxel(true);
-
-impl block_mesh::Voxel for BoolVoxel {
-    fn get_visibility(&self) -> block_mesh::VoxelVisibility {
-        if *self == EMPTY {
-            block_mesh::VoxelVisibility::Empty
-        } else {
-            block_mesh::VoxelVisibility::Opaque
-        }
-    }
-}
-
-impl block_mesh::MergeVoxel for BoolVoxel {
-    type MergeValue = Self;
-
-    fn merge_value(&self) -> Self::MergeValue {
-        *self
-    }
-}
-
 fn chunked_block_mesh(
     commands: &mut Commands,
     handles: Res<Handles>,
@@ -460,28 +360,12 @@ fn chunked_block_mesh(
     shape: Res<VoxelShape>,
     greedy: bool,
 ) {
-    const CHUNK_SIDE: u32 = 16;
-    const CHUNK_SIDE_PADDED: u32 = CHUNK_SIDE + 2;
-    const CHUNK_AREA: u32 = CHUNK_SIDE * CHUNK_SIDE;
-    const CHUNK_VOLUME: u32 = CHUNK_SIDE * CHUNK_SIDE * CHUNK_SIDE;
-
-    let mut chunks = HashMap::<IVec3, [BoolVoxel; CHUNK_VOLUME as usize]>::new();
-    for pos in shape.iter() {
-        let chunk_pos = pos / 16;
-        let chunk = chunks
-            .entry(chunk_pos)
-            .or_insert([EMPTY; CHUNK_VOLUME as usize]);
-        let chunk_offset = pos % 16;
-        let i = chunk_offset.x
-            + chunk_offset.y * CHUNK_SIDE as i32
-            + chunk_offset.z * CHUNK_AREA as i32;
-        chunk[i as usize] = FILLED;
-    }
+    let grid = Grid::from_vec(shape.iter().collect());
 
     type SampleShape = ConstShape3u32<CHUNK_SIDE_PADDED, CHUNK_SIDE_PADDED, CHUNK_SIDE_PADDED>;
-    for (pos, chunk) in chunks.iter() {
+    for (pos, chunk) in grid.chunks.iter() {
         let mut voxels = [EMPTY; SampleShape::SIZE as usize];
-        for (j, voxel) in chunk.iter().enumerate() {
+        for (j, voxel) in chunk.0.iter().enumerate() {
             let mut j = j as u32;
             let z = j / CHUNK_AREA;
             j -= z * CHUNK_AREA;
