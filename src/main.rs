@@ -1,4 +1,5 @@
 use bevy::{
+    asset::LoadState,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
@@ -27,13 +28,15 @@ use instanced_material::*;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    present_mode: PresentMode::AutoNoVsync,
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        present_mode: PresentMode::AutoNoVsync,
+                        ..default()
+                    }),
                     ..default()
-                }),
-                ..default()
-            }),
+                })
+                .set(ImagePlugin::default_nearest()),
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
             NoCameraPlayerPlugin,
@@ -42,13 +45,15 @@ fn main() {
             WireframePlugin,
         ))
         .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
+        .insert_resource(Handles::default())
         .add_state::<FlowState>()
-        .add_systems(Startup, setup)
-        .add_systems(Startup, start_benchmark)
+        .add_systems(Startup, load)
+        .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
+        .add_systems(OnEnter(FlowState::Base), (setup, start_benchmark))
         .add_systems(OnEnter(FlowState::Benchmark), setup_bench)
         .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
         .add_systems(Update, print_mesh_count)
-        .add_systems(Update, ui)
+        .add_systems(Update, ui.run_if(in_state(FlowState::Benchmark)))
         .add_systems(Update, wireframe)
         .add_systems(OnEnter(FlowState::Transition), start_benchmark)
         .add_event::<ToggleWireframeEvent>()
@@ -58,6 +63,7 @@ fn main() {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 enum FlowState {
     #[default]
+    Loading,
     Base,
     Benchmark,
     Transition,
@@ -145,12 +151,29 @@ fn wireframe(
 struct Handles {
     material: Handle<StandardMaterial>,
     cube: Handle<Mesh>,
+    texture_blocks: Handle<Image>,
+}
+
+fn load(mut handles: ResMut<Handles>, asset_server: Res<AssetServer>) {
+    handles.texture_blocks = asset_server.load("textures/blocks.png");
+}
+
+fn check_loading(
+    handles: Res<Handles>,
+    asset_server: Res<AssetServer>,
+    mut next_state: ResMut<NextState<FlowState>>,
+) {
+    match asset_server.get_load_state(handles.texture_blocks.clone()) {
+        Some(LoadState::Loaded) => next_state.set(FlowState::Base),
+        _ => (),
+    }
 }
 
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
+    mut handles: ResMut<Handles>,
 ) {
     commands.insert_resource(Settings::default());
     commands.insert_resource(VoxelShape::default());
@@ -175,15 +198,70 @@ fn setup(
         move_descend: KeyCode::Q,
         ..Default::default()
     });
-    let mut handles = Handles::default();
     handles.material = material_assets.add(StandardMaterial {
-        base_color: Color::rgba(0.5, 0.2, 0.0, 0.5),
         unlit: true,
-        alpha_mode: AlphaMode::Add,
+        //base_color: Color::rgba(0.5, 0.2, 0.0, 0.5),
+        //alpha_mode: AlphaMode::Add,
+        base_color_texture: Some(handles.texture_blocks.clone()),
         ..default()
     });
-    handles.cube = meshes.add(Mesh::from(shape::Cube { size: 1.0 }));
-    commands.insert_resource(handles);
+    let sp = shape::Box::new(1., 1., 1.);
+    // suppose Y-up right hand, and camera look from +z to -z
+    let vertices = &[
+        // Front
+        ([sp.min_x, sp.min_y, sp.max_z], [0., 0., 1.0], [0., 0.]),
+        ([sp.max_x, sp.min_y, sp.max_z], [0., 0., 1.0], [1.0, 0.]),
+        ([sp.max_x, sp.max_y, sp.max_z], [0., 0., 1.0], [1.0, 1.0]),
+        ([sp.min_x, sp.max_y, sp.max_z], [0., 0., 1.0], [0., 1.0]),
+        // Back
+        ([sp.min_x, sp.max_y, sp.min_z], [0., 0., -1.0], [1.0, 0.]),
+        ([sp.max_x, sp.max_y, sp.min_z], [0., 0., -1.0], [0., 0.]),
+        ([sp.max_x, sp.min_y, sp.min_z], [0., 0., -1.0], [0., 1.0]),
+        ([sp.min_x, sp.min_y, sp.min_z], [0., 0., -1.0], [1.0, 1.0]),
+        // Right
+        ([sp.max_x, sp.min_y, sp.min_z], [1.0, 0., 0.], [0., 0.]),
+        ([sp.max_x, sp.max_y, sp.min_z], [1.0, 0., 0.], [1.0, 0.]),
+        ([sp.max_x, sp.max_y, sp.max_z], [1.0, 0., 0.], [1.0, 1.0]),
+        ([sp.max_x, sp.min_y, sp.max_z], [1.0, 0., 0.], [0., 1.0]),
+        // Left
+        ([sp.min_x, sp.min_y, sp.max_z], [-1.0, 0., 0.], [1.0, 0.]),
+        ([sp.min_x, sp.max_y, sp.max_z], [-1.0, 0., 0.], [0., 0.]),
+        ([sp.min_x, sp.max_y, sp.min_z], [-1.0, 0., 0.], [0., 1.0]),
+        ([sp.min_x, sp.min_y, sp.min_z], [-1.0, 0., 0.], [1.0, 1.0]),
+        // Top
+        ([sp.max_x, sp.max_y, sp.min_z], [0., 1.0, 0.], [1.0, 0.]),
+        ([sp.min_x, sp.max_y, sp.min_z], [0., 1.0, 0.], [0., 0.]),
+        ([sp.min_x, sp.max_y, sp.max_z], [0., 1.0, 0.], [0., 1.0]),
+        ([sp.max_x, sp.max_y, sp.max_z], [0., 1.0, 0.], [1.0, 1.0]),
+        // Bottom
+        ([sp.max_x, sp.min_y, sp.max_z], [0., -1.0, 0.], [0., 0.]),
+        ([sp.min_x, sp.min_y, sp.max_z], [0., -1.0, 0.], [1.0, 0.]),
+        ([sp.min_x, sp.min_y, sp.min_z], [0., -1.0, 0.], [1.0, 1.0]),
+        ([sp.max_x, sp.min_y, sp.min_z], [0., -1.0, 0.], [0., 1.0]),
+    ];
+
+    let positions: Vec<_> = vertices.iter().map(|(p, _, _)| *p).collect();
+    let normals: Vec<_> = vertices.iter().map(|(_, n, _)| *n).collect();
+    let uvs: Vec<_> = vertices
+        .iter()
+        .map(|(_, _, uv)| [uv[0] / 16., uv[1] / 16.])
+        .collect();
+
+    let indices = Indices::U32(vec![
+        0, 1, 2, 2, 3, 0, // front
+        4, 5, 6, 6, 7, 4, // back
+        8, 9, 10, 10, 11, 8, // right
+        12, 13, 14, 14, 15, 12, // left
+        16, 17, 18, 18, 19, 16, // top
+        20, 21, 22, 22, 23, 20, // bottom
+    ]);
+
+    let mesh = Mesh::new(PrimitiveTopology::TriangleList)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_indices(Some(indices));
+    handles.cube = meshes.add(mesh);
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -486,7 +564,7 @@ fn chunked_block_mesh(
             );
             render_mesh.insert_attribute(
                 Mesh::ATTRIBUTE_UV_0,
-                VertexAttributeValues::Float32x2(vec![[0.0; 2]; num_vertices]),
+                VertexAttributeValues::Float32x2(vec![[0.0, 1.0]; num_vertices]),
             );
             render_mesh.set_indices(Some(Indices::U32(indices.clone())));
             render_mesh
