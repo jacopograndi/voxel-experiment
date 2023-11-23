@@ -1,5 +1,6 @@
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
     render::{
         mesh::{Indices, VertexAttributeValues},
@@ -38,6 +39,7 @@ fn main() {
             NoCameraPlayerPlugin,
             InstancedMaterialPlugin,
             EguiPlugin,
+            WireframePlugin,
         ))
         .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
         .add_state::<FlowState>()
@@ -47,7 +49,9 @@ fn main() {
         .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
         .add_systems(Update, print_mesh_count)
         .add_systems(Update, ui)
+        .add_systems(Update, wireframe)
         .add_systems(OnEnter(FlowState::Transition), start_benchmark)
+        .add_event::<ToggleWireframeEvent>()
         .run();
 }
 
@@ -64,13 +68,15 @@ fn ui(
     mut method: ResMut<RenderMethod>,
     mut shape: ResMut<VoxelShape>,
     mut next_state: ResMut<NextState<FlowState>>,
+    mut settings: ResMut<Settings>,
+    mut toggle_wireframe: EventWriter<ToggleWireframeEvent>,
 ) {
     egui::SidePanel::new(egui::panel::Side::Right, "Benchmark").show(contexts.ctx_mut(), |ui| {
         ui.separator();
         ui.label("CHOOSE RENDER METHOD");
         for m in RenderMethod::opts() {
-            let sel = if m == *method { "[x]" } else { "[]" };
-            if ui.button(format!("{sel} {:?}", m)).clicked() {
+            let mut sel = m == *method;
+            if ui.toggle_value(&mut sel, format!("{:?}", m)).clicked() {
                 *method = m.clone();
                 next_state.set(FlowState::Transition);
             }
@@ -78,11 +84,21 @@ fn ui(
         ui.separator();
         ui.label("CHOOSE VOXEL SHAPE");
         for s in VoxelShape::opts() {
-            let sel = if s == *shape { "[x]" } else { "[]" };
-            if ui.button(format!("{sel} {:?}", s)).clicked() {
+            let mut sel = s == *shape;
+            if ui.toggle_value(&mut sel, format!("{:?}", s)).clicked() {
                 *shape = s.clone();
                 next_state.set(FlowState::Transition);
             }
+        }
+        ui.separator();
+        ui.label("RENDER SETTINGS");
+        if ui
+            .toggle_value(&mut settings.wireframe, "wireframe")
+            .changed()
+        {
+            toggle_wireframe.send(ToggleWireframeEvent {
+                active: settings.wireframe,
+            })
         }
         ui.separator();
         ui.label("COMMANDS");
@@ -92,7 +108,51 @@ fn ui(
     });
 }
 
-fn setup(mut commands: Commands) {
+#[derive(Resource)]
+struct Settings {
+    wireframe: bool,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Self { wireframe: false }
+    }
+}
+
+#[derive(Event)]
+struct ToggleWireframeEvent {
+    active: bool,
+}
+
+fn wireframe(
+    mut commands: Commands,
+    query: Query<(Entity, &BenchedMesh)>,
+    mut event: EventReader<ToggleWireframeEvent>,
+) {
+    for event in event.read() {
+        if event.active {
+            for (ent, _) in query.iter() {
+                commands.entity(ent).insert(Wireframe);
+            }
+        } else {
+            for (ent, _) in query.iter() {
+                commands.entity(ent).remove::<Wireframe>();
+            }
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+struct Handles {
+    material: Handle<StandardMaterial>,
+    cube: Handle<Mesh>,
+}
+
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut material_assets: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.insert_resource(Settings::default());
     commands.insert_resource(VoxelShape::default());
     commands.insert_resource(RenderMethod::default());
     commands.spawn(DirectionalLightBundle { ..default() });
@@ -115,6 +175,15 @@ fn setup(mut commands: Commands) {
         move_descend: KeyCode::Q,
         ..Default::default()
     });
+    let mut handles = Handles::default();
+    handles.material = material_assets.add(StandardMaterial {
+        base_color: Color::rgba(0.5, 0.2, 0.0, 0.5),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        ..default()
+    });
+    handles.cube = meshes.add(Mesh::from(shape::Cube { size: 1.0 }));
+    commands.insert_resource(handles);
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -223,37 +292,31 @@ struct BenchedMesh;
 
 fn setup_bench(
     mut commands: Commands,
+    handles: Res<Handles>,
     mut meshes: ResMut<Assets<Mesh>>,
-    material_assets: ResMut<Assets<StandardMaterial>>,
     shape: Res<VoxelShape>,
     method: Res<RenderMethod>,
+    mut toggle_wireframe: EventWriter<ToggleWireframeEvent>,
+    settings: Res<Settings>,
 ) {
     match *method {
-        RenderMethod::Naive => naive(&mut commands, &mut meshes, material_assets, shape),
-        RenderMethod::Instanced => instanced(&mut commands, &mut meshes, shape),
+        RenderMethod::Naive => naive(&mut commands, handles, shape),
+        RenderMethod::Instanced => instanced(&mut commands, handles, shape),
         RenderMethod::ChunkedBlockMesh { greedy } => {
-            chunked_block_mesh(&mut commands, &mut meshes, material_assets, shape, greedy)
+            chunked_block_mesh(&mut commands, handles, &mut meshes, shape, greedy)
         }
     }
+    toggle_wireframe.send(ToggleWireframeEvent {
+        active: settings.wireframe,
+    });
 }
 
-fn naive(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    material_assets: ResMut<Assets<StandardMaterial>>,
-    shape: Res<VoxelShape>,
-) {
-    let mesh = meshes.add(Mesh::from(shape::Cube { size: 1.0 }));
-    let material_assets = material_assets.into_inner();
-    let material = material_assets.add(StandardMaterial {
-        base_color: Color::WHITE,
-        ..default()
-    });
+fn naive(commands: &mut Commands, handles: Res<Handles>, shape: Res<VoxelShape>) {
     for pos in shape.iter() {
         commands.spawn((
             PbrBundle {
-                mesh: mesh.clone(),
-                material: material.clone(),
+                mesh: handles.cube.clone(),
+                material: handles.material.clone(),
                 transform: Transform::from_translation(pos.as_vec3()),
                 ..default()
             },
@@ -262,7 +325,7 @@ fn naive(
     }
 }
 
-fn instanced(commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, shape: Res<VoxelShape>) {
+fn instanced(commands: &mut Commands, handles: Res<Handles>, shape: Res<VoxelShape>) {
     let vec: Vec<InstanceData> = shape
         .iter()
         .map(|pos| InstanceData {
@@ -273,7 +336,7 @@ fn instanced(commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, shape: 
         .collect();
     let instances = InstanceMaterialData(vec);
     commands.spawn((
-        meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        handles.cube.clone(),
         SpatialBundle::INHERITED_IDENTITY,
         instances,
         // If the camera doesn't see (0, 0, 0) all instances would be called.
@@ -314,17 +377,11 @@ impl block_mesh::MergeVoxel for BoolVoxel {
 
 fn chunked_block_mesh(
     commands: &mut Commands,
+    handles: Res<Handles>,
     meshes: &mut ResMut<Assets<Mesh>>,
-    material_assets: ResMut<Assets<StandardMaterial>>,
     shape: Res<VoxelShape>,
     greedy: bool,
 ) {
-    let material_assets = material_assets.into_inner();
-    let material = material_assets.add(StandardMaterial {
-        base_color: Color::WHITE,
-        ..default()
-    });
-
     const CHUNK_SIDE: u32 = 16;
     const CHUNK_SIDE_PADDED: u32 = CHUNK_SIDE + 2;
     const CHUNK_AREA: u32 = CHUNK_SIDE * CHUNK_SIDE;
@@ -441,7 +498,7 @@ fn chunked_block_mesh(
         commands.spawn((
             PbrBundle {
                 mesh: mesh_handle,
-                material: material.clone(),
+                material: handles.material.clone(),
                 transform: Transform::from_translation(world_pos),
                 ..default()
             },
