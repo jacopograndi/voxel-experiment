@@ -372,8 +372,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let hit = shoot_ray(ray, 0.0, 0u);
     var steps = hit.steps;
 
-    let mode = u32(in.uv.y * 3.0);
-    // let mode = 1u;
+    let mode = 0u;
 
     var samples = 0.0;
     if hit.hit {

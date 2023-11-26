@@ -8,7 +8,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct VoxelWorldPlugin;
 
@@ -246,8 +246,8 @@ pub struct VoxelUniforms {
 }
 
 #[derive(Resource, ExtractResource, Clone)]
-enum NewGH {
-    Some(Arc<GH>),
+pub enum NewGH {
+    Some(Arc<Mutex<GH>>),
     None,
 }
 
@@ -288,11 +288,11 @@ fn load_voxel_world(
             voxel_uniforms.levels = levels;
             voxel_uniforms.texture_size = gh.texture_size;
 
-            *new_gh = NewGH::Some(Arc::new(gh));
+            *new_gh = NewGH::Some(Arc::new(Mutex::new(gh)));
             *load_voxel_world = LoadVoxelWorld::None;
         }
         LoadVoxelWorld::None => {
-            *new_gh = NewGH::None;
+            //*new_gh = NewGH::None;
         }
     }
 }
@@ -303,7 +303,8 @@ fn load_voxel_world_prepare(
     render_queue: Res<RenderQueue>,
     new_gh: Res<NewGH>,
 ) {
-    if let NewGH::Some(gh) = new_gh.as_ref() {
+    if let NewGH::Some(newgh) = new_gh.as_ref() {
+        let gh = newgh.lock().unwrap();
         let buffer_size = gh.get_buffer_size();
 
         // grid hierarchy

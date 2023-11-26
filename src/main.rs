@@ -27,6 +27,7 @@ mod raycast;
 
 mod voxel_shapes;
 use voxel_engine::{BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle};
+use voxel_pipeline::voxel_world::NewGH;
 use voxel_shapes::*;
 
 mod voxel_engine;
@@ -63,12 +64,30 @@ fn main() {
     .add_systems(Update, print_mesh_count)
     .add_systems(Update, ui.run_if(in_state(FlowState::Benchmark)))
     .add_systems(Update, wireframe)
+    .add_systems(Update, voxel_break)
     .add_systems(OnEnter(FlowState::Transition), start_benchmark)
     .add_event::<ToggleWireframeEvent>();
 
     // bevy_mod_debugdump::print_render_graph(&mut app);
 
     app.run();
+}
+
+fn voxel_break(
+    camera_query: Query<(&Camera, &Transform)>,
+    mut new_gh: ResMut<NewGH>,
+    keys: Res<Input<KeyCode>>,
+) {
+    if let Ok((_cam, tr)) = camera_query.get_single() {
+        if let NewGH::Some(newgh) = new_gh.as_mut().clone() {
+            let mut gh = newgh.lock().unwrap();
+            for i in 0..gh.texture_data.len() / 2 {
+                if i % 10 == 0 {
+                gh.texture_data[i] = keys.pressed(KeyCode::R) as u8;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
