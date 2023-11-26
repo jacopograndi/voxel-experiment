@@ -14,11 +14,7 @@ fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> f32 {
     let mut step = IVec3::ZERO;
     let mut sidedist = Vec3::ZERO;
 
-    //olc::vf2d vRayUnitStepSize =
-    //{ sqrt(1 + (vRayDir.y / vRayDir.x) * (vRayDir.y / vRayDir.x))
-    //, sqrt(1 + (vRayDir.x / vRayDir.y) * (vRayDir.x / vRayDir.y)) };
     let deltadist = (1. / direction).abs();
-    //let deltadist = Vec3::new(f32::sqrt(1 + (direction.y / direction.x) * ()));
     if direction.x < 0. {
         step.x = -1;
         sidedist.x = (start.x - grid_pos.x as f32) * deltadist.x;
@@ -46,10 +42,6 @@ fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> f32 {
         Z,
     }
     let mut side;
-    println!(
-        "{:?}, {:?}, {:?}, {:?}",
-        grid_pos, sidedist, deltadist, direction
-    );
     for _i in 0..RAYCAST_MAX_ITERATIONS {
         if sidedist.x < sidedist.y {
             if sidedist.x < sidedist.z {
@@ -73,10 +65,6 @@ fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> f32 {
             }
         }
         if let Some(FILLED) = grid.get_at(grid_pos) {
-            println!(
-                "{:?}, {:?}, {:?}, {:?}",
-                grid_pos, sidedist, deltadist, direction
-            );
             let dist = match side {
                 Side::X => sidedist.x - deltadist.x,
                 Side::Y => sidedist.y - deltadist.y,

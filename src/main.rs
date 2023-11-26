@@ -1,5 +1,6 @@
 use bevy::{
     asset::LoadState,
+    core_pipeline::fxaa::Fxaa,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
@@ -7,7 +8,6 @@ use bevy::{
         mesh::{Indices, VertexAttributeValues},
         render_resource::PrimitiveTopology,
     },
-    utils::HashMap,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -24,44 +24,51 @@ mod instanced_material;
 use instanced_material::*;
 
 mod raycast;
-use raycast::*;
 
 mod voxel_shapes;
+use voxel_engine::{BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle};
 use voxel_shapes::*;
 
+mod voxel_engine;
+mod voxel_pipeline;
+
 fn main() {
-    App::new()
-        .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        present_mode: PresentMode::AutoNoVsync,
-                        ..default()
-                    }),
+    let mut app = App::new();
+    app.add_plugins((
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    present_mode: PresentMode::AutoNoVsync,
                     ..default()
-                })
-                .set(ImagePlugin::default_nearest()),
-            FrameTimeDiagnosticsPlugin,
-            LogDiagnosticsPlugin::default(),
-            NoCameraPlayerPlugin,
-            InstancedMaterialPlugin,
-            EguiPlugin,
-            WireframePlugin,
-        ))
-        .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
-        .insert_resource(Handles::default())
-        .add_state::<FlowState>()
-        .add_systems(Startup, load)
-        .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
-        .add_systems(OnEnter(FlowState::Base), (setup, start_benchmark))
-        .add_systems(OnEnter(FlowState::Benchmark), setup_bench)
-        .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
-        .add_systems(Update, print_mesh_count)
-        .add_systems(Update, ui.run_if(in_state(FlowState::Benchmark)))
-        .add_systems(Update, wireframe)
-        .add_systems(OnEnter(FlowState::Transition), start_benchmark)
-        .add_event::<ToggleWireframeEvent>()
-        .run();
+                }),
+                ..default()
+            })
+            .set(ImagePlugin::default_nearest()),
+        FrameTimeDiagnosticsPlugin,
+        LogDiagnosticsPlugin::default(),
+        NoCameraPlayerPlugin,
+        InstancedMaterialPlugin,
+        EguiPlugin,
+        WireframePlugin,
+        BevyVoxelEnginePlugin,
+    ))
+    .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
+    .insert_resource(Handles::default())
+    .add_state::<FlowState>()
+    .add_systems(Startup, load)
+    .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
+    .add_systems(OnEnter(FlowState::Base), (setup, start_benchmark))
+    .add_systems(OnEnter(FlowState::Benchmark), setup_bench)
+    .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
+    .add_systems(Update, print_mesh_count)
+    .add_systems(Update, ui.run_if(in_state(FlowState::Benchmark)))
+    .add_systems(Update, wireframe)
+    .add_systems(OnEnter(FlowState::Transition), start_benchmark)
+    .add_event::<ToggleWireframeEvent>();
+
+    // bevy_mod_debugdump::print_render_graph(&mut app);
+
+    app.run();
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
@@ -178,11 +185,13 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
     mut handles: ResMut<Handles>,
+    mut load_voxel_world: ResMut<LoadVoxelWorld>,
 ) {
     commands.insert_resource(Settings::default());
     commands.insert_resource(VoxelShape::default());
     commands.insert_resource(RenderMethod::default());
     commands.spawn(DirectionalLightBundle { ..default() });
+    /*
     commands.spawn((
         Camera3dBundle {
             transform: Transform {
@@ -193,6 +202,7 @@ fn setup(
         },
         FlyCam,
     ));
+    */
     commands.insert_resource(MovementSettings {
         sensitivity: 0.00015,
         speed: 30.0,
@@ -266,6 +276,24 @@ fn setup(
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
         .with_indices(Some(indices));
     handles.cube = meshes.add(mesh);
+
+    // voxel world
+    *load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
+
+    // camera
+    commands.spawn((
+        VoxelCameraBundle {
+            transform: Transform::from_xyz(5.0, 5.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            projection: Projection::Perspective(PerspectiveProjection {
+                fov: 1.57,
+                ..default()
+            }),
+            ..default()
+        },
+        // supports bloom and fxaa
+        Fxaa::default(),
+        FlyCam,
+    ));
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -276,7 +304,7 @@ enum RenderMethod {
 }
 impl Default for RenderMethod {
     fn default() -> Self {
-        Self::Naive
+        Self::ChunkedBlockMesh { greedy: true }
     }
 }
 impl RenderMethod {
