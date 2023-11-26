@@ -19,7 +19,11 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
+        // debug set gh immediately (seems not the problem)
+        //let file = std::fs::read("assets/monu9.vox").unwrap();
+        //let gh = GH::from_vox(&file).unwrap();
         let gh = GH::empty(128);
+
         let buffer_size = gh.get_buffer_size();
         let texture_size = gh.texture_size;
         let gh_offsets = gh.get_offsets();

@@ -25,7 +25,8 @@ var position: texture_storage_2d<rgba32float, read_write>;
 // note: raytracing.wgsl requires common.wgsl and for you to define u, voxel_world and gh before you import it
 // i copy pasted raytracing.wsgl
 fn get_value_index(index: u32) -> bool {
-    return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
+    //return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
+    return true;
 }
 
 struct Voxel {

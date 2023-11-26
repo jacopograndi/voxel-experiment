@@ -80,12 +80,12 @@ pub struct RenderGraphSettings {
 impl Default for RenderGraphSettings {
     fn default() -> Self {
         Self {
-            clear: true,
+            clear: false,
             automata: false,
             animation: false,
             voxelization: false,
-            rebuild: true,
-            mip: true,
+            rebuild: false,
+            mip: false,
             physics: false,
             trace: true,
             denoise: false,
