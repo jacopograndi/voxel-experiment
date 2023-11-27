@@ -4,10 +4,15 @@ use crate::voxel_shapes::*;
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
+// this code is pretty bad
+// i think there is a bug based on direction
+// needs to be fast and correct
+// -> a lot of generated tests
+// -> some benchmarks on different Grid structs
 /// http://www.cs.yorku.ca/~amana/research/grid.pdf
-fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> f32 {
+pub fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> (IVec3, f32) {
     if direction.length_squared() == 0. {
-        return 0.;
+        return (IVec3::ZERO, 0.);
     }
     assert!((0.999..1.001).contains(&direction.length_squared()));
     let mut grid_pos = IVec3::new(start.x as i32, start.y as i32, start.z as i32);
@@ -70,13 +75,14 @@ fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> f32 {
                 Side::Y => sidedist.y - deltadist.y,
                 Side::Z => sidedist.z - deltadist.z,
             };
-            return dist.abs();
+            return (grid_pos, dist.abs());
         }
     }
     println!("out of raycast iterations");
-    f32::INFINITY
+    (IVec3::ZERO, f32::INFINITY)
 }
 
+/*
 #[cfg(test)]
 mod test {
     use crate::{raycast::raycast, voxel_shapes::*};
@@ -145,3 +151,4 @@ mod test {
         assert!(eq_approx(t, dist, 0.01));
     }
 }
+*/

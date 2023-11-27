@@ -62,7 +62,6 @@ fn main() {
     .add_systems(OnEnter(FlowState::Benchmark), setup_bench)
     .add_systems(OnExit(FlowState::Benchmark), teardown_bench)
     .add_systems(Update, print_mesh_count)
-    .add_systems(Update, ui.run_if(in_state(FlowState::Benchmark)))
     .add_systems(Update, wireframe)
     .add_systems(Update, voxel_break)
     .add_systems(OnEnter(FlowState::Transition), start_benchmark)
@@ -81,10 +80,21 @@ fn voxel_break(
     if let Ok((_cam, tr)) = camera_query.get_single() {
         if let NewGH::Some(newgh) = new_gh.as_mut().clone() {
             let mut gh = newgh.lock().unwrap();
-            for i in 0..gh.texture_data.len() / 2 {
-                if i % 10 == 0 {
-                    gh.texture_data[i] = keys.pressed(KeyCode::R) as u8;
-                }
+            //j todo bug 
+            println!("{:?}", tr.forward());
+            let s = gh.texture_size as i32;
+            let grid = Grid::from_vec(
+                gh.raw
+                    .iter()
+                    .map(|pos| *pos - IVec3::splat(s / 2))
+                    .collect(),
+            );
+            let (pos, dist) = raycast::raycast(tr.translation * 4., tr.forward(), &grid);
+            let pos = pos + IVec3::splat(s / 2);
+            if dist.is_finite() && gh.raw.contains(&pos) {
+                let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
+                gh.texture_data[i as usize] = 0;
+                gh.raw.retain(|p| p != &pos);
             }
         }
     }

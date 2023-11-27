@@ -60,6 +60,7 @@ pub struct GH {
     pub texture_size: u32,
     pub texture_data: Vec<u8>,
     pub pallete: Pallete,
+    pub raw: Vec<IVec3>,
 }
 
 #[derive(Clone, Deref, DerefMut)]
@@ -78,6 +79,7 @@ impl GH {
             texture_size,
             texture_data: vec![0; (texture_size * texture_size * texture_size * 2) as usize],
             pallete: Pallete([[0.0; 4]; 256]),
+            raw: vec![],
         }
     }
 
@@ -89,16 +91,6 @@ impl GH {
             last = last + self.levels[i] as u32 * self.levels[i] as u32 * self.levels[i] as u32;
         }
         offsets
-        //[src/voxel_engine.rs:91] offsets = [
-        //   0,
-        //   512,
-        //   4608,
-        //   37376,
-        //   299520,
-        //   299520,
-        //   299520,
-        //   299520,
-        // ]
     }
 
     pub fn get_buffer_size_from_levels(levels: &[u32; 8]) -> usize {
@@ -157,19 +149,8 @@ impl GH {
             let index = pos.x as usize * size * size + pos.y as usize * size + pos.z as usize;
             gh.texture_data[index as usize * 2] = voxel.i;
             gh.texture_data[index as usize * 2 + 1] = 16; // set the collision flag
+            gh.raw.push(pos);
         }
-
-        dbg!(gh.levels);
-        //[src/voxel_engine.rs:76] levels = [
-        //   8,
-        //   16,
-        //   32,
-        //   64,
-        //   128,
-        //   0,
-        //   0,
-        //   0,
-        // ]
 
         Ok(gh)
     }
