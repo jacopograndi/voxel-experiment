@@ -8,7 +8,7 @@ use bevy::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         view::{ExtractedView, ViewTarget},
-        RenderApp, RenderSet, Render,
+        Render, RenderApp, RenderSet,
     },
     utils::HashMap,
 };
@@ -87,7 +87,7 @@ impl Default for TraceSettings {
             show_ray_steps: false,
             indirect_lighting: false,
             samples: 1,
-            reprojection_factor: 0.75,
+            reprojection_factor: 0.0,
             shadows: true,
             misc_bool: false,
             misc_float: 1.0,

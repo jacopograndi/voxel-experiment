@@ -25,8 +25,8 @@ var position: texture_storage_2d<rgba32float, read_write>;
 // note: raytracing.wgsl requires common.wgsl and for you to define u, voxel_world and gh before you import it
 // i copy pasted raytracing.wsgl
 fn get_value_index(index: u32) -> bool {
-    //return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
-    return true;
+    return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
+    //return true;
 }
 
 struct Voxel {
@@ -122,39 +122,6 @@ const IDENTITY = mat4x4<f32>(
 );
 
 fn intersect_scene(r: Ray, steps: u32) -> HitInfo {
-    // // pillar
-    // let t = ray_box_dist(r, vec3(-1.0), vec3(1.0, -10000.0, 1.0)).x;
-    // if (t != 0.0) {
-    //     let pos = r.pos + r.dir * t;
-    //     let normal = trunc(pos * vec3(1.00001, 0.0, 1.00001));
-    //     return HitInfo(true, 0u, vec4(vec3(0.2), 0.0), pos, vec3(0.0), normal, IDENTITY, steps);
-    // }
-
-    // // skybox
-    // let t = ray_box_dist(r, vec3(3.0), vec3(-3.0, -10000.0, -3.0)).y;
-    // if (t != 0.0) {
-    //     let pos = r.pos + r.dir * t;
-    //     if (pos.y > -1.0) {
-    //         let normal = -trunc(pos / vec3(2.99999));
-    //         let col = skybox(normalize(pos - vec3(0.0, -1.0, 0.0)), u.time);
-    //         // let col = vec3(0.3, 0.3, 0.8);
-    //         return HitInfo(true, 0u, vec4(col, 1.0), pos, vec3(0.0), normal, IDENTITY, steps);
-    //     } else {
-    //         let normal = -trunc(pos / vec3(2.99999, 10000.0, 2.99999));
-    //         return HitInfo(true, 0u, vec4(vec3(0.2), 0.0), pos, vec3(0.0), normal, IDENTITY, steps);
-    //     }
-    // }
-
-    let rtw = f32(voxel_uniforms.texture_size) / (VOXELS_PER_METER * 2.0); // render to world ratio
-
-    let normal = vec3(0.0, 1.0, 0.0);
-    let hit = ray_plane(r, vec3(0.0, -1.0, 0.0), normal).xyz;
-    if (any(hit != vec3(0.0))) {
-        let pos = hit + normal * 0.000002;
-        let colour = vec3(113.0, 129.0, 44.0) / 255.0;
-        return HitInfo(true, 0u, vec4(colour, 0.0), pos * rtw, pos * rtw, normal, IDENTITY, steps);
-    }
-
     let infinity = 1000000000.0 * r.dir;
     return HitInfo(false, 0u, vec4(0.0), infinity, infinity, vec3(0.0), IDENTITY, steps);
 }
@@ -188,10 +155,6 @@ fn shoot_ray(r: Ray, _physics_distance: f32, flags: u32) -> HitInfo {
         distance += dist;
     }
 
-    // let voxel = get_value(pos);
-    // let normal = trunc(pos * 1.00001);
-    // return HitInfo(true, voxel.data, u.materials[voxel.data & 0xFFu], pos + normal * 0.000004, vec3(0.0), normal, IDENTITY, 10u);
-
     var r_sign = sign(dir);
     var tcpotr = pos; // the current position of the ray
     var steps = 0u;
@@ -218,23 +181,6 @@ fn shoot_ray(r: Ray, _physics_distance: f32, flags: u32) -> HitInfo {
         tcpotr = pos + dir * t_current - normal * 0.000002;
         reprojection_pos = r.pos + (t_current + distance) * r.dir * rtw;
 
-        // portals
-        if (should_portal_skip) {
-            let portal = voxel_uniforms.portals[i32(voxel.data & 0xFFu)];
-
-            let intersection = ray_plane(Ray(pos * rtw, dir), portal.position + portal.normal * 0.00002, portal.normal);
-            if (intersection.w != 0.0 && intersection.w * wtr < t_current) {
-                pos = (portal.transformation * vec4(intersection.xyz - portal.normal * 0.00004, 1.0)).xyz * wtr;
-                dir = (portal.transformation * vec4(dir, 0.0)).xyz;
-                r_sign = sign(dir);
-                tcpotr = pos;
-
-                portal_mat = portal.transformation * portal_mat;
-
-                // return HitInfo(true, voxel.data, vec4(tcpotr, 0.0), tcpotr * rtw + normal * 0.0001, reprojection_pos, normal, portal_mat, steps);
-            }
-        }
-
         if (t_current + distance > physics_distance && physics_distance > 0.0) {
             return HitInfo(false, 0u, vec4(0.0), (pos + dir * (physics_distance - distance)) * rtw, vec3(0.0), vec3(0.0), portal_mat, steps);
         }
@@ -253,6 +199,7 @@ fn shoot_ray(r: Ray, _physics_distance: f32, flags: u32) -> HitInfo {
 }
 // end i copy pasted raytracing.wsgl
 
+// static directional light
 const light_dir = vec3<f32>(0.8, -1.0, 0.8);
 const light_colour = vec3<f32>(1.0, 1.0, 1.0);
 
@@ -265,7 +212,7 @@ fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode
     if trace_uniforms.shadows != 0u {
         if mode == 1u {
             let shadow_ray = Ray(pos, -light_dir);
-            let col = vct(shadow_ray, 0.1);
+            let col = voxel_cone_raytracing(shadow_ray, 0.1);
             shadow = 1.0 - col.a;
         } else if mode == 2u {
             for (var i = 0u; i < shadow_samples; i += 1u) {
@@ -319,7 +266,7 @@ fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
     return x - y * floor(x / y);
 }
 
-fn vct(ray: Ray, angle: f32) -> vec4<f32> {
+fn voxel_cone_raytracing(ray: Ray, angle: f32) -> vec4<f32> {
     var color = vec4(0.0);
     var steps = 0u;
     // var distance = 0.025;
@@ -372,6 +319,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let hit = shoot_ray(ray, 0.0, 0u);
     var steps = hit.steps;
 
+    // force voxel ambient occlusion
     let mode = 0u;
 
     var samples = 0.0;
@@ -382,7 +330,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // indirect lighting
         var indirect_lighting = vec3(0.0);
         if mode == 1u {
-            // voxel ao
+            // voxel ao using voxel_cone_raytracing
             let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.texture_size) / 2.0;
             let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
             let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
@@ -398,12 +346,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             }
             let forward = normalize(cross(right, up));
 
-            var color = vct(Ray(hit.pos, up), 0.5);
-            color += vct(Ray(hit.pos, cos(0.5) * cos(1.257 * 0.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 0.0) * forward), 0.5);
-            color += vct(Ray(hit.pos, cos(0.5) * cos(1.257 * 1.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 1.0) * forward), 0.5);
-            color += vct(Ray(hit.pos, cos(0.5) * cos(1.257 * 2.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 2.0) * forward), 0.5);
-            color += vct(Ray(hit.pos, cos(0.5) * cos(1.257 * 3.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 3.0) * forward), 0.5);
-            color += vct(Ray(hit.pos, cos(0.5) * cos(1.257 * 4.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 4.0) * forward), 0.5);
+            var color = voxel_cone_raytracing(Ray(hit.pos, up), 0.5);
+            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 0.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 0.0) * forward), 0.5);
+            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 1.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 1.0) * forward), 0.5);
+            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 2.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 2.0) * forward), 0.5);
+            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 3.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 3.0) * forward), 0.5);
+            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 4.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 4.0) * forward), 0.5);
             color /= 6.0;
             let sky = (1.0 - color.a);
             let indirect = color.rgb * color.a * 0.1;
@@ -437,11 +385,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
         // final blend
         output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
-
-        // let posing = (hit.pos - hit.normal * 0.01) * VOXELS_PER_METER / f32(voxel_uniforms.texture_size) + 0.5;
-        // output_colour = textureSampleLevel(mip, texture_sampler, posing.zyx, (1.0 - trace_uniforms.misc_float) * f32(textureNumLevels(mip))).rgb;
+        output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
     } else {
-        // output_colour = vec3<f32>(0.2);
         output_colour = skybox(ray.dir, 10.0);
     }
 

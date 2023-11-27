@@ -89,6 +89,16 @@ impl GH {
             last = last + self.levels[i] as u32 * self.levels[i] as u32 * self.levels[i] as u32;
         }
         offsets
+        //[src/voxel_engine.rs:91] offsets = [
+        //   0,
+        //   512,
+        //   4608,
+        //   37376,
+        //   299520,
+        //   299520,
+        //   299520,
+        //   299520,
+        // ]
     }
 
     pub fn get_buffer_size_from_levels(levels: &[u32; 8]) -> usize {
@@ -148,6 +158,18 @@ impl GH {
             gh.texture_data[index as usize * 2] = voxel.i;
             gh.texture_data[index as usize * 2 + 1] = 16; // set the collision flag
         }
+
+        dbg!(gh.levels);
+        //[src/voxel_engine.rs:76] levels = [
+        //   8,
+        //   16,
+        //   32,
+        //   64,
+        //   128,
+        //   0,
+        //   0,
+        //   0,
+        // ]
 
         Ok(gh)
     }

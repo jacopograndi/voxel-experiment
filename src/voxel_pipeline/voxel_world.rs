@@ -197,9 +197,9 @@ impl Plugin for VoxelWorldPlugin {
                 bind_group_layout,
                 bind_group,
             })
-            .add_systems(Render, prepare_uniforms.in_set(RenderSet::Prepare))
-            .add_systems(Render, load_voxel_world_prepare.in_set(RenderSet::Prepare))
-            .add_systems(Render, queue_bind_group.in_set(RenderSet::Queue));
+            .add_systems(Render, prepare_uniforms.in_set(RenderSet::Queue))
+            .add_systems(Render, load_voxel_world_prepare.in_set(RenderSet::Queue))
+            .add_systems(Render, queue_bind_group.in_set(RenderSet::Prepare));
     }
 }
 

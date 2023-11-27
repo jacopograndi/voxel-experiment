@@ -1,4 +1,6 @@
-use crate::voxel_pipeline::denoise::DenoisePlugin;
+use crate::voxel_pipeline::{
+    compute::ComputeResourcesPlugin, denoise::DenoisePlugin, mip::MipNode, rebuild::RebuildNode,
+};
 
 use self::{
     attachments::AttachmentsPlugin,
@@ -17,7 +19,10 @@ use bevy::{
 };
 
 pub mod attachments;
+pub mod compute;
 pub mod denoise;
+pub mod mip;
+pub mod rebuild;
 pub mod trace;
 pub mod voxel_world;
 
@@ -25,15 +30,14 @@ pub struct RenderPlugin;
 
 pub mod graph {
     pub const NAME: &'static str = "voxel";
-    pub mod input {
-        pub const VIEW_ENTITY: &str = "view_entity";
-    }
     pub mod node {
         pub const TRACE: &str = "trace";
         pub const DENOISE: &str = "denoise";
         pub const TONEMAPPING: &str = "tonemapping";
         pub const FXAA: &str = "fxaa";
         pub const UPSCALING: &str = "upscaling";
+        pub const MIP: &str = "mip";
+        pub const REBUILD: &str = "rebuild";
     }
 }
 pub const VOXEL: &str = graph::NAME;
@@ -45,7 +49,8 @@ impl Plugin for RenderPlugin {
             .add_plugins(AttachmentsPlugin)
             .add_plugins(VoxelWorldPlugin)
             .add_plugins(TracePlugin)
-            .add_plugins(DenoisePlugin);
+            .add_plugins(DenoisePlugin)
+            .add_plugins(ComputeResourcesPlugin);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -55,12 +60,17 @@ impl Plugin for RenderPlugin {
         use graph::node::*;
         render_app
             .add_render_sub_graph(VOXEL)
+            .add_render_graph_node::<ViewNodeRunner<MipNode>>(VOXEL, MIP)
+            .add_render_graph_node::<ViewNodeRunner<RebuildNode>>(VOXEL, REBUILD)
             .add_render_graph_node::<ViewNodeRunner<TraceNode>>(VOXEL, TRACE)
             .add_render_graph_node::<ViewNodeRunner<DenoiseNode>>(VOXEL, DENOISE)
             .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(VOXEL, TONEMAPPING)
             .add_render_graph_node::<ViewNodeRunner<FxaaNode>>(VOXEL, FXAA)
             .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(VOXEL, UPSCALING)
-            .add_render_graph_edges(VOXEL, &[TRACE, DENOISE, TONEMAPPING, FXAA, UPSCALING]);
+            .add_render_graph_edges(
+                VOXEL,
+                &[MIP, REBUILD, TRACE, DENOISE, TONEMAPPING, FXAA, UPSCALING],
+            );
     }
 }
 
@@ -84,8 +94,8 @@ impl Default for RenderGraphSettings {
             automata: false,
             animation: false,
             voxelization: false,
-            rebuild: false,
-            mip: false,
+            rebuild: true,
+            mip: true,
             physics: false,
             trace: true,
             denoise: false,

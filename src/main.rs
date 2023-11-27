@@ -68,7 +68,7 @@ fn main() {
     .add_systems(OnEnter(FlowState::Transition), start_benchmark)
     .add_event::<ToggleWireframeEvent>();
 
-    // bevy_mod_debugdump::print_render_graph(&mut app);
+    bevy_mod_debugdump::print_render_graph(&mut app);
 
     app.run();
 }
@@ -83,7 +83,7 @@ fn voxel_break(
             let mut gh = newgh.lock().unwrap();
             for i in 0..gh.texture_data.len() / 2 {
                 if i % 10 == 0 {
-                gh.texture_data[i] = keys.pressed(KeyCode::R) as u8;
+                    gh.texture_data[i] = keys.pressed(KeyCode::R) as u8;
                 }
             }
         }
