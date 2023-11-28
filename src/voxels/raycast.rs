@@ -1,6 +1,7 @@
-use bevy::math::{IVec3, Vec3};
-
-use crate::voxel_shapes::*;
+use bevy::{
+    math::{IVec3, Vec3},
+    utils::HashSet,
+};
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
@@ -10,7 +11,11 @@ const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 // -> a lot of generated tests
 // -> some benchmarks on different Grid structs
 /// http://www.cs.yorku.ca/~amana/research/grid.pdf
-pub fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> Option<(IVec3, IVec3, f32)> {
+pub fn raycast(
+    start: Vec3,
+    direction: Vec3,
+    voxels: &HashSet<IVec3>,
+) -> Option<(IVec3, IVec3, f32)> {
     if direction.length_squared() == 0. {
         return None;
     }
@@ -69,16 +74,16 @@ pub fn raycast(start: Vec3, direction: Vec3, grid: &Grid) -> Option<(IVec3, IVec
                 side = Side::Z;
             }
         }
-        if let Some(FILLED) = grid.get_at(grid_pos) {
+        if voxels.contains(&grid_pos) {
             let dist = match side {
                 Side::X => sidedist.x - deltadist.x,
                 Side::Y => sidedist.y - deltadist.y,
                 Side::Z => sidedist.z - deltadist.z,
             };
             let norm = match side {
-                Side::X => IVec3::X * step.x,
-                Side::Y => IVec3::Y * step.y,
-                Side::Z => IVec3::Z * step.z,
+                Side::X => -IVec3::X * step.x,
+                Side::Y => -IVec3::Y * step.y,
+                Side::Z => -IVec3::Z * step.z,
             };
             return Some((grid_pos, norm, dist.abs()));
         }

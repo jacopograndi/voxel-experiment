@@ -13,9 +13,6 @@ use voxels::{
     voxel_world::ArcGridHierarchy, BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle,
 };
 
-mod voxel_shapes;
-use voxel_shapes::*;
-
 use crate::voxels::raycast;
 
 fn main() {
@@ -41,10 +38,11 @@ fn main() {
     .add_systems(Startup, load)
     .add_systems(OnEnter(FlowState::Base), setup)
     .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
-    .add_systems(Update, print_mesh_count)
-    .add_systems(Update, voxel_break);
+    .add_systems(Update, print_mesh_count);
 
-    bevy_mod_debugdump::print_render_graph(&mut app);
+    app.add_systems(Update, voxel_break);
+
+    //bevy_mod_debugdump::print_render_graph(&mut app);
 
     app.run();
 }
@@ -60,12 +58,7 @@ fn voxel_break(
             let mut gh = newgh.lock().unwrap();
             //j todo bug
             let s = gh.texture_size as i32;
-            let grid = Grid::from_vec(
-                gh.raw
-                    .iter()
-                    .map(|pos| *pos - IVec3::splat(s / 2))
-                    .collect(),
-            );
+            let s3 = Vec3::splat(s as f32);
             #[derive(PartialEq)]
             enum Act {
                 PlaceBlock,
@@ -81,24 +74,25 @@ fn voxel_break(
             };
             if let Some(act) = act {
                 if let Some((pos, norm, dist)) =
-                    raycast::raycast(tr.translation * 4., tr.forward(), &grid)
+                    raycast::raycast(tr.translation * 4. + s3 / 2., tr.forward(), &gh.raw)
                 {
-                    let pos = pos + IVec3::splat(s / 2);
                     if dist.is_finite() && gh.raw.contains(&pos) {
                         match act {
                             Act::RemoveBlock => {
                                 let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
                                 gh.texture_data[i as usize] = 0;
-                                gh.raw.retain(|p| p != &pos);
+                                gh.raw.remove(&pos);
                             }
                             Act::PlaceBlock => {
-                                let pos = pos - norm;
+                                let pos = pos + norm;
                                 let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
                                 gh.texture_data[i as usize] = 1;
-                                gh.raw.push(pos);
+                                gh.raw.insert(pos);
                             }
                         };
                     }
+                } else {
+                    dbg!("no hit");
                 }
             }
         }
@@ -133,8 +127,6 @@ fn check_loading(
 }
 
 fn setup(mut commands: Commands, mut load_voxel_world: ResMut<LoadVoxelWorld>) {
-    commands.insert_resource(VoxelShape::default());
-
     // bevy-fly-cam camera settings
     // bevy-fly-cam is prototype only
     commands.insert_resource(MovementSettings {

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashSet};
 
 #[derive(Clone)]
 pub struct GridHierarchy {
@@ -7,7 +7,7 @@ pub struct GridHierarchy {
     pub texture_data: Vec<u8>,
     pub pallete: Palette,
     //j raw added temporarily
-    pub raw: Vec<IVec3>,
+    pub raw: HashSet<IVec3>,
 }
 
 #[derive(Clone, Deref, DerefMut)]
@@ -26,7 +26,7 @@ impl GridHierarchy {
             texture_size,
             texture_data: vec![0; (texture_size * texture_size * texture_size * 2) as usize],
             pallete: Palette([[0.0; 4]; 256]),
-            raw: vec![],
+            raw: HashSet::new(),
         }
     }
 
@@ -96,7 +96,7 @@ impl GridHierarchy {
             let index = pos.x as usize * size * size + pos.y as usize * size + pos.z as usize;
             gh.texture_data[index as usize * 2] = voxel.i;
             gh.texture_data[index as usize * 2 + 1] = 16; // set the collision flag
-            gh.raw.push(pos);
+            gh.raw.insert(pos);
         }
 
         Ok(gh)

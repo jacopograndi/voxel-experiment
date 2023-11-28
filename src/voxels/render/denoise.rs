@@ -1,5 +1,5 @@
+use crate::voxels::render::trace::TraceSettings;
 use crate::voxels::RenderGraphSettings;
-use crate::voxels::{render::trace::TraceSettings};
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
@@ -279,7 +279,7 @@ impl ViewNode for DenoiseNode {
     );
     fn run(
         &self,
-        graph: &mut render_graph::RenderGraphContext,
+        _graph: &mut render_graph::RenderGraphContext,
         render_context: &mut bevy::render::renderer::RenderContext,
         view_query: bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,

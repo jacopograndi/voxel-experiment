@@ -1,4 +1,8 @@
-use crate::voxels::{voxel_world::{VoxelData, VoxelUniforms}, grid_hierarchy::GridHierarchy, RenderGraphSettings};
+use crate::voxels::{
+    grid_hierarchy::GridHierarchy,
+    voxel_world::{VoxelData, VoxelUniforms},
+    RenderGraphSettings,
+};
 use bevy::{
     prelude::*,
     render::{
@@ -40,9 +44,9 @@ impl ViewNode for RebuildNode {
     type ViewQuery = ();
     fn run(
         &self,
-        graph: &mut RenderGraphContext,
+        _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        view_query: bevy::ecs::query::QueryItem<Self::ViewQuery>,
+        _view_query: bevy::ecs::query::QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let voxel_data = world.resource::<VoxelData>();

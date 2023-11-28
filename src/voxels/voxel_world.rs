@@ -20,9 +20,6 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
-        // debug set gh immediately (seems not the problem)
-        //let file = std::fs::read("assets/monu9.vox").unwrap();
-        //let gh = GH::from_vox(&file).unwrap();
         let gh = GridHierarchy::empty(128);
 
         let buffer_size = gh.get_buffer_size();
@@ -39,7 +36,6 @@ impl Plugin for VoxelWorldPlugin {
         // uniforms
         let voxel_uniforms = VoxelUniforms {
             pallete: gh.pallete.into(),
-            portals: [ExtractedPortal::default(); 32],
             levels,
             offsets,
             texture_size,
@@ -230,17 +226,9 @@ impl Into<[PaletteEntry; 256]> for Palette {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, ShaderType)]
-pub struct ExtractedPortal {
-    pub transformation: Mat4,
-    pub position: Vec3,
-    pub normal: Vec3,
-}
-
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
 pub struct VoxelUniforms {
     pub pallete: [PaletteEntry; 256],
-    pub portals: [ExtractedPortal; 32],
     pub levels: [UVec4; 8],
     pub offsets: [UVec4; 8],
     pub texture_size: u32,

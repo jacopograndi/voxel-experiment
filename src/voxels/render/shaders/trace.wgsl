@@ -26,7 +26,6 @@ var position: texture_storage_2d<rgba32float, read_write>;
 // i copy pasted raytracing.wsgl
 fn get_value_index(index: u32) -> bool {
     return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
-    //return true;
 }
 
 struct Voxel {
@@ -320,7 +319,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var steps = hit.steps;
 
     // force voxel ambient occlusion
-    let mode = 0u;
+    let mode = 1u;
 
     var samples = 0.0;
     if hit.hit {
