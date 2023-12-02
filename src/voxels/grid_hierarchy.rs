@@ -5,9 +5,7 @@ pub struct GridHierarchy {
     pub levels: [u32; 8],
     pub texture_size: u32,
     pub texture_data: Vec<u8>,
-    pub pallete: Palette,
-    //j raw added temporarily
-    pub raw: HashSet<IVec3>,
+    pub palette: Palette,
 }
 
 #[derive(Clone, Deref, DerefMut)]
@@ -25,8 +23,7 @@ impl GridHierarchy {
             levels,
             texture_size,
             texture_data: vec![0; (texture_size * texture_size * texture_size * 2) as usize],
-            pallete: Palette([[0.0; 4]; 256]),
-            raw: HashSet::new(),
+            palette: Palette([[0.0; 4]; 256]),
         }
     }
 
@@ -50,6 +47,41 @@ impl GridHierarchy {
 
     pub fn get_buffer_size(&self) -> usize {
         Self::get_buffer_size_from_levels(&self.levels)
+    }
+
+    pub fn flatland(size: u32) -> GridHierarchy {
+        let mut gh = GridHierarchy::empty(size as u32);
+        gh.palette[0] = [0.0, 0.0, 0.0, 0.0];
+        gh.palette[1] = [1.0, 1.0, 1.0, 1.0];
+        gh.palette[2] = [1.0, 0.0, 0.0, 1.0];
+        for z in 0..size {
+            for y in 0..size {
+                for x in 0..size {
+                    let index = (x * size * size + y * size + z) as usize;
+                    if y > size / 2 {
+                        gh.texture_data[index * 2] = 0;
+                        gh.texture_data[index * 2 + 1] = 0;
+                    } else {
+                        gh.texture_data[index * 2] = 1;
+                        gh.texture_data[index * 2 + 1] = 16;
+                    }
+                }
+            }
+        }
+        gh
+    }
+
+    pub fn get_at(&self, pos: IVec3) -> u16 {
+        let size = self.texture_size as i32;
+        let index = (pos.x * size * size + pos.y * size + pos.z) as usize;
+        let id = self.texture_data[index * 2] as u16;
+        let flags = self.texture_data[index * 2 + 1] as u16;
+        (id << 8) + flags
+    }
+
+    pub fn contains(&self, pos: &IVec3) -> bool {
+        let range = 0..self.texture_size as i32;
+        range.contains(&pos.x) && range.contains(&pos.y) && range.contains(&pos.z)
     }
 
     pub fn from_vox(file: &[u8]) -> Result<GridHierarchy, String> {
@@ -83,7 +115,7 @@ impl GridHierarchy {
                 }
             }
 
-            gh.pallete[i] = material.to_array();
+            gh.palette[i] = material.to_array();
         }
 
         for voxel in &vox.models[0].voxels {
@@ -96,7 +128,6 @@ impl GridHierarchy {
             let index = pos.x as usize * size * size + pos.y as usize * size + pos.z as usize;
             gh.texture_data[index as usize * 2] = voxel.i;
             gh.texture_data[index as usize * 2 + 1] = 16; // set the collision flag
-            gh.raw.insert(pos);
         }
 
         Ok(gh)

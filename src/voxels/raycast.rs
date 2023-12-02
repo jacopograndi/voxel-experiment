@@ -3,6 +3,8 @@ use bevy::{
     utils::HashSet,
 };
 
+use super::grid_hierarchy::GridHierarchy;
+
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
 // this code is pretty bad
@@ -14,7 +16,7 @@ const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 pub fn raycast(
     start: Vec3,
     direction: Vec3,
-    voxels: &HashSet<IVec3>,
+    voxels: &GridHierarchy,
 ) -> Option<(IVec3, IVec3, f32)> {
     if direction.length_squared() == 0. {
         return None;
@@ -75,17 +77,19 @@ pub fn raycast(
             }
         }
         if voxels.contains(&grid_pos) {
-            let dist = match side {
-                Side::X => sidedist.x - deltadist.x,
-                Side::Y => sidedist.y - deltadist.y,
-                Side::Z => sidedist.z - deltadist.z,
-            };
-            let norm = match side {
-                Side::X => -IVec3::X * step.x,
-                Side::Y => -IVec3::Y * step.y,
-                Side::Z => -IVec3::Z * step.z,
-            };
-            return Some((grid_pos, norm, dist.abs()));
+            if voxels.get_at(grid_pos) & 16 == 16 {
+                let dist = match side {
+                    Side::X => sidedist.x - deltadist.x,
+                    Side::Y => sidedist.y - deltadist.y,
+                    Side::Z => sidedist.z - deltadist.z,
+                };
+                let norm = match side {
+                    Side::X => -IVec3::X * step.x,
+                    Side::Y => -IVec3::Y * step.y,
+                    Side::Z => -IVec3::Z * step.z,
+                };
+                return Some((grid_pos, norm, dist.abs()));
+            }
         }
     }
     println!("out of raycast iterations");

@@ -74,20 +74,22 @@ fn voxel_break(
             };
             if let Some(act) = act {
                 if let Some((pos, norm, dist)) =
-                    raycast::raycast(tr.translation * 4. + s3 / 2., tr.forward(), &gh.raw)
+                    raycast::raycast(tr.translation * 4. + s3 / 2., tr.forward(), &gh)
                 {
-                    if dist.is_finite() && gh.raw.contains(&pos) {
+                    if dist.is_finite() && gh.contains(&pos) {
                         match act {
                             Act::RemoveBlock => {
                                 let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
                                 gh.texture_data[i as usize] = 0;
-                                gh.raw.remove(&pos);
+                                gh.texture_data[i as usize + 1] = 0;
                             }
                             Act::PlaceBlock => {
                                 let pos = pos + norm;
-                                let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
-                                gh.texture_data[i as usize] = 1;
-                                gh.raw.insert(pos);
+                                if gh.contains(&pos) {
+                                    let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
+                                    gh.texture_data[i as usize] = 2;
+                                    gh.texture_data[i as usize + 1] = 16;
+                                }
                             }
                         };
                     }
@@ -140,7 +142,8 @@ fn setup(mut commands: Commands, mut load_voxel_world: ResMut<LoadVoxelWorld>) {
     });
 
     // voxel world
-    *load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
+    //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
+    *load_voxel_world = LoadVoxelWorld::Flatland(256);
 
     // voxel camera
     commands.spawn((

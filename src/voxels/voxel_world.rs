@@ -20,7 +20,7 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
-        let gh = GridHierarchy::empty(128);
+        let gh = GridHierarchy::empty(256);
 
         let buffer_size = gh.get_buffer_size();
         let texture_size = gh.texture_size;
@@ -35,7 +35,7 @@ impl Plugin for VoxelWorldPlugin {
 
         // uniforms
         let voxel_uniforms = VoxelUniforms {
-            pallete: gh.pallete.into(),
+            palette: gh.palette.into(),
             levels,
             offsets,
             texture_size,
@@ -228,7 +228,7 @@ impl Into<[PaletteEntry; 256]> for Palette {
 
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
 pub struct VoxelUniforms {
-    pub pallete: [PaletteEntry; 256],
+    pub palette: [PaletteEntry; 256],
     pub levels: [UVec4; 8],
     pub offsets: [UVec4; 8],
     pub texture_size: u32,
@@ -258,9 +258,10 @@ fn load_voxel_world(
     mut voxel_uniforms: ResMut<VoxelUniforms>,
 ) {
     match load_voxel_world.as_ref() {
-        LoadVoxelWorld::Empty(_) | LoadVoxelWorld::File(_) => {
+        LoadVoxelWorld::Empty(_) | LoadVoxelWorld::File(_) | LoadVoxelWorld::Flatland(_) => {
             let gh = match load_voxel_world.as_ref() {
                 LoadVoxelWorld::Empty(size) => GridHierarchy::empty(*size),
+                LoadVoxelWorld::Flatland(size) => GridHierarchy::flatland(*size),
                 LoadVoxelWorld::File(path) => {
                     let file = std::fs::read(path).unwrap();
                     GridHierarchy::from_vox(&file).unwrap()
@@ -273,7 +274,7 @@ fn load_voxel_world(
                 levels[i] = UVec4::new(gh.levels[i], 0, 0, 0);
             }
 
-            voxel_uniforms.pallete = gh.pallete.clone().into();
+            voxel_uniforms.palette = gh.palette.clone().into();
             voxel_uniforms.levels = levels;
             voxel_uniforms.texture_size = gh.texture_size;
 
@@ -281,7 +282,7 @@ fn load_voxel_world(
             *load_voxel_world = LoadVoxelWorld::None;
         }
         LoadVoxelWorld::None => {
-            //*new_gh = NewGH::None;
+            //*new_gh = ArcGridHierarchy::None;
         }
     }
 }

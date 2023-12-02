@@ -153,5 +153,6 @@ impl Plugin for BevyVoxelEnginePlugin {
 pub enum LoadVoxelWorld {
     Empty(u32),
     File(String),
+    Flatland(u32),
     None,
 }
