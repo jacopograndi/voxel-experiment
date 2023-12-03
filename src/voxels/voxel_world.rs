@@ -1,5 +1,6 @@
-use crate::voxels::grid_hierarchy::{GridHierarchy, Palette};
+use crate::voxels::grid_hierarchy::{Grid, Palette};
 use crate::voxels::LoadVoxelWorld;
+use bevy::utils::{HashMap, HashSet};
 use bevy::{
     prelude::*,
     render::{
@@ -9,7 +10,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 pub struct VoxelWorldPlugin;
 
@@ -20,81 +21,31 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
-        let gh = GridHierarchy::empty(256);
+        let gh = Grid::flatland(256);
 
         let buffer_size = gh.get_buffer_size();
-        let texture_size = gh.texture_size;
-        let gh_offsets = gh.get_offsets();
-
-        let mut levels = [UVec4::ZERO; 8];
-        let mut offsets = [UVec4::ZERO; 8];
-        for i in 0..8 {
-            levels[i] = UVec4::new(gh.levels[i], 0, 0, 0);
-            offsets[i] = UVec4::new(gh_offsets[i], 0, 0, 0);
-        }
+        let chunk_size = gh.size;
 
         // uniforms
         let voxel_uniforms = VoxelUniforms {
             palette: gh.palette.into(),
-            levels,
-            offsets,
-            texture_size,
+            chunk_size,
+            offsets_grid_size: 3,
         };
         let mut uniform_buffer = UniformBuffer::from(voxel_uniforms.clone());
         uniform_buffer.write_buffer(render_device, render_queue);
 
-        // texture
-        let voxel_world = render_device.create_texture_with_data(
-            render_queue,
-            &TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: gh.texture_size,
-                    height: gh.texture_size,
-                    depth_or_array_layers: gh.texture_size,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D3,
-                format: TextureFormat::R16Uint,
-                usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            &gh.texture_data.clone(),
-        );
-        let voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
-
         // storage
-        let grid_heierachy = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            contents: &vec![0; buffer_size],
+        let chunks = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            contents: &vec![0; buffer_size as usize * voxel_uniforms.offsets_grid_size as usize],
             label: None,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
-
-        // mip texture
-        let mip_count = gh.texture_size.trailing_zeros();
-        let mip_texture = render_device.create_texture(&TextureDescriptor {
+        // storage
+        let offsets_grid = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            contents: &vec![0; voxel_uniforms.offsets_grid_size as usize * 12],
             label: None,
-            size: Extent3d {
-                width: gh.texture_size,
-                height: gh.texture_size,
-                depth_or_array_layers: gh.texture_size,
-            },
-            mip_level_count: mip_count,
-            sample_count: 1,
-            dimension: TextureDimension::D3,
-            format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let mip_texture_view = mip_texture.create_view(&TextureViewDescriptor::default());
-
-        // sampler
-        let texture_sampler = render_device.create_sampler(&SamplerDescriptor {
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
-            ..default()
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
 
         let bind_group_layout =
@@ -114,10 +65,10 @@ impl Plugin for VoxelWorldPlugin {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadWrite,
-                            format: TextureFormat::R16Uint,
-                            view_dimension: TextureViewDimension::D3,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: BufferSize::new(4),
                         },
                         count: None,
                     },
@@ -129,22 +80,6 @@ impl Plugin for VoxelWorldPlugin {
                             has_dynamic_offset: false,
                             min_binding_size: BufferSize::new(4),
                         },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D3,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -160,37 +95,30 @@ impl Plugin for VoxelWorldPlugin {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&voxel_world),
+                    resource: chunks.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: grid_heierachy.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::TextureView(&mip_texture_view),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::Sampler(&texture_sampler),
+                    resource: offsets_grid.as_entire_binding(),
                 },
             ],
         );
 
         app.insert_resource(LoadVoxelWorld::None)
             .insert_resource(ArcGridHierarchy::None)
+            .insert_resource(ChunkMap::default())
+            .insert_resource(RenderChunkMap::default())
             .insert_resource(voxel_uniforms)
+            .add_plugins(ExtractResourcePlugin::<RenderChunkMap>::default())
             .add_plugins(ExtractResourcePlugin::<ArcGridHierarchy>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
-            .add_systems(Update, load_voxel_world);
+            .add_systems(Update, extract_chunks);
 
         app.sub_app_mut(RenderApp)
             .insert_resource(VoxelData {
                 uniform_buffer,
-                voxel_world,
-                grid_heierachy,
-                mip_texture,
-                texture_sampler,
+                chunks,
+                chunks_pos: offsets_grid,
                 bind_group_layout,
                 bind_group,
             })
@@ -203,12 +131,37 @@ impl Plugin for VoxelWorldPlugin {
 #[derive(Resource)]
 pub struct VoxelData {
     pub uniform_buffer: UniformBuffer<VoxelUniforms>,
-    pub voxel_world: TextureView,
-    pub grid_heierachy: Buffer,
-    pub mip_texture: Texture,
-    pub texture_sampler: Sampler,
+    pub chunks: Buffer,
+    pub chunks_pos: Buffer,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
+}
+
+#[derive(Debug, Clone)]
+pub struct GridPtr(pub Arc<RwLock<Grid>>);
+
+#[derive(Debug, Clone)]
+pub struct Chunk {
+    pub grid: GridPtr,
+    pub was_mutated: bool,
+}
+
+/// Game resource, it's mutations are propagated to `RenderChunkMap`
+/// and written to the gpu buffer.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ChunkMap {
+    pub chunks: HashMap<IVec3, Chunk>,
+}
+
+#[derive(Resource, ExtractResource, Clone, Default)]
+pub struct RenderChunkMap {
+    pub chunks: HashMap<IVec3, u32>,
+    pub to_be_written: Vec<(IVec3, GridPtr)>,
+}
+
+pub struct RenderChunkBuffer {
+    pub buffer_size: u32,
+    pub allocation_table: [u32; 512],
 }
 
 #[derive(Default, Debug, Clone, Copy, ShaderType)]
@@ -229,14 +182,13 @@ impl Into<[PaletteEntry; 256]> for Palette {
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
 pub struct VoxelUniforms {
     pub palette: [PaletteEntry; 256],
-    pub levels: [UVec4; 8],
-    pub offsets: [UVec4; 8],
-    pub texture_size: u32,
+    pub offsets_grid_size: u32,
+    pub chunk_size: u32,
 }
 
 #[derive(Resource, ExtractResource, Clone)]
 pub enum ArcGridHierarchy {
-    Some(Arc<Mutex<GridHierarchy>>),
+    Some(Arc<RwLock<Grid>>),
     None,
 }
 
@@ -252,97 +204,70 @@ fn prepare_uniforms(
         .write_buffer(&render_device, &render_queue);
 }
 
-fn load_voxel_world(
-    mut load_voxel_world: ResMut<LoadVoxelWorld>,
-    mut new_gh: ResMut<ArcGridHierarchy>,
-    mut voxel_uniforms: ResMut<VoxelUniforms>,
+fn extract_chunks(
+    voxel_uniforms: Res<VoxelUniforms>,
+    mut chunk_map: ResMut<ChunkMap>,
+    mut render_chunk_map: ResMut<RenderChunkMap>,
 ) {
-    match load_voxel_world.as_ref() {
-        LoadVoxelWorld::Empty(_) | LoadVoxelWorld::File(_) | LoadVoxelWorld::Flatland(_) => {
-            let gh = match load_voxel_world.as_ref() {
-                LoadVoxelWorld::Empty(size) => GridHierarchy::empty(*size),
-                LoadVoxelWorld::Flatland(size) => GridHierarchy::flatland(*size),
-                LoadVoxelWorld::File(path) => {
-                    let file = std::fs::read(path).unwrap();
-                    GridHierarchy::from_vox(&file).unwrap()
-                }
-                LoadVoxelWorld::None => unreachable!(),
-            };
+    let game_chunks: HashSet<IVec3> = chunk_map.chunks.iter().map(|c| *c.0).collect();
+    let render_chunks: HashSet<IVec3> = render_chunk_map.chunks.iter().map(|rc| *rc.0).collect();
+    let modified_chunks: HashSet<IVec3> = chunk_map
+        .chunks
+        .iter()
+        .filter(|c| c.1.was_mutated)
+        .map(|c| *c.0)
+        .collect();
 
-            let mut levels = [UVec4::ZERO; 8];
-            for i in 0..8 {
-                levels[i] = UVec4::new(gh.levels[i], 0, 0, 0);
-            }
+    let new_chunks: HashSet<IVec3> = game_chunks.difference(&render_chunks).cloned().collect();
+    let _deleted_chunks: HashSet<IVec3> = render_chunks.difference(&game_chunks).cloned().collect();
+    let new_chunks: HashSet<IVec3> = modified_chunks.union(&new_chunks).cloned().collect();
 
-            voxel_uniforms.palette = gh.palette.clone().into();
-            voxel_uniforms.levels = levels;
-            voxel_uniforms.texture_size = gh.texture_size;
-
-            *new_gh = ArcGridHierarchy::Some(Arc::new(Mutex::new(gh)));
-            *load_voxel_world = LoadVoxelWorld::None;
-        }
-        LoadVoxelWorld::None => {
-            //*new_gh = ArcGridHierarchy::None;
+    for (i, &pos) in new_chunks.iter().enumerate() {
+        if let None = render_chunk_map.chunks.get(&pos) {
+            let offset = i as u32;
+            render_chunk_map.chunks.insert(pos, offset);
         }
     }
+
+    for (_, chunk) in chunk_map.chunks.iter_mut() {
+        chunk.was_mutated = false;
+    }
+
+    render_chunk_map.to_be_written.clear();
+    render_chunk_map.to_be_written.extend(
+        new_chunks
+            .into_iter()
+            .map(|pos| (pos, chunk_map.chunks.get(&pos).unwrap().grid.clone())),
+    );
 }
 
 fn load_voxel_world_prepare(
-    mut voxel_data: ResMut<VoxelData>,
-    render_device: Res<RenderDevice>,
+    voxel_data: Res<VoxelData>,
+    //render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    new_gh: Res<ArcGridHierarchy>,
+    render_chunk_map: Res<RenderChunkMap>,
 ) {
-    if let ArcGridHierarchy::Some(newgh) = new_gh.as_ref() {
-        let gh = newgh.lock().unwrap();
-        let buffer_size = gh.get_buffer_size();
-
-        // grid hierarchy
-        voxel_data.grid_heierachy = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            contents: &vec![0; buffer_size],
-            label: None,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        });
-
-        // voxel world
-        let voxel_world = render_device.create_texture_with_data(
-            render_queue.as_ref(),
-            &TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: gh.texture_size,
-                    height: gh.texture_size,
-                    depth_or_array_layers: gh.texture_size,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D3,
-                format: TextureFormat::R16Uint,
-                usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            &gh.texture_data,
-        );
-        voxel_data.voxel_world = voxel_world.create_view(&TextureViewDescriptor::default());
-
-        // mip texture
-        let mip_count = gh.texture_size.trailing_zeros();
-        let mip_texture = render_device.create_texture(&TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: gh.texture_size,
-                height: gh.texture_size,
-                depth_or_array_layers: gh.texture_size,
-            },
-            mip_level_count: mip_count,
-            sample_count: 1,
-            dimension: TextureDimension::D3,
-            format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        voxel_data.mip_texture = mip_texture;
+    for (pos, grid_ptr) in render_chunk_map.to_be_written.iter() {
+        if let Some(offset) = render_chunk_map.chunks.get(pos) {
+            let gh = grid_ptr.0.read().unwrap();
+            let offset = *offset as u64 * gh.get_buffer_size() as u64;
+            render_queue.write_buffer(&voxel_data.chunks, offset, &gh.voxels);
+        }
     }
+
+    let mut sorted: Vec<(IVec3, u32)> = render_chunk_map
+        .chunks
+        .iter()
+        .map(|c| (*c.0, *c.1))
+        .collect();
+    sorted.sort_by(|a, b| a.1.cmp(&b.1));
+    let mut chunks_pos: Vec<u8> = vec![];
+    for (pos, _offset) in sorted.iter() {
+        chunks_pos.extend(pos.x.to_ne_bytes());
+        chunks_pos.extend(pos.y.to_ne_bytes());
+        chunks_pos.extend(pos.z.to_ne_bytes());
+    }
+    render_queue.write_buffer(&voxel_data.chunks_pos, 0, &chunks_pos);
 }
 
 fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<VoxelData>) {
@@ -356,23 +281,11 @@ fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<Vox
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::TextureView(&voxel_data.voxel_world),
+                resource: voxel_data.chunks.as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 2,
-                resource: voxel_data.grid_heierachy.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 3,
-                resource: BindingResource::TextureView(
-                    &voxel_data
-                        .mip_texture
-                        .create_view(&TextureViewDescriptor::default()),
-                ),
-            },
-            BindGroupEntry {
-                binding: 4,
-                resource: BindingResource::Sampler(&voxel_data.texture_sampler),
+                resource: voxel_data.chunks_pos.as_entire_binding(),
             },
         ],
     );

@@ -1,10 +1,7 @@
 use crate::voxels::render::{
-    compute::ComputeResourcesPlugin, denoise::DenoisePlugin, mip::MipNode, rebuild::RebuildNode,
-    trace::TraceSettings,
-};
-use crate::voxels::render::{
-    denoise::DenoiseNode,
-    trace::{TraceNode, TracePlugin},
+    denoise::{DenoiseNode, DenoisePlugin},
+    //compute::ComputeResourcesPlugin, , mip::MipNode, rebuild::RebuildNode,
+    trace::{TraceNode, TracePlugin, TraceSettings},
 };
 
 use self::{render::attachments::AttachmentsPlugin, voxel_world::VoxelWorldPlugin};
@@ -53,8 +50,8 @@ impl Plugin for RenderPlugin {
             .add_plugins(AttachmentsPlugin)
             .add_plugins(VoxelWorldPlugin)
             .add_plugins(TracePlugin)
-            .add_plugins(DenoisePlugin)
-            .add_plugins(ComputeResourcesPlugin);
+            .add_plugins(DenoisePlugin);
+        //.add_plugins(ComputeResourcesPlugin);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -64,8 +61,8 @@ impl Plugin for RenderPlugin {
         use graph::node::*;
         render_app
             .add_render_sub_graph(VOXEL)
-            .add_render_graph_node::<ViewNodeRunner<MipNode>>(VOXEL, MIP)
-            .add_render_graph_node::<ViewNodeRunner<RebuildNode>>(VOXEL, REBUILD)
+            //.add_render_graph_node::<ViewNodeRunner<MipNode>>(VOXEL, MIP)
+            //.add_render_graph_node::<ViewNodeRunner<RebuildNode>>(VOXEL, REBUILD)
             .add_render_graph_node::<ViewNodeRunner<TraceNode>>(VOXEL, TRACE)
             .add_render_graph_node::<ViewNodeRunner<DenoiseNode>>(VOXEL, DENOISE)
             .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(VOXEL, TONEMAPPING)
@@ -73,7 +70,14 @@ impl Plugin for RenderPlugin {
             .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(VOXEL, UPSCALING)
             .add_render_graph_edges(
                 VOXEL,
-                &[MIP, REBUILD, TRACE, DENOISE, TONEMAPPING, FXAA, UPSCALING],
+                &[
+                    //MIP, REBUILD,
+                    TRACE,
+                    DENOISE,
+                    TONEMAPPING,
+                    FXAA,
+                    UPSCALING,
+                ],
             );
     }
 }
@@ -98,11 +102,11 @@ impl Default for RenderGraphSettings {
             automata: false,
             animation: false,
             voxelization: false,
-            rebuild: true,
-            mip: true,
+            rebuild: false,
+            mip: false,
             physics: false,
             trace: true,
-            denoise: false,
+            denoise: true,
         }
     }
 }

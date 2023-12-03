@@ -7,13 +7,9 @@
 @group(0) @binding(0)
 var<uniform> voxel_uniforms: VoxelUniforms;
 @group(0) @binding(1)
-var voxel_world: texture_storage_3d<r16uint, read_write>;
+var<storage, read_write> chunks: array<u32>;
 @group(0) @binding(2)
-var<storage, read_write> gh: array<u32>;
-@group(0) @binding(3)
-var mip: texture_3d<f32>;
-@group(0) @binding(4)
-var texture_sampler: sampler;
+var<storage, read_write> chunks_pos: array<vec3<i32>>;
 
 @group(1) @binding(0)
 var<uniform> trace_uniforms: TraceUniforms;
@@ -24,82 +20,26 @@ var position: texture_storage_2d<rgba32float, read_write>;
 
 // note: raytracing.wgsl requires common.wgsl and for you to define u, voxel_world and gh before you import it
 // i copy pasted raytracing.wsgl
-fn get_value_index(index: u32) -> bool {
-    return ((gh[index / 32u] >> (index % 32u)) & 1u) != 0u;
-}
-
 struct Voxel {
     data: u32,
     pos: vec3<f32>,
     grid_size: u32,
 };
 
+fn get_at(grid: vec3<i32>) -> u32 {
+    let side = voxel_uniforms.chunk_size;
+    let i = u32(grid.x) * (side * side) + u32(grid.y) * side + u32(grid.z);
+    return chunks[i];
+}
+
 fn get_value(pos: vec3<f32>) -> Voxel {
+    let rounded_pos = (floor(pos * f32(voxel_uniforms.chunk_size) * 0.5) + 0.5) / (f32(voxel_uniforms.chunk_size) * 0.5);
+
     let scaled = pos * 0.5 + 0.5;
+    let grid = vec3<i32>(scaled * f32(voxel_uniforms.chunk_size));
+    let data = get_at(grid);
 
-    let size0 = voxel_uniforms.levels[0].x;
-    let size1 = voxel_uniforms.levels[1].x;
-    let size2 = voxel_uniforms.levels[2].x;
-    let size3 = voxel_uniforms.levels[3].x;
-    let size4 = voxel_uniforms.levels[4].x;
-    let size5 = voxel_uniforms.levels[5].x;
-    let size6 = voxel_uniforms.levels[6].x;
-    let size7 = voxel_uniforms.levels[7].x;
-
-    let scaled0 = vec3<u32>(scaled * f32(size0));
-    let scaled1 = vec3<u32>(scaled * f32(size1));
-    let scaled2 = vec3<u32>(scaled * f32(size2));
-    let scaled3 = vec3<u32>(scaled * f32(size3));
-    let scaled4 = vec3<u32>(scaled * f32(size4));
-    let scaled5 = vec3<u32>(scaled * f32(size5));
-    let scaled6 = vec3<u32>(scaled * f32(size6));
-    let scaled7 = vec3<u32>(scaled * f32(size7));
-
-    let state0 = get_value_index(voxel_uniforms.offsets[0].x + scaled0.x * size0 * size0 + scaled0.y * size0 + scaled0.z);
-    let state1 = get_value_index(voxel_uniforms.offsets[1].x + scaled1.x * size1 * size1 + scaled1.y * size1 + scaled1.z);
-    let state2 = get_value_index(voxel_uniforms.offsets[2].x + scaled2.x * size2 * size2 + scaled2.y * size2 + scaled2.z);
-    let state3 = get_value_index(voxel_uniforms.offsets[3].x + scaled3.x * size3 * size3 + scaled3.y * size3 + scaled3.z);
-    let state4 = get_value_index(voxel_uniforms.offsets[4].x + scaled4.x * size4 * size4 + scaled4.y * size4 + scaled4.z);
-    let state5 = get_value_index(voxel_uniforms.offsets[5].x + scaled5.x * size5 * size5 + scaled5.y * size5 + scaled5.z);
-    let state6 = get_value_index(voxel_uniforms.offsets[6].x + scaled6.x * size6 * size6 + scaled6.y * size6 + scaled6.z);
-    let state7 = get_value_index(voxel_uniforms.offsets[7].x + scaled7.x * size7 * size7 + scaled7.y * size7 + scaled7.z);
-
-    if (!state0 && size0 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled0) + 0.5) / f32(size0)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size0);
-    }
-    if (!state1 && size1 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled1) + 0.5) / f32(size1)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size1);
-    }
-    if (!state2 && size2 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled2) + 0.5) / f32(size2)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size2);
-    }
-    if (!state3 && size3 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled3) + 0.5) / f32(size3)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size3);
-    }
-    if (!state4 && size4 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled4) + 0.5) / f32(size4)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size4);
-    }
-    if (!state5 && size5 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled5) + 0.5) / f32(size5)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size5);
-    }
-    if (!state6 && size6 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled6) + 0.5) / f32(size6)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size6);
-    }
-    if (!state7 && size7 != 0u) {
-        let rounded_pos = ((vec3<f32>(scaled7) + 0.5) / f32(size7)) * 2.0 - 1.0;
-        return Voxel(0u, rounded_pos, size7);
-    }
-
-    let rounded_pos = (floor(pos * f32(voxel_uniforms.texture_size) * 0.5) + 0.5) / (f32(voxel_uniforms.texture_size) * 0.5);
-    let data = textureLoad(voxel_world, vec3<i32>(scaled * f32(voxel_uniforms.texture_size)).zyx).r;
-    return Voxel(data, rounded_pos, voxel_uniforms.texture_size);
+    return Voxel(data, rounded_pos, voxel_uniforms.chunk_size);
 }
 
 struct HitInfo {
@@ -131,8 +71,8 @@ const PI: f32 = 3.14159265358979323846264338327950288;
 /// ray direction if you want it to be in world cordinates.
 /// only hits voxels that have any of the flags set or hits everything if flags is 0
 fn shoot_ray(r: Ray, _physics_distance: f32, flags: u32) -> HitInfo {
-    let wtr = VOXELS_PER_METER * 2.0 / f32(voxel_uniforms.texture_size); // world to render ratio
-    let rtw = f32(voxel_uniforms.texture_size) / (VOXELS_PER_METER * 2.0); // render to world ratio
+    let wtr = VOXELS_PER_METER * 2.0 / f32(voxel_uniforms.chunk_size); // world to render ratio
+    let rtw = f32(voxel_uniforms.chunk_size) / (VOXELS_PER_METER * 2.0); // render to world ratio
 
     let physics_distance = _physics_distance * wtr;
     var pos = r.pos * wtr;
@@ -209,11 +149,7 @@ fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode
     // shadow
     var shadow = 1.0;
     if trace_uniforms.shadows != 0u {
-        if mode == 1u {
-            let shadow_ray = Ray(pos, -light_dir);
-            let col = voxel_cone_raytracing(shadow_ray, 0.1);
-            shadow = 1.0 - col.a;
-        } else if mode == 2u {
+        if mode == 2u {
             for (var i = 0u; i < shadow_samples; i += 1u) {
                 let rand = hash(seed + i) * 2.0 - 1.0;
                 let shadow_ray = Ray(pos, -light_dir + rand * 0.1);
@@ -237,12 +173,13 @@ fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode
 }
 
 fn get_voxel(pos: vec3<f32>) -> f32 {
-    if any(pos < vec3(0.0)) || any(pos >= vec3(f32(voxel_uniforms.texture_size))) {
+    if any(pos < vec3(0.0)) || any(pos >= vec3(f32(voxel_uniforms.chunk_size))) {
         return 0.0;
     }
 
-    let voxel = textureLoad(voxel_world, vec3<i32>(pos.zyx));
-    return min(f32(voxel.r & 0xFFu), 1.0);
+    let grid = vec3<i32>(pos).xyz;
+    let data = get_at(grid);
+    return min(f32(0u & 0xFFu), 1.0);
 }
 
 // https://www.shadertoy.com/view/ldl3DS
@@ -263,39 +200,6 @@ fn voxel_ao(pos: vec3<f32>, d1: vec3<f32>, d2: vec3<f32>) -> vec4<f32> {
 }
 fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
     return x - y * floor(x / y);
-}
-
-fn voxel_cone_raytracing(ray: Ray, angle: f32) -> vec4<f32> {
-    var color = vec4(0.0);
-    var steps = 0u;
-    // var distance = 0.025;
-    var distance = 0.3 * angle;
-    var tcpotr = ray.pos + ray.dir * distance;
-    tcpotr = tcpotr * VOXELS_PER_METER / f32(voxel_uniforms.texture_size) + 0.5;
-    loop {
-        let size = distance * tan(angle);
-        let mip_level = log2(size * f32(voxel_uniforms.texture_size));
-
-        let col = textureSampleLevel(mip, texture_sampler, tcpotr.zyx, mip_level);
-        color += col;
-        if color.a > 1.0 {
-            color.a = 1.0;
-            break;
-        }
-
-        tcpotr += ray.dir * size;
-        distance += size;
-        if any(tcpotr < vec3(0.0)) || any(tcpotr >= vec3(1.0)) {
-            break;
-        }
-
-        steps += 1u;
-        if steps > 200u {
-            break;
-        }
-    }
-
-    return color;
 }
 
 @fragment
@@ -319,7 +223,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var steps = hit.steps;
 
     // force voxel ambient occlusion
-    let mode = 1u;
+    let mode = 0u;
 
     var samples = 0.0;
     if hit.hit {
@@ -328,35 +232,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
         // indirect lighting
         var indirect_lighting = vec3(0.0);
-        if mode == 1u {
-            // voxel ao using voxel_cone_raytracing
-            let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.texture_size) / 2.0;
-            let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
-            let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
-
-            let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
-            let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
-
-            // voxel cone tracing
-            let up = hit.normal;
-            var right = cross(up, vec3(0.0, 0.0, 1.0));
-            if all(right == vec3(0.0)) {
-                right = cross(up, vec3(0.0, 1.0, 0.0));
-            }
-            let forward = normalize(cross(right, up));
-
-            var color = voxel_cone_raytracing(Ray(hit.pos, up), 0.5);
-            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 0.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 0.0) * forward), 0.5);
-            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 1.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 1.0) * forward), 0.5);
-            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 2.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 2.0) * forward), 0.5);
-            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 3.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 3.0) * forward), 0.5);
-            color += voxel_cone_raytracing(Ray(hit.pos, cos(0.5) * cos(1.257 * 4.0) * right + sin(0.5) * up + cos(0.5) * sin(1.257 * 4.0) * forward), 0.5);
-            color /= 6.0;
-            let sky = (1.0 - color.a);
-            let indirect = color.rgb * color.a * 0.1;
-
-            indirect_lighting = vec3(0.3 * voxel_ao * sky);
-        } else if mode == 2u {
+        if mode == 2u {
             // raytraced indirect lighting
             for (var i = 0u; i < trace_uniforms.samples; i += 1u) {
                 let indirect_dir = cosine_hemisphere(hit.normal, seed + i);
@@ -372,14 +248,14 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             }
         } else {
             // voxel ao
-            let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.texture_size) / 2.0;
+            let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.chunk_size) / 2.0;
             let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
             let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
 
             let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
             let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
 
-            indirect_lighting = vec3(0.3 * voxel_ao);
+            indirect_lighting = vec3(2.0 * voxel_ao);
         }
 
         // final blend

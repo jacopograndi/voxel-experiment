@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use bevy::{
     asset::LoadState,
     core_pipeline::fxaa::Fxaa,
@@ -10,7 +12,9 @@ use bevy_flycam::prelude::*;
 
 mod voxels;
 use voxels::{
-    voxel_world::ArcGridHierarchy, BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle,
+    grid_hierarchy::Grid,
+    voxel_world::{ArcGridHierarchy, Chunk, ChunkMap, GridPtr},
+    BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle,
 };
 
 use crate::voxels::raycast;
@@ -50,14 +54,13 @@ fn main() {
 // just for prototype
 fn voxel_break(
     camera_query: Query<(&Camera, &Transform)>,
-    mut new_gh: ResMut<ArcGridHierarchy>,
+    mut chunk_map: ResMut<ChunkMap>,
     mouse: Res<Input<MouseButton>>,
 ) {
     if let Ok((_cam, tr)) = camera_query.get_single() {
-        if let ArcGridHierarchy::Some(newgh) = new_gh.as_mut().clone() {
-            let mut gh = newgh.lock().unwrap();
-            //j todo bug
-            let s = gh.texture_size as i32;
+        for (pos, chunk) in chunk_map.chunks.iter_mut() {
+            let mut gh = chunk.grid.0.write().unwrap();
+            let s = gh.size as i32;
             let s3 = Vec3::splat(s as f32);
             #[derive(PartialEq)]
             enum Act {
@@ -79,16 +82,18 @@ fn voxel_break(
                     if dist.is_finite() && gh.contains(&pos) {
                         match act {
                             Act::RemoveBlock => {
-                                let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
-                                gh.texture_data[i as usize] = 0;
-                                gh.texture_data[i as usize + 1] = 0;
+                                let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
+                                gh.voxels[i as usize] = 0;
+                                gh.voxels[i as usize + 1] = 0;
+                                chunk.was_mutated = true;
                             }
                             Act::PlaceBlock => {
                                 let pos = pos + norm;
                                 if gh.contains(&pos) {
-                                    let i = (pos.z + pos.y * s + pos.x * s * s) * 2;
-                                    gh.texture_data[i as usize] = 2;
-                                    gh.texture_data[i as usize + 1] = 16;
+                                    let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
+                                    gh.voxels[i as usize] = 2;
+                                    gh.voxels[i as usize + 1] = 16;
+                                    chunk.was_mutated = true;
                                 }
                             }
                         };
@@ -128,7 +133,7 @@ fn check_loading(
     }
 }
 
-fn setup(mut commands: Commands, mut load_voxel_world: ResMut<LoadVoxelWorld>) {
+fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
     // bevy-fly-cam camera settings
     // bevy-fly-cam is prototype only
     commands.insert_resource(MovementSettings {
@@ -143,7 +148,13 @@ fn setup(mut commands: Commands, mut load_voxel_world: ResMut<LoadVoxelWorld>) {
 
     // voxel world
     //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
-    *load_voxel_world = LoadVoxelWorld::Flatland(256);
+    chunk_map.chunks.insert(
+        IVec3::new(0, 0, 0),
+        Chunk {
+            grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(256)))),
+            was_mutated: false,
+        },
+    );
 
     // voxel camera
     commands.spawn((

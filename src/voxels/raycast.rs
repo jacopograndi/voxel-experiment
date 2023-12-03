@@ -1,9 +1,6 @@
-use bevy::{
-    math::{IVec3, Vec3},
-    utils::HashSet,
-};
+use bevy::math::{IVec3, Vec3};
 
-use super::grid_hierarchy::GridHierarchy;
+use super::grid_hierarchy::Grid;
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
@@ -13,11 +10,7 @@ const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 // -> a lot of generated tests
 // -> some benchmarks on different Grid structs
 /// http://www.cs.yorku.ca/~amana/research/grid.pdf
-pub fn raycast(
-    start: Vec3,
-    direction: Vec3,
-    voxels: &GridHierarchy,
-) -> Option<(IVec3, IVec3, f32)> {
+pub fn raycast(start: Vec3, direction: Vec3, voxels: &Grid) -> Option<(IVec3, IVec3, f32)> {
     if direction.length_squared() == 0. {
         return None;
     }

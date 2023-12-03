@@ -16,9 +16,8 @@ struct Portal {
 
 struct VoxelUniforms {
     materials: array<vec4<f32>, 256>,
-    levels: array<vec4<u32>, 8>,
-    offsets: array<vec4<u32>, 8>,
-    texture_size: u32,
+    offsets_grid_size: u32,
+    chunk_size: u32,
 };
 
 struct TraceUniforms {
