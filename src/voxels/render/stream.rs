@@ -143,7 +143,7 @@ impl ViewNode for StreamNode {
             pass.set_bind_group(0, &copy_bind_group, &[]);
 
             pass.set_pipeline(copy_pipeline);
-            pass.dispatch_workgroups(1, 1, 1);
+            pass.dispatch_workgroups(dispatch_size, 1, 1);
         }
 
         Ok(())

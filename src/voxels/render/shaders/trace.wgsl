@@ -125,7 +125,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
         }
     }
 
-    // outer chunks raycasting
+    // actual raycasting
     var scale = chunk_size.x;
     var delta_dist = abs(vec3f(length(ray.dir)) / ray.dir);
     var ray_step = sign(ray.dir);
@@ -147,6 +147,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
         let outer_pos = floor(map_pos / chunk_size);
         let chunk_i = u32(outer_pos.x) * (outer * outer) + u32(outer_pos.y) * outer + u32(outer_pos.z);
         let offset = chunks_offsets[chunk_i];
+        //let offset = chunk_i * side * side * side;
         if (offset != EMPTY_CHUNK) {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
@@ -195,79 +196,6 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     hit_info.uv = uv;
     hit_info.steps = u32(iters);
     return hit_info;
-}
-
-fn shoot_ray_chunk(ray: Ray, flags: u32) -> HitInfo {
-    let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
-    var map_pos = floor(ray.pos);
-    var delta_dist = abs(vec3f(length(ray.dir)) / ray.dir);
-    var ray_step = sign(ray.dir);
-    var side_dist = (sign(ray.dir) * (map_pos - ray.pos) + (sign(ray.dir) * 0.5) + 0.5) * delta_dist; 
-    var mask = vec3f(0.0);
-    var hit = false;
-    var voxel: Voxel;
-    var iters = 0;
-    for (iters = 0; iters < MAX_RAY_ITERS; iters++) {
-		mask = step(side_dist.xyz, side_dist.yzx) * step(side_dist.xyz, side_dist.zxy);
-		side_dist += mask * delta_dist;
-		map_pos += mask * ray_step;
-        if (!in_chunk_bounds(map_pos, vec3f(0.0), chunk_size)) {
-            break;
-        }
-        voxel = get_value(map_pos);
-        if ((voxel.data & 0xFFu) != 0u && (((voxel.data >> 8u) & flags) > 0u || flags == 0u)) {
-            hit = true;
-            break;
-        }
-	}
-    let end_ray_pos = ray.dir 
-        / dot(mask * ray.dir, vec3f(1.0)) 
-        * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) 
-        + ray.pos
-    ;
-   	var uv = vec3f(0.0);
-    var tangent1 = vec3f(0.0);
-    var tangent2 = vec3f(0.0);
-    if (abs(mask.x) > 0.0) {
-        uv = vec3f(end_ray_pos.yz, 0.0);
-        tangent1 = vec3f(0.0, 1.0, 0.0);
-        tangent2 = vec3f(0.0, 0.0, 1.0);
-    }
-    else if (abs(mask.y) > 0.) {
-        uv = vec3f(end_ray_pos.xz, 0.0);
-        tangent1 = vec3f(1.0, 0.0, 0.0);
-        tangent2 = vec3f(0.0, 0.0, 1.0);
-    }
-    else {
-        uv = vec3f(end_ray_pos.xy, 0.0);
-        tangent1 = vec3f(1.0, 0.0, 0.0);
-        tangent2 = vec3f(0.0, 1.0, 0.0);
-    }
-    uv = fract(uv);
-
-    var hit_info : HitInfo;
-    hit_info.hit = hit;
-    hit_info.data = voxel.data;
-    hit_info.material = voxel_uniforms.materials[voxel.data & 0xFFu];
-    hit_info.pos = end_ray_pos;
-    hit_info.reprojection_pos = ray.pos;
-    hit_info.normal = -ray_step * mask;
-    hit_info.uv = uv;
-    hit_info.steps = u32(iters);
-    return hit_info;
-
-    /*
-    rayCastResults res;
-    res.hit = hit;
-    res.uv = uv;
-    res.mapPos = mapPos;
-    res.normal = -rayStep * mask;
-    res.tangent = tangent1;
-    res.bitangent = tangent2;
-    res.rayPos = endRayPos;
-    res.dist = length(rayPos - endRayPos);
-    return res;
-    */
 }
 
 // static directional light

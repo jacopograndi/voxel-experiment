@@ -13,7 +13,7 @@ use bevy_flycam::prelude::*;
 mod voxels;
 use voxels::{
     grid_hierarchy::Grid,
-    voxel_world::{ArcGridHierarchy, Chunk, ChunkMap, GridPtr},
+    voxel_world::{Chunk, ChunkMap, GridPtr},
     BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle,
 };
 
@@ -148,6 +148,21 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
 
     // voxel world
     //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
+    let size = 12;
+    for x in 0..size {
+        for y in 0..size {
+            for z in 0..size {
+                chunk_map.chunks.insert(
+                    IVec3::new(x, y, z) * 32,
+                    Chunk {
+                        grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(32)))),
+                        was_mutated: false,
+                    },
+                );
+            }
+        }
+    }
+    /*
     let mut grid = Grid::flatland(32);
     let pos = IVec3::new(20, 20, 20);
     let i = (pos.z + pos.y * 32 + pos.x * 32 * 32) * 4;
@@ -174,6 +189,7 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
             was_mutated: true,
         },
     );
+    */
 
     // voxel camera
     commands.spawn((
