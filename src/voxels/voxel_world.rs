@@ -1,5 +1,7 @@
 use crate::voxels::grid_hierarchy::{Grid, Palette};
 use crate::voxels::LoadVoxelWorld;
+use crate::Handles;
+use bevy::render::render_asset::RenderAssets;
 use bevy::utils::{HashMap, HashSet};
 use bevy::{
     prelude::*,
@@ -25,7 +27,7 @@ impl Plugin for VoxelWorldPlugin {
 
         let buffer_size = gh.get_buffer_u8_size();
         let chunk_size = gh.size;
-        let chunks_grid = 12;
+        let chunks_grid = 3;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
@@ -115,6 +117,29 @@ impl Plugin for VoxelWorldPlugin {
             ],
         );
 
+        let texture_bind_group_layout =
+            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            multisampled: false,
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                ],
+                label: Some("tilemap_material_layout"),
+            });
+
         let render_chunk_map = RenderChunkMap {
             buffer_alloc: RenderChunkBufferAllocation {
                 buffer_size: chunks_volume,
@@ -125,11 +150,14 @@ impl Plugin for VoxelWorldPlugin {
 
         app.insert_resource(LoadVoxelWorld::None)
             .insert_resource(ChunkMap::default())
+            .insert_resource(ExtractedImage::default())
             .insert_resource(render_chunk_map)
             .insert_resource(voxel_uniforms)
             .add_plugins(ExtractResourcePlugin::<RenderChunkMap>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
-            .add_systems(Update, extract_chunks);
+            .add_plugins(ExtractResourcePlugin::<ExtractedImage>::default())
+            .add_systems(Update, extract_chunks)
+            .add_systems(Update, extract_images);
 
         app.sub_app_mut(RenderApp)
             .insert_resource(VoxelData {
@@ -140,10 +168,13 @@ impl Plugin for VoxelWorldPlugin {
                 chunks_loading_offsets,
                 bind_group_layout,
                 bind_group,
+                texture_bind_group_layout,
+                texture_bind_group: None,
             })
             .add_systems(Render, prepare_uniforms.in_set(RenderSet::Queue))
             .add_systems(Render, load_voxel_world_prepare.in_set(RenderSet::Queue))
-            .add_systems(Render, queue_bind_group.in_set(RenderSet::Prepare));
+            .add_systems(Render, queue_bind_group.in_set(RenderSet::Prepare))
+            .add_systems(Render, bind_images.in_set(RenderSet::Prepare));
     }
 }
 
@@ -156,6 +187,8 @@ pub struct VoxelData {
     pub chunks_loading_offsets: Buffer,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
+    pub texture_bind_group_layout: BindGroupLayout,
+    pub texture_bind_group: Option<BindGroup>,
 }
 
 #[derive(Debug, Clone)]
@@ -194,8 +227,7 @@ impl ChunkMap {
 
 #[derive(Resource, ExtractResource, Clone, Default)]
 pub struct RenderChunkMap {
-    pub chunks: HashMap<IVec3, u32>,
-    pub to_be_written: Vec<(IVec3, u32, GridPtr)>,
+    pub to_be_written: Vec<(u32, GridPtr)>,
     pub buffer_alloc: RenderChunkBufferAllocation,
 }
 
@@ -261,6 +293,11 @@ impl RenderChunkBufferAllocation {
     }
 }
 
+#[derive(Resource, ExtractResource, Clone, Default)]
+pub struct ExtractedImage {
+    handle: AssetId<Image>,
+}
+
 #[derive(Default, Debug, Clone, Copy, ShaderType)]
 pub struct PaletteEntry {
     pub colour: Vec4,
@@ -295,13 +332,22 @@ fn prepare_uniforms(
         .write_buffer(&render_device, &render_queue);
 }
 
+fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<Handles>) {
+    extr.handle = handles.texture_blocks.id();
+}
+
 fn extract_chunks(
     _voxel_uniforms: Res<VoxelUniforms>,
     mut chunk_map: ResMut<ChunkMap>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
 ) {
     let game_chunks: HashSet<IVec3> = chunk_map.chunks.iter().map(|c| *c.0).collect();
-    let render_chunks: HashSet<IVec3> = render_chunk_map.chunks.iter().map(|rc| *rc.0).collect();
+    let render_chunks: HashSet<IVec3> = render_chunk_map
+        .buffer_alloc
+        .allocations
+        .iter()
+        .map(|rc| *rc.1)
+        .collect();
     let modified_chunks: HashSet<IVec3> = chunk_map
         .chunks
         .iter()
@@ -316,29 +362,16 @@ fn extract_chunks(
     render_chunk_map.to_be_written.clear();
     for &pos in new_chunks.iter() {
         let chunk = chunk_map.chunks.get(&pos).unwrap();
+        let grid = chunk.grid.clone();
         if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
-            render_chunk_map
-                .to_be_written
-                .push((pos, offset, chunk.grid.clone()));
+            render_chunk_map.to_be_written.push((offset, grid));
         } else {
             if let Ok(offset) = render_chunk_map.buffer_alloc.allocate_chunk(pos) {
-                render_chunk_map.chunks.insert(pos, offset);
-                render_chunk_map
-                    .to_be_written
-                    .push((pos, offset, chunk.grid.clone()));
+                render_chunk_map.to_be_written.push((offset, grid));
             } else {
                 panic!();
             }
         }
-    }
-    if !render_chunk_map.to_be_written.is_empty() && false {
-        println!(
-            "{:?}, {:?}, {:?}, {:?}",
-            render_chunk_map.to_be_written.len(),
-            new_chunks,
-            game_chunks,
-            render_chunks
-        );
     }
 
     for (_, chunk) in chunk_map.chunks.iter_mut() {
@@ -355,8 +388,8 @@ fn load_voxel_world_prepare(
 ) {
     let chunk_side = voxel_uniforms.chunk_size;
     let chunk_volume = chunk_side * chunk_side * chunk_side;
-    let chunk_bytes = chunk_volume * 4;
 
+    // voxel outer grid
     let side = voxel_uniforms.offsets_grid_size;
     let mut chunks_pos: Vec<u32> = vec![];
     for x in 0..side {
@@ -364,17 +397,14 @@ fn load_voxel_world_prepare(
             for z in 0..side {
                 let mut pos = IVec3::new(x as i32, y as i32, z as i32);
                 pos *= voxel_uniforms.chunk_size as i32;
-                // translate the (0,0,0) chunk to the center of the chunk grid
-                //pos = pos - IVec3::splat(side as i32) / 2;
                 if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
-                    chunks_pos.push(offset * chunk_bytes / 4);
+                    chunks_pos.push(offset * chunk_volume);
                 } else {
                     chunks_pos.push(u32::MAX);
                 }
             }
         }
     }
-    //println!("{:?}", chunks_pos);
     let chunks_pos: Vec<u8> = chunks_pos
         .iter()
         // https://www.w3.org/TR/WGSL/#internal-value-layout
@@ -383,13 +413,14 @@ fn load_voxel_world_prepare(
         .collect();
     render_queue.write_buffer(&voxel_data.chunks_pos, 0, &chunks_pos);
 
+    // push new/modified chunks to stream buffer
     if !render_chunk_map.to_be_written.is_empty() {
         let mut linear_chunks_offsets = Vec::<u8>::new();
         let mut linear_chunks = Vec::<u8>::new();
-        for (pos, offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
+        for (offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
             let grid = grid_ptr.0.read().unwrap();
-            let offset = *offset as u32 * chunk_bytes as u32 / 4;
-            assert_eq!(grid.voxels.len() as u32, chunk_bytes);
+            let offset = *offset as u32 * chunk_volume as u32;
+            assert_eq!(grid.voxels.len() as u32, chunk_volume * 4);
             linear_chunks.extend(&grid.voxels);
             linear_chunks_offsets.extend(offset.to_le_bytes());
         }
@@ -431,4 +462,29 @@ fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<Vox
         ],
     );
     voxel_data.bind_group = bind_group;
+}
+
+fn bind_images(
+    mut voxel_data: ResMut<VoxelData>,
+    extr: Res<ExtractedImage>,
+    render_device: Res<RenderDevice>,
+    render_images: Res<RenderAssets<Image>>,
+) {
+    if let Some(image) = render_images.get(extr.handle) {
+        let bind_group = render_device.create_bind_group(
+            None,
+            &voxel_data.texture_bind_group_layout,
+            &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: image.texture_view.into_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: image.sampler.into_binding(),
+                },
+            ],
+        );
+        voxel_data.texture_bind_group = Some(bind_group);
+    }
 }

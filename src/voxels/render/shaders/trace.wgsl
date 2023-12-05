@@ -18,6 +18,11 @@ var normal: texture_storage_2d<rgba16float, read_write>;
 @group(1) @binding(3)
 var position: texture_storage_2d<rgba32float, read_write>;
 
+@group(2) @binding(0)
+var texture_sheet: texture_2d<f32>;
+@group(2) @binding(1)
+var texture_sheet_sampler: sampler;
+
 const MAX_RAY_CHUNK_ITERS = 1000u;
 const MAX_RAY_ITERS = 1000;
 
@@ -267,9 +272,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let seed = vec3<u32>(in.position.xyz) * 100u + u32(trace_uniforms.time * 120.0) * 15236u;
     let resolution = vec2<f32>(textureDimensions(normal));
     var jitter = vec2(0.0);
-    // if (trace_uniforms.indirect_lighting != 0u) {
-    //     jitter = (hash(seed).xy - 0.5) / resolution;
-    // }
+    if (trace_uniforms.indirect_lighting != 0u) {
+        jitter = (hash(seed).xy - 0.5) / resolution;
+    }
     var clip_space = vec2(1.0, -1.0) * ((in.uv + jitter) * 2.0 - 1.0);
     var output_colour = vec3(0.0);
 
@@ -283,15 +288,15 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var steps = hit.steps;
 
     // force voxel ambient occlusion
-    let mode = 0u;
+    let mode = 2u;
+
+    // lighting
+    var direct_lighting = vec3(0.0);
+    var indirect_lighting = vec3(0.0);
 
     var samples = 0.0;
     if hit.hit {
-        // direct lighting
-        let direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
-
-        // indirect lighting
-        var indirect_lighting = vec3(0.0);
+        direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
         if mode == 2u {
             // raytraced indirect lighting
             for (var i = 0u; i < trace_uniforms.samples; i += 1u) {
@@ -301,12 +306,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 if indirect_hit.hit {
                     lighting = calculate_direct(indirect_hit.material, indirect_hit.pos, indirect_hit.normal, mode, seed + 3u, 1u);
                 } else {
-                    lighting = vec3(0.2);
-                    // lighting = skybox(indirect_dir, 10.0);
+                    //lighting = vec3(0.2);
+                    lighting = skybox(indirect_dir, 10.0);
                 }
                 indirect_lighting += lighting / f32(trace_uniforms.samples);
             }
         } else {
+            /*
             // voxel ao
             let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.chunk_size) / 2.0;
             let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
@@ -316,12 +322,23 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
 
             indirect_lighting = vec3(2.0 * voxel_ao);
+            */
         }
 
         // final blend
-        output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
-        output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
+        //output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
     } else {
+        output_colour = skybox(ray.dir, 10.0);
+    }
+
+    var uv = hit.uv.xy;
+    uv = vec2f(1.0) - uv;
+    uv /= 16.0;
+    uv.x += f32(hit.data& 0xFFu) / 16.0;
+    let color = textureSample(texture_sheet, texture_sheet_sampler, uv);
+    output_colour = (direct_lighting + indirect_lighting) * color.xyz;
+
+    if !hit.hit {
         output_colour = skybox(ray.dir, 10.0);
     }
 

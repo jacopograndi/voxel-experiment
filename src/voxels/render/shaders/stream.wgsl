@@ -14,7 +14,7 @@ const CHUNK_SIZE = 32768u; // 32^3
 const MAX_COPY_ITERS = 100000u;
 
 // increase parallelism using workgroup_size
-@compute @workgroup_size(32)
+@compute @workgroup_size(1)
 fn copy(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let invocation = u32(invocation_id.x);
     for (var i = 0u; i < MAX_COPY_ITERS; i++) {
@@ -22,11 +22,13 @@ fn copy(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
         if (offset == EMPTY_CHUNK) {
             return;
         }
-        for (var j = 0u; j < CHUNK_SIZE / 32u; j++) {
-            let from_linear = CHUNK_SIZE * i + j + invocation * 1024u;
-            let to_offset = offset + j + invocation * 1024u;
+        //for (var j = 0u; j < CHUNK_SIZE / 32u; j++) {
+            //let from_linear = CHUNK_SIZE * i + j + invocation * 1024u;
+            //let to_offset = offset + j + invocation * 1024u;
+        for (var j = 0u; j < CHUNK_SIZE; j++) {
+            let from_linear = CHUNK_SIZE * i + j;
+            let to_offset = offset + j;
             chunks[to_offset] = chunks_loading[from_linear];
-            //chunks[to_offset] = 1u;
         }
     }
 }

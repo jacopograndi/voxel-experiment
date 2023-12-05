@@ -148,7 +148,7 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
 
     // voxel world
     //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
-    let size = 12;
+    let size = 3;
     for x in 0..size {
         for y in 0..size {
             for z in 0..size {
