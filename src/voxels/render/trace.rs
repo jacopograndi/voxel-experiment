@@ -85,7 +85,7 @@ pub struct TraceSettings {
 impl Default for TraceSettings {
     fn default() -> Self {
         Self {
-            show_ray_steps: false,
+            show_ray_steps: true,
             indirect_lighting: false,
             samples: 1,
             reprojection_factor: 0.0,
@@ -456,6 +456,7 @@ impl ViewNode for TraceNode {
             render_pass.draw(0..3, 0..1);
         }
         {
+            /*
             let mut render_pass = render_context
                 .command_encoder()
                 .begin_render_pass(&source_descriptor);
@@ -465,8 +466,10 @@ impl ViewNode for TraceNode {
 
             render_pass.set_pipeline(reprojection_pipeline);
             render_pass.draw(0..3, 0..1);
+            */
         }
         {
+            /*
             let mut render_pass = render_context
                 .command_encoder()
                 .begin_render_pass(&destination_descriptor);
@@ -476,6 +479,7 @@ impl ViewNode for TraceNode {
 
             render_pass.set_pipeline(accumulation_pipeline);
             render_pass.draw(0..3, 0..1);
+            */
         }
 
         Ok(())

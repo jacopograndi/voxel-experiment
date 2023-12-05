@@ -85,6 +85,6 @@ pub fn raycast(start: Vec3, direction: Vec3, voxels: &Grid) -> Option<(IVec3, IV
             }
         }
     }
-    println!("out of raycast iterations");
+    //println!("out of raycast iterations");
     None
 }

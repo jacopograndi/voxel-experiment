@@ -14,6 +14,17 @@ var colour_attachment: texture_2d<f32>;
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    return vec4(0.0);
+}
+
+@fragment
+fn accumulation(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    return vec4(0.0);
+}
+
+/*
+@fragment
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let resolution = vec2<f32>(textureDimensions(colour_attachment));
     let sample_pos = vec2<i32>(in.position.xy);
     let colour = textureLoad(colour_attachment, sample_pos, 0).rgb;
@@ -63,3 +74,4 @@ fn accumulation(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     textureStore(accumulation_attachment, sample_pos, colour);
     return vec4<f32>(colour.rgb, 1.0);
 }
+*/

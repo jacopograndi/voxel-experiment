@@ -10,6 +10,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use std::num::NonZeroU64;
 use std::sync::{Arc, RwLock};
 
 pub struct VoxelWorldPlugin;
@@ -21,29 +22,40 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
-        let gh = Grid::flatland(256);
+        let gh = Grid::flatland(32);
 
-        let buffer_size = gh.get_buffer_size();
+        let buffer_size = gh.get_buffer_u8_size();
         let chunk_size = gh.size;
+        let chunks_grid = 3;
+        let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
         let voxel_uniforms = VoxelUniforms {
             palette: gh.palette.into(),
             chunk_size,
-            offsets_grid_size: 3,
+            offsets_grid_size: chunks_grid,
         };
         let mut uniform_buffer = UniformBuffer::from(voxel_uniforms.clone());
         uniform_buffer.write_buffer(render_device, render_queue);
 
         // storage
         let chunks = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            contents: &vec![0; buffer_size as usize * voxel_uniforms.offsets_grid_size as usize],
+            contents: &vec![0; buffer_size as usize * chunks_volume as usize],
             label: None,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
-        // storage
         let offsets_grid = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            contents: &vec![0; voxel_uniforms.offsets_grid_size as usize * 12],
+            contents: &vec![0; chunks_volume as usize * 4],
+            label: None,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        });
+        let chunks_loading = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            contents: &vec![0; buffer_size as usize * chunks_volume as usize],
+            label: None,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+        });
+        let chunks_loading_offsets = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            contents: &vec![0; chunks_volume as usize * 4],
             label: None,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
@@ -68,7 +80,7 @@ impl Plugin for VoxelWorldPlugin {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(4),
+                            min_binding_size: BufferSize::new(0),
                         },
                         count: None,
                     },
@@ -78,7 +90,7 @@ impl Plugin for VoxelWorldPlugin {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(4),
+                            min_binding_size: BufferSize::new(0),
                         },
                         count: None,
                     },
@@ -119,6 +131,8 @@ impl Plugin for VoxelWorldPlugin {
                 uniform_buffer,
                 chunks,
                 chunks_pos: offsets_grid,
+                chunks_loading,
+                chunks_loading_offsets,
                 bind_group_layout,
                 bind_group,
             })
@@ -133,6 +147,8 @@ pub struct VoxelData {
     pub uniform_buffer: UniformBuffer<VoxelUniforms>,
     pub chunks: Buffer,
     pub chunks_pos: Buffer,
+    pub chunks_loading: Buffer,
+    pub chunks_loading_offsets: Buffer,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
 }
@@ -222,51 +238,113 @@ fn extract_chunks(
     let _deleted_chunks: HashSet<IVec3> = render_chunks.difference(&game_chunks).cloned().collect();
     let new_chunks: HashSet<IVec3> = modified_chunks.union(&new_chunks).cloned().collect();
 
+    render_chunk_map.to_be_written.clear();
     for (i, &pos) in new_chunks.iter().enumerate() {
         if let None = render_chunk_map.chunks.get(&pos) {
             let offset = i as u32;
             render_chunk_map.chunks.insert(pos, offset);
         }
+        let chunk = chunk_map.chunks.get(&pos).unwrap();
+        //println!("pos {pos}, {:p}", chunk.grid.0);
+        render_chunk_map
+            .to_be_written
+            .push((pos, chunk.grid.clone()));
+    }
+    if !render_chunk_map.to_be_written.is_empty() && false {
+        println!(
+            "{:?}, {:?}, {:?}, {:?}",
+            render_chunk_map.to_be_written.len(),
+            new_chunks,
+            game_chunks,
+            render_chunks
+        );
     }
 
     for (_, chunk) in chunk_map.chunks.iter_mut() {
         chunk.was_mutated = false;
     }
-
-    render_chunk_map.to_be_written.clear();
-    render_chunk_map.to_be_written.extend(
-        new_chunks
-            .into_iter()
-            .map(|pos| (pos, chunk_map.chunks.get(&pos).unwrap().grid.clone())),
-    );
 }
 
 fn load_voxel_world_prepare(
+    voxel_uniforms: Res<VoxelUniforms>,
     voxel_data: Res<VoxelData>,
     //render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     render_chunk_map: Res<RenderChunkMap>,
 ) {
+    let chunk_side = voxel_uniforms.chunk_size;
+    let chunk_volume = chunk_side * chunk_side * chunk_side;
+    let chunk_bytes = chunk_volume * 4;
+
+    let mut linear_chunks_offsets = Vec::<u8>::new();
+    let mut linear_chunks = Vec::<u8>::new();
+    //linear_chunks.reserve_exact(chunk_bytes as usize * render_chunk_map.to_be_written.len());
     for (pos, grid_ptr) in render_chunk_map.to_be_written.iter() {
         if let Some(offset) = render_chunk_map.chunks.get(pos) {
-            let gh = grid_ptr.0.read().unwrap();
-            let offset = *offset as u64 * gh.get_buffer_size() as u64;
-            render_queue.write_buffer(&voxel_data.chunks, offset, &gh.voxels);
+            let grid = grid_ptr.0.read().unwrap();
+            let offset = *offset as u32 * chunk_bytes as u32;
+            assert_eq!(grid.voxels.len() as u32, chunk_bytes);
+            linear_chunks.extend(&grid.voxels);
+            linear_chunks_offsets.extend(offset.to_le_bytes());
+        } else {
+            linear_chunks_offsets.extend(u32::MAX.to_le_bytes());
         }
     }
-
-    let mut sorted: Vec<(IVec3, u32)> = render_chunk_map
-        .chunks
-        .iter()
-        .map(|c| (*c.0, *c.1))
-        .collect();
-    sorted.sort_by(|a, b| a.1.cmp(&b.1));
-    let mut chunks_pos: Vec<u8> = vec![];
-    for (pos, _offset) in sorted.iter() {
-        chunks_pos.extend(pos.x.to_ne_bytes());
-        chunks_pos.extend(pos.y.to_ne_bytes());
-        chunks_pos.extend(pos.z.to_ne_bytes());
+    linear_chunks_offsets.extend(u32::MAX.to_le_bytes());
+    if linear_chunks_offsets.len() > 4 {
+        println!("{:?}", linear_chunks_offsets);
     }
+    // write_buffer calls overwrite each other
+    render_queue.write_buffer(&voxel_data.chunks_loading, 0, &linear_chunks);
+    render_queue.write_buffer(
+        &voxel_data.chunks_loading_offsets,
+        0,
+        &linear_chunks_offsets,
+    );
+
+    /*
+    for (pos, grid_ptr) in render_chunk_map.to_be_written.iter() {
+        if let Some(offset) = render_chunk_map.chunks.get(pos) {
+            let grid = grid_ptr.0.read().unwrap();
+            let offset = *offset as u64 * grid.get_buffer_u8_size() as u64;
+            dbg!(offset, grid.voxels.len());
+            println!("podds{pos} {:p}", grid_ptr.0);
+            if let Some(mut buffer) = render_queue.write_buffer_with(
+                &voxel_data.chunks,
+                offset,
+                NonZeroU64::new(grid.voxels.len() as u64).unwrap(),
+            ) {
+                buffer.as_mut().copy_from_slice(&grid.voxels);
+            }
+        }
+    }
+    */
+
+    let chunk_side = voxel_uniforms.chunk_size;
+    let chunk_volume = chunk_side * chunk_side * chunk_side;
+    let side = voxel_uniforms.offsets_grid_size;
+    let mut chunks_pos: Vec<u32> = vec![];
+    for z in 0..side {
+        for y in 0..side {
+            for x in 0..side {
+                let mut pos = IVec3::new(x as i32, y as i32, z as i32);
+                pos *= voxel_uniforms.chunk_size as i32;
+                // translate the (0,0,0) chunk to the center of the chunk grid
+                //pos = pos - IVec3::splat(side as i32) / 2;
+                if let Some(offset) = render_chunk_map.chunks.get(&pos) {
+                    chunks_pos.push(*offset * chunk_volume * 4);
+                } else {
+                    chunks_pos.push(u32::MAX);
+                }
+            }
+        }
+    }
+    let chunks_pos: Vec<u8> = chunks_pos
+        .iter()
+        // https://www.w3.org/TR/WGSL/#internal-value-layout
+        .map(|off| off.to_le_bytes())
+        .flatten()
+        .collect();
     render_queue.write_buffer(&voxel_data.chunks_pos, 0, &chunks_pos);
 }
 

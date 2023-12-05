@@ -19,6 +19,23 @@ impl Grid {
         }
     }
 
+    pub fn filled(size: u32) -> Grid {
+        let mut gh = Grid::empty(size as u32);
+        gh.palette[0] = [0.0, 0.0, 0.0, 0.0];
+        gh.palette[1] = [1.0, 1.0, 1.0, 1.0];
+        gh.palette[2] = [1.0, 0.0, 0.0, 1.0];
+        for z in 0..size {
+            for y in 0..size {
+                for x in 0..size {
+                    let index = (x * size * size + y * size + z) as usize;
+                        gh.voxels[index * 4] = 1;
+                        gh.voxels[index * 4 + 1] = 16;
+                }
+            }
+        }
+        gh
+    }
+
     pub fn flatland(size: u32) -> Grid {
         let mut gh = Grid::empty(size as u32);
         gh.palette[0] = [0.0, 0.0, 0.0, 0.0];
@@ -50,7 +67,7 @@ impl Grid {
         (id << 8) + flags
     }
 
-    pub fn get_buffer_size(&self) -> u32 {
+    pub fn get_buffer_u8_size(&self) -> u32 {
         self.size * self.size * self.size * 4
     }
 

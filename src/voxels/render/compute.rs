@@ -8,11 +8,11 @@ use bevy::{
     },
 };
 
-use crate::voxels::render::{mip, rebuild};
+use crate::voxels::render::stream;
 
 const MAX_TYPE_BUFFER_DATA: usize = 1000000; // 4mb
 
-pub const MIP_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(6189143918759879663);
+pub const STREAM_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(6189143918759879663);
 pub const REBUILD_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(18135969847573717619);
 
 pub struct ComputeResourcesPlugin;
@@ -22,14 +22,8 @@ impl Plugin for ComputeResourcesPlugin {
     fn finish(&self, app: &mut App) {
         load_internal_asset!(
             app,
-            MIP_SHADER_HANDLE,
-            "shaders/mip.wgsl",
-            Shader::from_wgsl
-        );
-        load_internal_asset!(
-            app,
-            REBUILD_SHADER_HANDLE,
-            "shaders/rebuild.wgsl",
+            STREAM_SHADER_HANDLE,
+            "shaders/stream.wgsl",
             Shader::from_wgsl
         );
 
@@ -121,8 +115,7 @@ impl Plugin for ComputeResourcesPlugin {
                 bind_group,
                 uniform_buffer,
             })
-            .init_resource::<rebuild::Pipeline>()
-            .init_resource::<mip::Pipeline>()
+            .init_resource::<stream::Pipeline>()
             .add_systems(Render, prepare_uniforms.in_set(RenderSet::Queue));
     }
 }

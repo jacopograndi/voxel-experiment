@@ -77,7 +77,7 @@ fn voxel_break(
             };
             if let Some(act) = act {
                 if let Some((pos, norm, dist)) =
-                    raycast::raycast(tr.translation * 4. + s3 / 2., tr.forward(), &gh)
+                    raycast::raycast(tr.translation - pos.as_vec3(), tr.forward(), &gh)
                 {
                     if dist.is_finite() && gh.contains(&pos) {
                         match act {
@@ -99,7 +99,7 @@ fn voxel_break(
                         };
                     }
                 } else {
-                    dbg!("no hit");
+                    //dbg!("no hit");
                 }
             }
         }
@@ -148,11 +148,30 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
 
     // voxel world
     //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
+    let mut grid = Grid::flatland(32);
+    let pos = IVec3::new(20, 20, 20);
+    let i = (pos.z + pos.y * 32 + pos.x * 32 * 32) * 4;
+    grid.voxels[i as usize] = 1;
+    grid.voxels[i as usize + 1] = 16;
     chunk_map.chunks.insert(
         IVec3::new(0, 0, 0),
         Chunk {
-            grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(256)))),
-            was_mutated: false,
+            grid: GridPtr(Arc::new(RwLock::new(grid.clone()))),
+            was_mutated: true,
+        },
+    );
+    chunk_map.chunks.insert(
+        IVec3::new(32, 0, 0),
+        Chunk {
+            grid: GridPtr(Arc::new(RwLock::new(Grid::filled(32)))),
+            was_mutated: true,
+        },
+    );
+    chunk_map.chunks.insert(
+        IVec3::new(32, 64, 64),
+        Chunk {
+            grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(32)))),
+            was_mutated: true,
         },
     );
 

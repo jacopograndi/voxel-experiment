@@ -1,6 +1,7 @@
 use crate::voxels::render::{
+    compute::ComputeResourcesPlugin,
     denoise::{DenoiseNode, DenoisePlugin},
-    //compute::ComputeResourcesPlugin, , mip::MipNode, rebuild::RebuildNode,
+    stream::StreamNode,
     trace::{TraceNode, TracePlugin, TraceSettings},
 };
 
@@ -37,7 +38,7 @@ pub mod graph {
         pub const TONEMAPPING: &str = "tonemapping";
         pub const FXAA: &str = "fxaa";
         pub const UPSCALING: &str = "upscaling";
-        pub const MIP: &str = "mip";
+        pub const STREAM: &str = "stream";
         pub const REBUILD: &str = "rebuild";
     }
 }
@@ -50,8 +51,8 @@ impl Plugin for RenderPlugin {
             .add_plugins(AttachmentsPlugin)
             .add_plugins(VoxelWorldPlugin)
             .add_plugins(TracePlugin)
-            .add_plugins(DenoisePlugin);
-        //.add_plugins(ComputeResourcesPlugin);
+            .add_plugins(DenoisePlugin)
+            .add_plugins(ComputeResourcesPlugin);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
@@ -61,7 +62,7 @@ impl Plugin for RenderPlugin {
         use graph::node::*;
         render_app
             .add_render_sub_graph(VOXEL)
-            //.add_render_graph_node::<ViewNodeRunner<MipNode>>(VOXEL, MIP)
+            .add_render_graph_node::<ViewNodeRunner<StreamNode>>(VOXEL, STREAM)
             //.add_render_graph_node::<ViewNodeRunner<RebuildNode>>(VOXEL, REBUILD)
             .add_render_graph_node::<ViewNodeRunner<TraceNode>>(VOXEL, TRACE)
             .add_render_graph_node::<ViewNodeRunner<DenoiseNode>>(VOXEL, DENOISE)
@@ -72,6 +73,7 @@ impl Plugin for RenderPlugin {
                 VOXEL,
                 &[
                     //MIP, REBUILD,
+                    STREAM,
                     TRACE,
                     DENOISE,
                     TONEMAPPING,
