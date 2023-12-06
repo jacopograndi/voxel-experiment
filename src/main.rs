@@ -60,48 +60,58 @@ fn voxel_break(
     mouse: Res<Input<MouseButton>>,
 ) {
     if let Ok((_cam, tr)) = camera_query.get_single() {
-        for (pos, chunk) in chunk_map.chunks.iter_mut() {
-            let mut gh = chunk.grid.0.write().unwrap();
-            let s = gh.size as i32;
-            #[derive(PartialEq)]
-            enum Act {
-                PlaceBlock,
-                RemoveBlock,
-            }
-            let act = match (
-                mouse.pressed(MouseButton::Left),
-                mouse.pressed(MouseButton::Right),
-            ) {
-                (true, false) => Some(Act::PlaceBlock),
-                (false, true) => Some(Act::RemoveBlock),
-                _ => None,
-            };
-            if let Some(act) = act {
-                if let Some((pos, norm, dist)) =
-                    raycast::raycast(tr.translation - pos.as_vec3(), tr.forward(), &gh)
-                {
-                    if dist.is_finite() && gh.contains(&pos) {
-                        match act {
-                            Act::RemoveBlock => {
-                                let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
-                                gh.voxels[i as usize] = 0;
-                                gh.voxels[i as usize + 1] = 0;
+        #[derive(PartialEq)]
+        enum Act {
+            PlaceBlock,
+            RemoveBlock,
+        }
+        let act = match (
+            mouse.pressed(MouseButton::Left),
+            mouse.pressed(MouseButton::Right),
+        ) {
+            (true, false) => Some(Act::PlaceBlock),
+            (false, true) => Some(Act::RemoveBlock),
+            _ => None,
+        };
+        if let Some(act) = act {
+            if let Some((pos, norm, dist)) =
+                raycast::raycast(tr.translation, tr.forward(), &chunk_map)
+            {
+                if dist.is_finite() {
+                    match act {
+                        Act::RemoveBlock => {
+                            let grid_pos = (pos / 32) * 32;
+                            let voxel_pos = pos % 32;
+                            let chunk: &mut Chunk = chunk_map.chunks.get_mut(&grid_pos).unwrap();
+                            let mut grid = chunk.grid.0.write().unwrap();
+                            let s = grid.size as i32;
+                            if grid.contains(&voxel_pos) {
+                                let i = (voxel_pos.z + voxel_pos.y * s + voxel_pos.x * s * s) * 4;
+                                grid.voxels[i as usize] = 0;
+                                grid.voxels[i as usize + 1] = 0;
                                 chunk.version = chunk.version.wrapping_add(1);
                             }
-                            Act::PlaceBlock => {
-                                let pos = pos + norm;
-                                if gh.contains(&pos) {
-                                    let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
-                                    gh.voxels[i as usize] = 2;
-                                    gh.voxels[i as usize + 1] = 16;
+                        }
+                        Act::PlaceBlock => {
+                            let pos = pos + norm;
+                            let grid_pos = (pos / 32) * 32;
+                            let voxel_pos = pos % 32;
+                            if let Some(mut chunk) = chunk_map.chunks.get_mut(&grid_pos) {
+                                let mut grid = chunk.grid.0.write().unwrap();
+                                let s = grid.size as i32;
+                                if grid.contains(&voxel_pos) {
+                                    let i =
+                                        (voxel_pos.z + voxel_pos.y * s + voxel_pos.x * s * s) * 4;
+                                    grid.voxels[i as usize] = 2;
+                                    grid.voxels[i as usize + 1] = 16;
                                     chunk.version = chunk.version.wrapping_add(1);
                                 }
                             }
-                        };
-                    }
-                } else {
-                    //dbg!("no hit");
+                        }
+                    };
                 }
+            } else {
+                //dbg!("no hit");
             }
         }
     }
