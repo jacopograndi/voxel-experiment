@@ -1,4 +1,7 @@
-use crate::voxels::{voxel_world::VoxelData, RenderGraphSettings};
+use crate::voxels::{
+    voxel_world::{ExtractedCameraPosition, VoxelData},
+    RenderGraphSettings,
+};
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
@@ -98,6 +101,7 @@ impl Default for TraceSettings {
 
 #[derive(Clone, ShaderType)]
 pub struct TraceUniforms {
+    pub camera_pos: Vec3,
     pub camera: Mat4,
     pub camera_inverse: Mat4,
     pub last_camera: Mat4,
@@ -125,6 +129,7 @@ fn prepare_uniforms(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut last_cameras: ResMut<LastCameras>,
+    cam_pos: Res<ExtractedCameraPosition>,
 ) {
     let elapsed = time.elapsed_seconds_f64();
 
@@ -141,6 +146,7 @@ fn prepare_uniforms(
         last_cameras.insert(entity, camera);
 
         let uniforms = TraceUniforms {
+            camera_pos: cam_pos.pos,
             camera,
             camera_inverse,
             last_camera,

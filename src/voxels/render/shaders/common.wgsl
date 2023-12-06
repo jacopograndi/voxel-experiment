@@ -21,6 +21,7 @@ struct VoxelUniforms {
 };
 
 struct TraceUniforms {
+    camera_pos: vec3<f32>,
     camera: mat4x4<f32>,
     camera_inverse: mat4x4<f32>,
     last_camera: mat4x4<f32>,

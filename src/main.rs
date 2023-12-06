@@ -63,7 +63,6 @@ fn voxel_break(
         for (pos, chunk) in chunk_map.chunks.iter_mut() {
             let mut gh = chunk.grid.0.write().unwrap();
             let s = gh.size as i32;
-            let s3 = Vec3::splat(s as f32);
             #[derive(PartialEq)]
             enum Act {
                 PlaceBlock,
@@ -87,7 +86,7 @@ fn voxel_break(
                                 let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
                                 gh.voxels[i as usize] = 0;
                                 gh.voxels[i as usize + 1] = 0;
-                                chunk.was_mutated = true;
+                                chunk.version = chunk.version.wrapping_add(1);
                             }
                             Act::PlaceBlock => {
                                 let pos = pos + norm;
@@ -95,7 +94,7 @@ fn voxel_break(
                                     let i = (pos.z + pos.y * s + pos.x * s * s) * 4;
                                     gh.voxels[i as usize] = 2;
                                     gh.voxels[i as usize + 1] = 16;
-                                    chunk.was_mutated = true;
+                                    chunk.version = chunk.version.wrapping_add(1);
                                 }
                             }
                         };
@@ -152,7 +151,7 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
     let camera_pos = if let Ok((_, tr)) = camera.get_single() {
         tr.translation
     } else {
-        Vec3::ZERO
+        return;
     };
 
     let camera_chunk_pos = (camera_pos / 32.0).as_ivec3() * 32;
@@ -170,13 +169,13 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
                     let pos = camera_chunk_pos + rel;
                     if let None = chunk_map.chunks.get(&pos) {
                         // gen chunk
-                        println!("{:?}", pos);
+                        //println!("gen {:?}", pos);
                         let grid_ptr = gen_chunk(pos);
                         chunk_map.chunks.insert(
                             pos,
                             Chunk {
                                 grid: grid_ptr,
-                                was_mutated: true,
+                                version: 0,
                             },
                         );
                     }

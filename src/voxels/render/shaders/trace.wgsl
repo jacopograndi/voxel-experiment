@@ -270,24 +270,26 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let seed = vec3<u32>(in.position.xyz) * 100u + u32(trace_uniforms.time * 120.0) * 15236u;
     let resolution = vec2<f32>(textureDimensions(normal));
     var jitter = vec2(0.0);
+    /*
     if (trace_uniforms.indirect_lighting != 0u) {
         jitter = (hash(seed).xy - 0.5) / resolution;
     }
+    */
     var clip_space = vec2(1.0, -1.0) * ((in.uv + jitter) * 2.0 - 1.0);
     var output_colour = vec3(0.0);
 
     let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
     let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
-    let center_in_grid = chunk_size * chunk_grid_size / 2.0;
+    let center_in_grid = vec3f(
+        vec3i(i32(voxel_uniforms.chunk_size * voxel_uniforms.offsets_grid_size))  
+        / 2
+    );
 
     let pos1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
     let dir1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 0.01, 1.0);
     let pos = pos1.xyz / pos1.w;
     let dir = normalize(dir1.xyz / dir1.w - pos);
-    var constrained_pos = pos + center_in_grid;
-    if trace_uniforms.misc_bool != 0u {
-        constrained_pos = (pos) % chunk_size + center_in_grid;
-    }
+    var constrained_pos = trace_uniforms.camera_pos % chunk_size + center_in_grid;
     var ray = Ray(constrained_pos, dir);
 
     let hit = shoot_ray(ray, 0u);
@@ -355,7 +357,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     output_colour = max(output_colour, vec3(0.0));
-    textureStore(normal, vec2<i32>(in.position.xy), vec4(hit.normal, 0.0));
-    textureStore(position, vec2<i32>(in.position.xy), vec4(hit.reprojection_pos, 0.0));
+    //textureStore(normal, vec2<i32>(in.position.xy), vec4(hit.normal, 0.0));
+    //textureStore(position, vec2<i32>(in.position.xy), vec4(hit.reprojection_pos, 0.0));
     return vec4<f32>(output_colour, 1.0);
 }
