@@ -28,8 +28,8 @@ impl Grid {
             for y in 0..size {
                 for x in 0..size {
                     let index = (x * size * size + y * size + z) as usize;
-                        gh.voxels[index * 4] = 1;
-                        gh.voxels[index * 4 + 1] = 16;
+                    gh.voxels[index * 4] = 1;
+                    gh.voxels[index * 4 + 1] = 16;
                 }
             }
         }
@@ -65,6 +65,12 @@ impl Grid {
         let flags = self.voxels[index * 4 + 1] as u32;
         //j todo: this drops two bytes
         (id << 8) + flags
+    }
+
+    pub fn set_at(&mut self, pos: IVec3, data: u8) {
+        let size = self.size as i32;
+        let index = (pos.x * size * size + pos.y * size + pos.z) as usize;
+        self.voxels[index * 4] = data;
     }
 
     pub fn get_buffer_u8_size(&self) -> u32 {

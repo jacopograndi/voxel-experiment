@@ -27,7 +27,7 @@ impl Plugin for VoxelWorldPlugin {
 
         let buffer_size = gh.get_buffer_u8_size();
         let chunk_size = gh.size;
-        let chunks_grid = 3;
+        let chunks_grid = 12;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
@@ -151,11 +151,13 @@ impl Plugin for VoxelWorldPlugin {
         app.insert_resource(LoadVoxelWorld::None)
             .insert_resource(ChunkMap::default())
             .insert_resource(ExtractedImage::default())
+            .insert_resource(ExtractedCameraPosition::default())
             .insert_resource(render_chunk_map)
             .insert_resource(voxel_uniforms)
             .add_plugins(ExtractResourcePlugin::<RenderChunkMap>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
             .add_plugins(ExtractResourcePlugin::<ExtractedImage>::default())
+            .add_plugins(ExtractResourcePlugin::<ExtractedCameraPosition>::default())
             .add_systems(Update, extract_chunks)
             .add_systems(Update, extract_images);
 
@@ -205,24 +207,6 @@ pub struct Chunk {
 #[derive(Resource, Debug, Clone, Default)]
 pub struct ChunkMap {
     pub chunks: HashMap<IVec3, Chunk>,
-}
-
-impl ChunkMap {
-    pub fn contains(&self, pos: &IVec3) -> bool {
-        self.chunks
-            .iter()
-            .any(|(outer, chunk)| chunk.grid.0.read().unwrap().contains(&(*pos - *outer)))
-    }
-    pub fn get_at(&self, pos: IVec3) -> u32 {
-        for (outer, chunk) in self.chunks.iter() {
-            let grid = chunk.grid.0.read().unwrap();
-            let p = pos - *outer;
-            if grid.contains(&p) {
-                return grid.get_at(p);
-            }
-        }
-        return 0;
-    }
 }
 
 #[derive(Resource, ExtractResource, Clone, Default)]
@@ -336,31 +320,71 @@ fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<Handles>) {
     extr.handle = handles.texture_blocks.id();
 }
 
+#[derive(Resource, ExtractResource, Clone, Default)]
+struct ExtractedCameraPosition {
+    pos: Vec3,
+}
+
 fn extract_chunks(
     _voxel_uniforms: Res<VoxelUniforms>,
     mut chunk_map: ResMut<ChunkMap>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
+    camera: Query<(&Camera, &Transform)>,
+    mut cam_pos: ResMut<ExtractedCameraPosition>,
 ) {
-    let game_chunks: HashSet<IVec3> = chunk_map.chunks.iter().map(|c| *c.0).collect();
-    let render_chunks: HashSet<IVec3> = render_chunk_map
+    let chunk_view_distance: u32 = 200;
+
+    let camera_pos = if let Ok((_, tr)) = camera.get_single() {
+        -tr.translation
+    } else {
+        Vec3::ZERO
+    };
+
+    cam_pos.pos = camera_pos;
+
+    let visible_chunks: HashSet<IVec3> = chunk_map
+        .chunks
+        .iter()
+        .filter_map(|(pos, _chunk)| {
+            if (camera_pos + pos.as_vec3()).length_squared() < chunk_view_distance.pow(2) as f32 {
+                Some(*pos)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let to_be_removed: HashSet<IVec3> = render_chunk_map
         .buffer_alloc
         .allocations
         .iter()
-        .map(|rc| *rc.1)
+        .filter_map(|(_offset, pos)| (!visible_chunks.contains(pos)).then(|| *pos))
         .collect();
-    let modified_chunks: HashSet<IVec3> = chunk_map
+    for &pos in to_be_removed.iter() {
+        render_chunk_map.buffer_alloc.deallocate_chunk(pos).unwrap();
+    }
+
+    let to_be_rendered: HashSet<IVec3> = chunk_map
         .chunks
         .iter()
-        .filter(|c| c.1.was_mutated)
-        .map(|c| *c.0)
+        .filter_map(|(pos, chunk)| {
+            if visible_chunks.contains(pos) {
+                if chunk.was_mutated {
+                    Some(*pos)
+                } else {
+                    if render_chunk_map.buffer_alloc.get_offset(*pos).is_none() {
+                        Some(*pos)
+                    } else {
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        })
         .collect();
-
-    let new_chunks: HashSet<IVec3> = game_chunks.difference(&render_chunks).cloned().collect();
-    let _deleted_chunks: HashSet<IVec3> = render_chunks.difference(&game_chunks).cloned().collect();
-    let new_chunks: HashSet<IVec3> = modified_chunks.union(&new_chunks).cloned().collect();
-
     render_chunk_map.to_be_written.clear();
-    for &pos in new_chunks.iter() {
+    for &pos in to_be_rendered.iter() {
         let chunk = chunk_map.chunks.get(&pos).unwrap();
         let grid = chunk.grid.clone();
         if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
@@ -385,18 +409,23 @@ fn load_voxel_world_prepare(
     //render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     render_chunk_map: Res<RenderChunkMap>,
+    cam_pos: Res<ExtractedCameraPosition>,
 ) {
     let chunk_side = voxel_uniforms.chunk_size;
     let chunk_volume = chunk_side * chunk_side * chunk_side;
+    let outer = voxel_uniforms.offsets_grid_size;
+
+    let camera_chunk_pos = (cam_pos.pos / chunk_side as f32).as_ivec3() * chunk_side as i32;
+    let center = IVec3::splat(outer as i32) / 2 * chunk_side as i32;
 
     // voxel outer grid
-    let side = voxel_uniforms.offsets_grid_size;
     let mut chunks_pos: Vec<u32> = vec![];
-    for x in 0..side {
-        for y in 0..side {
-            for z in 0..side {
-                let mut pos = IVec3::new(x as i32, y as i32, z as i32);
-                pos *= voxel_uniforms.chunk_size as i32;
+    for x in 0..outer {
+        for y in 0..outer {
+            for z in 0..outer {
+                let mut pos = IVec3::new(x as i32, y as i32, z as i32) * chunk_side as i32;
+                pos -= center;
+                pos -= camera_chunk_pos;
                 if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
                     chunks_pos.push(offset * chunk_volume);
                 } else {

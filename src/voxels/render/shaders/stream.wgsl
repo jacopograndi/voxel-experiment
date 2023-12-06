@@ -10,26 +10,25 @@ var<storage, read> chunks_loading: array<u32>;
 var<storage, read> chunks_loading_offsets: array<u32>;
 
 const EMPTY_CHUNK = 4294967295u;
-const CHUNK_SIZE = 32768u; // 32^3
 const MAX_COPY_ITERS = 100000u;
 
 // increase parallelism using workgroup_size
-@compute @workgroup_size(1)
+@compute @workgroup_size(4, 4, 4)
 fn copy(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let invocation = u32(invocation_id.x);
+    let chunk_size = voxel_uniforms.chunk_size;
+    let chunk_volume = chunk_size * chunk_size * chunk_size;
+    let id = invocation_id.x * chunk_size * chunk_size 
+        + invocation_id.y * chunk_size 
+        + invocation_id.z
+    ;
     for (var i = 0u; i < MAX_COPY_ITERS; i++) {
         let offset = chunks_loading_offsets[i];
         if (offset == EMPTY_CHUNK) {
             return;
         }
-        //for (var j = 0u; j < CHUNK_SIZE / 32u; j++) {
-            //let from_linear = CHUNK_SIZE * i + j + invocation * 1024u;
-            //let to_offset = offset + j + invocation * 1024u;
-        for (var j = 0u; j < CHUNK_SIZE; j++) {
-            let from_linear = CHUNK_SIZE * i + j;
-            let to_offset = offset + j;
-            chunks[to_offset] = chunks_loading[from_linear];
-        }
+        let from_linear = chunk_volume * i + id;
+        let to_offset = offset + id;
+        chunks[to_offset] = chunks_loading[from_linear];
     }
 }
 

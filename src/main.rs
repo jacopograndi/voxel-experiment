@@ -5,6 +5,7 @@ use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
+    utils::HashMap,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -42,7 +43,8 @@ fn main() {
     .add_systems(Startup, load)
     .add_systems(OnEnter(FlowState::Base), setup)
     .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
-    .add_systems(Update, print_mesh_count);
+    .add_systems(Update, print_mesh_count)
+    .add_systems(Update, load_and_gen_chunks);
 
     app.add_systems(Update, voxel_break);
 
@@ -133,6 +135,66 @@ fn check_loading(
     }
 }
 
+fn gen_chunk(pos: IVec3) -> GridPtr {
+    let mut grid = if pos.y == 0 {
+        Grid::flatland(32)
+    } else if pos.y < 0 {
+        Grid::filled(32)
+    } else {
+        Grid::empty(32)
+    };
+    GridPtr(Arc::new(RwLock::new(grid)))
+}
+
+fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, &Transform)>) {
+    let load_view_distance: u32 = 250;
+
+    let camera_pos = if let Ok((_, tr)) = camera.get_single() {
+        tr.translation
+    } else {
+        Vec3::ZERO
+    };
+
+    let camera_chunk_pos = (camera_pos / 32.0).as_ivec3() * 32;
+
+    // hardcoded chunk size
+    let load_view_distance_chunk = load_view_distance as i32 / 32;
+    let lvdc = load_view_distance_chunk;
+
+    // sphere centered on the player
+    for x in -lvdc..=lvdc {
+        for y in -lvdc..=lvdc {
+            for z in -lvdc..=lvdc {
+                let rel = IVec3::new(x, y, z) * 32;
+                if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
+                    let pos = camera_chunk_pos + rel;
+                    if let None = chunk_map.chunks.get(&pos) {
+                        // gen chunk
+                        println!("{:?}", pos);
+                        let grid_ptr = gen_chunk(pos);
+                        chunk_map.chunks.insert(
+                            pos,
+                            Chunk {
+                                grid: grid_ptr,
+                                was_mutated: true,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+    println!(
+        "{:?}",
+        chunk_map.chunks.iter().map(|o| o.0).collect::<Vec<_>>()
+    );
+    */
+
+    //dbg!(chunk_map.chunks.len());
+}
+
 fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
     // bevy-fly-cam camera settings
     // bevy-fly-cam is prototype only
@@ -147,48 +209,23 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
     });
 
     // voxel world
-    //*load_voxel_world = LoadVoxelWorld::File("assets/monu9.vox".to_string());
-    let size = 3;
-    for x in 0..size {
-        for y in 0..size {
-            for z in 0..size {
+    /*
+    let size = 10;
+    for x in -size..size {
+        for y in -size..size {
+            for z in -size..size {
+                let pos = IVec3::new(x, y, z);
                 chunk_map.chunks.insert(
-                    IVec3::new(x, y, z) * 32,
+                    // hardcoded chunk size
+                    pos * 32,
                     Chunk {
-                        grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(32)))),
+                        grid: GridPtr(Arc::new(RwLock::new(Grid::filled(32, pos)))),
                         was_mutated: false,
                     },
                 );
             }
         }
     }
-    /*
-    let mut grid = Grid::flatland(32);
-    let pos = IVec3::new(20, 20, 20);
-    let i = (pos.z + pos.y * 32 + pos.x * 32 * 32) * 4;
-    grid.voxels[i as usize] = 1;
-    grid.voxels[i as usize + 1] = 16;
-    chunk_map.chunks.insert(
-        IVec3::new(0, 0, 0),
-        Chunk {
-            grid: GridPtr(Arc::new(RwLock::new(grid.clone()))),
-            was_mutated: true,
-        },
-    );
-    chunk_map.chunks.insert(
-        IVec3::new(32, 0, 0),
-        Chunk {
-            grid: GridPtr(Arc::new(RwLock::new(Grid::filled(32)))),
-            was_mutated: true,
-        },
-    );
-    chunk_map.chunks.insert(
-        IVec3::new(32, 64, 64),
-        Chunk {
-            grid: GridPtr(Arc::new(RwLock::new(Grid::flatland(32)))),
-            was_mutated: true,
-        },
-    );
     */
 
     // voxel camera

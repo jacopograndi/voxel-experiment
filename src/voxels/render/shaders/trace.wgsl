@@ -44,19 +44,21 @@ struct Voxel {
 };
 
 fn get_at(grid: vec3<i32>) -> u32 {
-    let side = voxel_uniforms.chunk_size;
     let outer = voxel_uniforms.offsets_grid_size;
+    let side = voxel_uniforms.chunk_size;
     let chunk_size = vec3f(f32(side));
-    let split = vec3f(grid) / chunk_size;
-    var voxel_pos = vec3i(split - trunc(split)) * vec3i(i32(side));
-    var chunk_pos = vec3i(trunc(split));
-    let voxel_i = u32(voxel_pos.x) * (side * side) + u32(voxel_pos.y) * side + u32(voxel_pos.z);
-    let chunk_i = u32(chunk_pos.x) * (outer * outer) + u32(chunk_pos.y) * outer + u32(chunk_pos.z);
+    let pos = vec3f(grid);
+    let outer_pos = floor(pos / chunk_size);
+    let chunk_i = u32(outer_pos.x) * (outer * outer) + u32(outer_pos.y) * outer + u32(outer_pos.z);
     let offset = chunks_offsets[chunk_i];
-    if offset == EMPTY_CHUNK {
-        return chunks[0];
+    if (offset != EMPTY_CHUNK) {
+        let voxel_map = pos % chunk_size;
+        let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
+        return chunks[offset + voxel_i];
     }
-    return chunks[voxel_i + offset];
+    else {
+        return 0u;
+    }
 }
 
 fn get_value(pos: vec3<f32>) -> Voxel {
@@ -238,10 +240,6 @@ fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode
 }
 
 fn get_voxel(pos: vec3<f32>) -> f32 {
-    if any(pos < vec3(0.0)) || any(pos >= vec3(f32(voxel_uniforms.chunk_size))) {
-        return 0.0;
-    }
-
     let grid = vec3<i32>(pos).xyz;
     let data = get_at(grid);
     return min(f32(0u & 0xFFu), 1.0);
@@ -278,17 +276,25 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var clip_space = vec2(1.0, -1.0) * ((in.uv + jitter) * 2.0 - 1.0);
     var output_colour = vec3(0.0);
 
+    let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
+    let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
+    let center_in_grid = chunk_size * chunk_grid_size / 2.0;
+
     let pos1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
     let dir1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 0.01, 1.0);
     let pos = pos1.xyz / pos1.w;
     let dir = normalize(dir1.xyz / dir1.w - pos);
-    var ray = Ray(pos, dir);
+    var constrained_pos = pos + center_in_grid;
+    if trace_uniforms.misc_bool != 0u {
+        constrained_pos = (pos) % chunk_size + center_in_grid;
+    }
+    var ray = Ray(constrained_pos, dir);
 
     let hit = shoot_ray(ray, 0u);
     var steps = hit.steps;
 
     // force voxel ambient occlusion
-    let mode = 2u;
+    let mode = 0u;
 
     // lighting
     var direct_lighting = vec3(0.0);
@@ -296,7 +302,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     var samples = 0.0;
     if hit.hit {
-        direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
+        //direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
         if mode == 2u {
             // raytraced indirect lighting
             for (var i = 0u; i < trace_uniforms.samples; i += 1u) {
@@ -312,17 +318,19 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 indirect_lighting += lighting / f32(trace_uniforms.samples);
             }
         } else {
-            /*
             // voxel ao
-            let texture_coords = hit.pos * VOXELS_PER_METER + f32(voxel_uniforms.chunk_size) / 2.0;
+            /*
+            let texture_coords = hit.pos;
             let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
             let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
 
             let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
-            let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
+            //let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
+            let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 10.0);
 
             indirect_lighting = vec3(2.0 * voxel_ao);
             */
+            indirect_lighting = vec3(0.8);
         }
 
         // final blend

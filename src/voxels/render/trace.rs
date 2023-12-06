@@ -87,10 +87,10 @@ impl Default for TraceSettings {
         Self {
             show_ray_steps: false,
             indirect_lighting: false,
-            samples: 4,
+            samples: 1,
             reprojection_factor: 0.0,
             shadows: true,
-            misc_bool: false,
+            misc_bool: true,
             misc_float: 1.0,
         }
     }
