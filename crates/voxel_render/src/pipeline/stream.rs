@@ -107,10 +107,10 @@ impl ViewNode for StreamNode {
             None,
             &pipelines.stream_bind_group_layout,
             &BindGroupEntries::sequential((
-                   voxel_data.uniform_buffer.binding().unwrap(),
-                    voxel_data.chunks.as_entire_binding(),
-                    voxel_data.chunks_loading.as_entire_binding(),
-                    voxel_data.chunks_loading_offsets.as_entire_binding(),
+                voxel_data.uniform_buffer.binding().unwrap(),
+                voxel_data.chunks.as_entire_binding(),
+                voxel_data.chunks_loading.as_entire_binding(),
+                voxel_data.chunks_loading_offsets.as_entire_binding(),
             )),
         );
 

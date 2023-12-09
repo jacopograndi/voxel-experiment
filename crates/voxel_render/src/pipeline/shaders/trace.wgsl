@@ -3,7 +3,7 @@
 #import bevy_render::globals::Globals
 #import bevy_voxel_engine::common::{
     VoxelUniforms, TraceUniforms, Ray, VOXELS_PER_METER, hash, 
-    clip_aabb, ray_plane, in_bounds, ray_box_dist, PORTAL_FLAG, cosine_hemisphere, skybox
+    clip_aabb, ray_plane, in_bounds, ray_box_dist, PORTAL_FLAG, cosine_hemisphere, skybox, PI
 }
 
 @group(0) @binding(0) var<uniform> voxel_uniforms: VoxelUniforms;
@@ -72,19 +72,10 @@ struct HitInfo {
     steps: u32,
 };
 
-const IDENTITY = mat4x4<f32>(
-    vec4<f32>(1.0, 0.0, 0.0, 0.0), 
-    vec4<f32>(0.0, 1.0, 0.0, 0.0), 
-    vec4<f32>(0.0, 0.0, 1.0, 0.0),
-    vec4<f32>(0.0, 0.0, 0.0, 1.0),
-);
-
 fn intersect_scene(r: Ray, steps: u32) -> HitInfo {
     let infinity = 1000000000.0 * r.dir;
     return HitInfo(false, 0u, infinity, infinity, vec3(0.0), vec3(0.0), steps);
 }
-
-const PI: f32 = 3.14159265358979323846264338327950288;
 
 fn in_chunk_bounds (v: vec3f, offset: vec3f, size: vec3f) -> bool {
     return 
@@ -103,7 +94,6 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
     let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
 
-    //ray.pos /= chunk_size;
     var map_pos = floor(ray.pos);
 
     // initial raycast against the outer chunks bounds
@@ -158,7 +148,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
             }
         }
         else {
-            // skip empty chunks
+            // todo skip empty chunks
         }
 	}
     let end_ray_pos = ray.dir 
@@ -197,42 +187,6 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     return hit_info;
 }
 
-// static directional light
-const light_dir = vec3<f32>(0.8, -1.0, 0.8);
-const light_colour = vec3<f32>(1.0, 1.0, 1.0);
-
-/*
-fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode: u32, seed: vec3<u32>, shadow_samples: u32) -> vec3<f32> {
-    // diffuse
-    let diffuse = max(dot(normal, -normalize(light_dir)), 0.0);
-
-    // shadow
-    var shadow = 1.0;
-    if trace_uniforms.shadows != 0u {
-        if mode == 2u {
-            for (var i = 0u; i < shadow_samples; i += 1u) {
-                let rand = hash(seed + i) * 2.0 - 1.0;
-                let shadow_ray = Ray(pos, -light_dir + rand * 0.1);
-                let shadow_hit = shoot_ray(shadow_ray, 0u);
-                shadow -= f32(shadow_hit.hit) / f32(shadow_samples);
-            }
-        } else {
-            let shadow_ray = Ray(pos, -light_dir);
-            let shadow_hit = shoot_ray(shadow_ray, 0u);
-            shadow = f32(!shadow_hit.hit);
-        }
-    }
-
-    // emissive
-    var emissive = vec3(0.0);
-    if material.a != 0.0 {
-        emissive = vec3(material.rgb);
-    }
-
-    return diffuse * shadow * light_colour + emissive;
-}
-*/
-
 fn get_voxel(pos: vec3<f32>) -> f32 {
     let grid = vec3<i32>(pos).xyz;
     let data = get_at(grid);
@@ -263,13 +217,7 @@ fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let seed = vec3<u32>(in.position.xyz) * 100u + u32(globals.time * 120.0) * 15236u;
     let resolution = vec2<f32>(view.viewport.zw);
-    var jitter = vec2(0.0);
-    /*
-    if (trace_uniforms.indirect_lighting != 0u) {
-        jitter = (hash(seed).xy - 0.5) / resolution;
-    }
-    */
-    var clip_space = vec2(1.0, -1.0) * ((in.uv + jitter) * 2.0 - 1.0);
+    var clip_space = vec2(1.0, -1.0) * (in.uv * 2.0 - 1.0);
     var output_colour = vec3(0.0);
 
     let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
@@ -290,62 +238,26 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let hit = shoot_ray(ray, 0u);
     var steps = hit.steps;
 
-    // force voxel ambient occlusion
-    let mode = 0u;
-
     // lighting
-    var direct_lighting = vec3(0.0);
     var indirect_lighting = vec3(0.0);
-
-    var samples = 0.0;
-    if hit.hit {
-        //direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
-        if mode == 2u {
-            /*
-            // raytraced indirect lighting
-            for (var i = 0u; i < trace_uniforms.samples; i += 1u) {
-                let indirect_dir = cosine_hemisphere(hit.normal, seed + i);
-                let indirect_hit = shoot_ray(Ray(hit.pos, indirect_dir),0u);
-                var lighting = vec3(0.0);
-                if indirect_hit.hit {
-                    lighting = calculate_direct(indirect_hit.material, indirect_hit.pos, indirect_hit.normal, mode, seed + 3u, 1u);
-                } else {
-                    //lighting = vec3(0.2);
-                    lighting = skybox(indirect_dir, 10.0);
-                }
-                indirect_lighting += lighting / f32(trace_uniforms.samples);
-            }
-            */
-        } else {
-            // voxel ao
-            /*
-            let texture_coords = hit.pos;
-            let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
-            let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
-
-            let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
-            //let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
-            let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 10.0);
-
-            indirect_lighting = vec3(2.0 * voxel_ao);
-            */
-            indirect_lighting = vec3(0.8);
-        }
-
-        // final blend
-        //output_colour = (indirect_lighting + direct_lighting) * hit.material.rgb;
-    } else {
-        output_colour = skybox(ray.dir, 10.0);
-    }
 
     var uv = hit.uv.xy;
     uv = vec2f(1.0) - uv;
     uv /= 16.0;
     uv.x += f32(hit.data& 0xFFu) / 16.0;
     let color = textureSample(texture_sheet, texture_sheet_sampler, uv);
-    output_colour = (direct_lighting + indirect_lighting) * color.xyz;
 
-    if !hit.hit {
+    if hit.hit {
+        // voxel ao
+        let texture_coords = hit.pos;
+        let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
+        let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
+        let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
+        let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
+        indirect_lighting = vec3(2.0 * voxel_ao);
+        output_colour = (indirect_lighting) * color.xyz;
+    }
+    else {
         output_colour = skybox(ray.dir, 10.0);
     }
 
@@ -354,7 +266,5 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     output_colour = max(output_colour, vec3(0.0));
-    //textureStore(normal, vec2<i32>(in.position.xy), vec4(hit.normal, 0.0));
-    //textureStore(position, vec2<i32>(in.position.xy), vec4(hit.reprojection_pos, 0.0));
     return vec4<f32>(output_colour, 1.0);
 }

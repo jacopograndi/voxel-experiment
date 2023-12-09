@@ -1,7 +1,4 @@
-use crate::{
-    voxel_world::{VoxelData},
-    RenderGraphSettings,
-};
+use crate::{voxel_world::VoxelData, RenderGraphSettings};
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,

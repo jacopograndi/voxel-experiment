@@ -11,7 +11,10 @@ use bevy::{
 use bevy_flycam::prelude::*;
 
 use voxel_physics::raycast;
-use voxel_render::{voxel_world::RenderHandles, BevyVoxelEnginePlugin, VoxelCameraBundle};
+use voxel_render::{
+    voxel_world::{RenderHandles, VIEW_DISTANCE},
+    BevyVoxelEnginePlugin, VoxelCameraBundle,
+};
 use voxel_storage::{
     chunk_map::{Chunk, ChunkMap, GridPtr},
     grid::{Grid, Voxel},
@@ -147,7 +150,7 @@ fn gen_chunk(pos: IVec3) -> GridPtr {
 }
 
 fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, &Transform)>) {
-    let load_view_distance: u32 = 250;
+    let load_view_distance: u32 = VIEW_DISTANCE + CHUNK_SIDE as u32 * 2;
 
     let camera_pos = if let Ok((_, tr)) = camera.get_single() {
         tr.translation

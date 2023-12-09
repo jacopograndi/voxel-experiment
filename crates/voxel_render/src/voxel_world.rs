@@ -14,6 +14,8 @@ use bevy::{
 use voxel_storage::chunk_map::{ChunkMap, GridPtr};
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
+pub const VIEW_DISTANCE: u32 = 250;
+
 pub struct VoxelWorldPlugin;
 
 impl Plugin for VoxelWorldPlugin {
@@ -25,7 +27,7 @@ impl Plugin for VoxelWorldPlugin {
 
         let buffer_size = CHUNK_VOLUME * 4;
         let chunk_size = CHUNK_SIDE as u32;
-        let chunks_grid = 24;
+        let chunks_grid = (VIEW_DISTANCE + CHUNK_SIDE as u32) * 2 / CHUNK_SIDE as u32;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
@@ -129,10 +131,7 @@ impl Plugin for VoxelWorldPlugin {
             });
 
         let render_chunk_map = RenderChunkMap {
-            buffer_alloc: RenderChunkBufferAllocation {
-                buffer_size: chunks_volume,
-                ..default()
-            },
+            buffer_alloc: ChunkAllocator::new(chunks_volume as usize),
             ..default()
         };
 
@@ -160,14 +159,36 @@ impl Plugin for VoxelWorldPlugin {
             .insert_resource(render_chunk_map)
             .add_systems(
                 Render,
-                (prepare_chunks, prepare_uniforms, load_voxel_world_prepare)
+                (
+                    prepare_uniforms,
+                    prepare_chunks,
+                    write_chunks,
+                    bind_voxel_data,
+                    bind_images,
+                )
                     .in_set(RenderSet::Prepare),
-            )
-            .add_systems(
-                Render,
-                (queue_bind_group, bind_images).in_set(RenderSet::PrepareBindGroups),
             );
     }
+}
+
+#[derive(Resource, ExtractResource, Clone, Default)]
+pub struct ExtractedImage {
+    handle: AssetId<Image>,
+}
+
+#[derive(Resource, Debug, Clone, Default)]
+pub struct RenderHandles {
+    pub texture_blocks: Handle<Image>,
+}
+
+fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<RenderHandles>) {
+    extr.handle = handles.texture_blocks.id();
+}
+
+#[derive(Resource, ExtractResource, Clone, ShaderType)]
+pub struct VoxelUniforms {
+    pub offsets_grid_size: u32,
+    pub chunk_size: u32,
 }
 
 #[derive(Resource)]
@@ -186,81 +207,53 @@ pub struct VoxelData {
 #[derive(Resource, Clone, Default)]
 pub struct RenderChunkMap {
     pub to_be_written: Vec<(u32, GridPtr)>,
-    pub buffer_alloc: RenderChunkBufferAllocation,
+    pub buffer_alloc: ChunkAllocator,
     pub versions: HashMap<IVec3, u32>,
 }
 
+#[derive(Clone, Default, Debug, Hash, PartialEq, Eq)]
+struct BufferOffset(u32);
+
 #[derive(Clone, Default)]
-pub struct RenderChunkBufferAllocation {
-    pub allocations: HashMap<u32, IVec3>,
-    pub buffer_size: u32,
+pub struct ChunkAllocator {
+    allocated: HashMap<IVec3, BufferOffset>,
+    free: Vec<BufferOffset>,
 }
 
-use std::{error::Error, fmt};
-
-#[derive(Debug)]
-enum AllocationError {
-    OutOfSpace,
-    AlreadyAllocated,
-    NotAllocated,
-}
-
-impl Error for AllocationError {}
-
-impl fmt::Display for AllocationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::OutOfSpace => "out of space",
-                Self::AlreadyAllocated => "already allocated",
-                Self::NotAllocated => "not allocated",
-            }
-        )
-    }
-}
-
-impl RenderChunkBufferAllocation {
-    fn get_offset(&self, chunk_id: IVec3) -> Option<u32> {
-        self.allocations
-            .iter()
-            .find(|&kv| *kv.1 == chunk_id)
-            .map(|kv| *kv.0)
-    }
-
-    fn allocate_chunk(&mut self, chunk_id: IVec3) -> Result<u32, AllocationError> {
-        if self.get_offset(chunk_id).is_some() {
-            return Err(AllocationError::AlreadyAllocated);
+impl ChunkAllocator {
+    fn new(size: usize) -> Self {
+        Self {
+            allocated: HashMap::new(),
+            free: (0..size).map(|i| BufferOffset(i as u32)).collect(),
         }
-        for i in 0..self.buffer_size {
-            if let None = self.allocations.get(&i) {
-                self.allocations.insert(i, chunk_id);
-                return Ok(i);
-            }
-        }
-        Err(AllocationError::OutOfSpace)
     }
 
-    fn deallocate_chunk(&mut self, chunk_id: IVec3) -> Result<(), AllocationError> {
-        if let Some(key) = self.get_offset(chunk_id) {
-            self.allocations.remove(&key);
-            Ok(())
+    fn iter(&self) -> impl Iterator<Item = &IVec3> {
+        self.allocated.iter().map(|kv| kv.0)
+    }
+
+    fn get(&mut self, pos: &IVec3) -> Option<BufferOffset> {
+        self.allocated.get(pos).cloned()
+    }
+
+    fn is_allocated(&self, pos: &IVec3) -> bool {
+        self.allocated.get(pos).is_some()
+    }
+
+    fn allocate(&mut self, pos: IVec3) -> Option<BufferOffset> {
+        if let Some(slot) = self.free.pop() {
+            self.allocated.insert(pos, slot.clone());
+            Some(slot)
         } else {
-            Err(AllocationError::NotAllocated)
+            None
         }
     }
-}
 
-#[derive(Resource, ExtractResource, Clone, Default)]
-pub struct ExtractedImage {
-    handle: AssetId<Image>,
-}
-
-#[derive(Resource, ExtractResource, Clone, ShaderType)]
-pub struct VoxelUniforms {
-    pub offsets_grid_size: u32,
-    pub chunk_size: u32,
+    fn deallocate(&mut self, pos: IVec3) {
+        if let Some(slot) = self.allocated.remove(&pos) {
+            self.free.push(slot);
+        }
+    }
 }
 
 fn prepare_uniforms(
@@ -275,15 +268,6 @@ fn prepare_uniforms(
         .write_buffer(&render_device, &render_queue);
 }
 
-#[derive(Resource, Debug, Clone, Default)]
-pub struct RenderHandles {
-    pub texture_blocks: Handle<Image>,
-}
-
-fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<RenderHandles>) {
-    extr.handle = handles.texture_blocks.id();
-}
-
 fn prepare_chunks(
     voxel_uniforms: Res<VoxelUniforms>,
     chunk_map: Res<ChunkMap>,
@@ -295,8 +279,6 @@ fn prepare_chunks(
     };
     let cam_pos = view.transform.translation();
 
-    let chunk_view_distance: u32 = 200;
-
     let chunk_side = voxel_uniforms.chunk_size;
     let camera_chunk_pos = (cam_pos / chunk_side as f32) * chunk_side as f32;
 
@@ -304,9 +286,7 @@ fn prepare_chunks(
         .chunks
         .iter()
         .filter_map(|(pos, _chunk)| {
-            if (camera_chunk_pos - pos.as_vec3()).length_squared()
-                < chunk_view_distance.pow(2) as f32
-            {
+            if (camera_chunk_pos - pos.as_vec3()).length_squared() < VIEW_DISTANCE.pow(2) as f32 {
                 Some(*pos)
             } else {
                 None
@@ -316,12 +296,12 @@ fn prepare_chunks(
 
     let to_be_removed: HashSet<IVec3> = render_chunk_map
         .buffer_alloc
-        .allocations
         .iter()
-        .filter_map(|(_offset, pos)| (!visible_chunks.contains(pos)).then(|| *pos))
+        .filter_map(|pos| (!visible_chunks.contains(pos)).then(|| *pos))
         .collect();
+
     for &pos in to_be_removed.iter() {
-        render_chunk_map.buffer_alloc.deallocate_chunk(pos).unwrap();
+        render_chunk_map.buffer_alloc.deallocate(pos);
         render_chunk_map.versions.remove(&pos);
     }
 
@@ -337,7 +317,7 @@ fn prepare_chunks(
                         None
                     }
                 } else {
-                    if render_chunk_map.buffer_alloc.get_offset(*pos).is_none() {
+                    if !render_chunk_map.buffer_alloc.is_allocated(pos) {
                         Some(*pos)
                     } else {
                         None
@@ -348,14 +328,15 @@ fn prepare_chunks(
             }
         })
         .collect();
+
     for &pos in to_be_rendered.iter() {
         let chunk = chunk_map.chunks.get(&pos).unwrap();
         let grid = chunk.grid.clone();
         render_chunk_map.versions.insert(pos, chunk.version);
-        if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
+        if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
         } else {
-            if let Ok(offset) = render_chunk_map.buffer_alloc.allocate_chunk(pos) {
+            if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.allocate(pos) {
                 render_chunk_map.to_be_written.push((offset, grid));
             } else {
                 panic!();
@@ -364,7 +345,7 @@ fn prepare_chunks(
     }
 }
 
-fn load_voxel_world_prepare(
+fn write_chunks(
     voxel_uniforms: Res<VoxelUniforms>,
     voxel_data: Res<VoxelData>,
     render_queue: Res<RenderQueue>,
@@ -383,7 +364,6 @@ fn load_voxel_world_prepare(
     let camera_chunk_pos = (cam_pos / chunk_side as f32).as_ivec3() * chunk_side as i32;
     let center = IVec3::splat(outer as i32) / 2 * chunk_side as i32;
 
-    // voxel outer grid
     let mut chunks_pos: Vec<u32> = vec![];
     for x in 0..outer {
         for y in 0..outer {
@@ -391,7 +371,7 @@ fn load_voxel_world_prepare(
                 let mut pos = IVec3::new(x as i32, y as i32, z as i32) * chunk_side as i32;
                 pos -= center;
                 pos += camera_chunk_pos;
-                if let Some(offset) = render_chunk_map.buffer_alloc.get_offset(pos) {
+                if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
                     chunks_pos.push(offset * chunk_volume);
                 } else {
                     chunks_pos.push(u32::MAX);
@@ -407,8 +387,8 @@ fn load_voxel_world_prepare(
         .collect();
     render_queue.write_buffer(&voxel_data.chunks_pos, 0, &chunks_pos);
 
-    // push new/modified chunks to stream buffer
     if !render_chunk_map.to_be_written.is_empty() {
+        // push new/modified chunks to stream buffer
         let mut linear_chunks_offsets = Vec::<u8>::new();
         let mut linear_chunks = Vec::<u8>::new();
         for (offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
@@ -437,7 +417,7 @@ fn load_voxel_world_prepare(
     }
 }
 
-fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<VoxelData>) {
+fn bind_voxel_data(render_device: Res<RenderDevice>, mut voxel_data: ResMut<VoxelData>) {
     let bind_group = render_device.create_bind_group(
         None,
         &voxel_data.bind_group_layout,

@@ -1,6 +1,6 @@
 use bevy::{asset::load_internal_asset, prelude::*, render::RenderApp};
 
-use crate::render::stream;
+use crate::pipeline::stream;
 
 pub const STREAM_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(6189143918759879663);
 pub const REBUILD_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(18135969847573717619);

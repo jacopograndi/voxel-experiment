@@ -35,63 +35,7 @@ fn get_clip_space(frag_pos: vec4<f32>, dimensions: vec2<f32>) -> vec2<f32> {
     return clip_space;
 }
 
-const k: u32 = 1103515245u;
-const PRIME32_2: u32 = 2246822519u;
-const PRIME32_3: u32 = 3266489917u;
-const PRIME32_4: u32 = 668265263u;
-const PRIME32_5: u32 = 374761393u;
-fn xxhash32_base(p: vec3<u32>) -> u32 {
-	var h32 =  p.z + PRIME32_5 + p.x * PRIME32_3;
-	h32 = PRIME32_4 * ((h32 << 17u) | (h32 >> (32u - 17u)));
-	h32 += p.y * PRIME32_3;
-	h32 = PRIME32_4*((h32 << 17u) | (h32 >> (32u - 17u)));
-    h32 = PRIME32_2*(h32^(h32 >> 15u));
-    h32 = PRIME32_3*(h32^(h32 >> 13u));
-    return h32 ^ (h32 >> 16u);
-}
-fn xxhash32(p: vec3<u32>) -> vec3<f32> {
-    let n = xxhash32_base(p);
-    let rz = vec3(n, n * 16807u, n * 48271u); //see: http://random.mat.sbg.ac.at/results/karl/server/node4.html
-    return vec3<f32>((rz >> vec3(1u)) & vec3(0x7fffffffu)) / f32(0x7fffffff);
-}
-// pcg3d
-// http://www.jcgt.org/published/0009/03/02/
-fn hash(w: vec3<u32>) -> vec3<f32> {
-    var v = w * 1664525u + 1013904223u;
-
-    v.x += v.y*v.z;
-    v.y += v.z*v.x;
-    v.z += v.x*v.y;
-
-    v ^= v >> vec3(16u);
-
-    v.x += v.y*v.z;
-    v.y += v.z*v.x;
-    v.z += v.x*v.y;
-
-    return vec3<f32>((v >> vec3(1u)) & vec3(0x7fffffffu)) / f32(0x7fffffff);
-}
-fn old_hash(x: vec3<u32>) -> vec3<f32> {
-    let x1 = ((x >> vec3<u32>(8u)) ^ x.yzx) * k;
-    let x2 = ((x >> vec3<u32>(8u)) ^ x.yzx) * k;
-    let xx = ((x >> vec3<u32>(8u)) ^ x.yzx) * k;
-    
-    return vec3<f32>(xx) * (1.0 / f32(0xffffffffu));
-}
-
-const pi = 3.14159265359;
-
-fn cosine_hemisphere(n: vec3<f32>, seed: vec3<u32>) -> vec3<f32> {
-    let u = hash(seed);
-
-    let r = sqrt(u.x);
-    let theta = 2.0 * pi * u.y;
- 
-    let  b = normalize(cross(n, vec3<f32>(0.0, 1.0, 1.0)));
-    let  t = cross(b, n);
-    
-    return normalize(r * sin(theta) * b + sqrt(1.0 - u.x) * n + r * cos(theta) * t);
-}
+const PI: f32 = 3.14159265358979323846264338327950288;
 
 struct Ray {
     pos: vec3<f32>,
@@ -148,7 +92,6 @@ fn clip_aabb(hist: vec3<f32>, min_aabb: vec3<f32>, max_aabb: vec3<f32>) -> vec3<
     }
 }
 
-//j fun function
 fn skybox(dir: vec3<f32>, time_of_day: f32) -> vec3<f32> {
     var dir1: vec3<f32>;
     var time_of_day1: f32;

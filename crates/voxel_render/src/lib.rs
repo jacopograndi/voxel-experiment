@@ -1,4 +1,4 @@
-use crate::render::{
+use crate::pipeline::{
     compute::ComputeResourcesPlugin,
     stream::StreamNode,
     trace::{TraceNode, TracePlugin, TraceSettings},
@@ -22,7 +22,7 @@ use bevy::{
     },
 };
 
-pub mod render;
+pub mod pipeline;
 pub mod voxel_world;
 
 pub struct RenderPlugin;
