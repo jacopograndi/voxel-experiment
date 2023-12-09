@@ -14,7 +14,7 @@ use bevy::{
 use voxel_storage::chunk_map::{ChunkMap, GridPtr};
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
-pub const VIEW_DISTANCE: u32 = 250;
+pub const VIEW_DISTANCE: u32 = 220;
 
 pub struct VoxelWorldPlugin;
 

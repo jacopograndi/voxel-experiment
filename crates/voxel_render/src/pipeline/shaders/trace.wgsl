@@ -55,26 +55,23 @@ fn get_at(grid: vec3<i32>) -> u32 {
     }
 }
 
-fn get_value(pos: vec3<f32>) -> Voxel {
-    let grid = vec3<i32>(pos);
-    let data = get_at(grid);
-    let rounded_pos = floor(pos);
-    return Voxel(data, rounded_pos, voxel_uniforms.chunk_size);
-}
-
 struct HitInfo {
     hit: bool,
     data: u32,
     pos: vec3<f32>,
     reprojection_pos: vec3<f32>,
     normal: vec3<f32>,
+    tangent1: vec3<f32>,
+    tangent2: vec3<f32>,
     uv: vec3<f32>,
     steps: u32,
 };
 
 fn intersect_scene(r: Ray, steps: u32) -> HitInfo {
     let infinity = 1000000000.0 * r.dir;
-    return HitInfo(false, 0u, infinity, infinity, vec3(0.0), vec3(0.0), steps);
+    var hit_info : HitInfo;
+    hit_info.hit = false;
+    return hit_info;
 }
 
 fn in_chunk_bounds (v: vec3f, offset: vec3f, size: vec3f) -> bool {
@@ -91,8 +88,8 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
 
     let outer = voxel_uniforms.offsets_grid_size;
     let side = voxel_uniforms.chunk_size;
-    let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
-    let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
+    let chunk_size = vec3f(f32(side));
+    let chunk_grid_size = vec3f(f32(outer));
 
     var map_pos = floor(ray.pos);
 
@@ -137,7 +134,6 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
         let outer_pos = floor(map_pos / chunk_size);
         let chunk_i = u32(outer_pos.x) * (outer * outer) + u32(outer_pos.y) * outer + u32(outer_pos.z);
         let offset = chunks_offsets[chunk_i];
-        //let offset = chunk_i * side * side * side;
         if (offset != EMPTY_CHUNK) {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
@@ -182,35 +178,41 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     hit_info.pos = end_ray_pos;
     hit_info.reprojection_pos = ray.pos;
     hit_info.normal = -ray_step * mask;
+    hit_info.tangent1 = tangent1;
+    hit_info.tangent2 = tangent2;
     hit_info.uv = uv;
     hit_info.steps = u32(iters);
     return hit_info;
 }
 
 fn get_voxel(pos: vec3<f32>) -> f32 {
-    let grid = vec3<i32>(pos).xyz;
-    let data = get_at(grid);
-    return min(f32(0u & 0xFFu), 1.0);
+    let data = get_at(vec3i(pos));
+    return min(f32(data & 0xFFu), 1.0);
 }
 
 // https://www.shadertoy.com/view/ldl3DS
 fn vertex_ao(side: vec2<f32>, corner: f32) -> f32 {
-    return (side.x + side.y + max(corner, side.x * side.y)) / 3.1;
+    return 1.0 - (side.x + side.y + max(corner, side.x * side.y)) / 3.1;
 }
-fn voxel_ao(pos: vec3<f32>, d1: vec3<f32>, d2: vec3<f32>) -> vec4<f32> {
-    let side = vec4(get_voxel(pos + d1), get_voxel(pos + d2), get_voxel(pos - d1), get_voxel(pos - d2));
-    let corner = vec4(get_voxel(pos + d1 + d2), get_voxel(pos - d1 + d2), get_voxel(pos - d1 - d2), get_voxel(pos + d1 - d2));
-
+fn voxel_ao(pos: vec3<f32>, s: vec3<f32>, t: vec3<f32>) -> vec4<f32> {
+    let side = vec4(
+        get_voxel(pos + t), 
+        get_voxel(pos - s), 
+        get_voxel(pos + s), 
+        get_voxel(pos - t)
+    );
+    let corner = vec4(
+        get_voxel(pos - s + t), 
+        get_voxel(pos + s + t), 
+        get_voxel(pos + s - t), 
+        get_voxel(pos - s - t)
+    );
     var ao: vec4<f32>;
     ao.x = vertex_ao(side.xy, corner.x);
-    ao.y = vertex_ao(side.yz, corner.y);
+    ao.y = vertex_ao(side.xz, corner.y);
     ao.z = vertex_ao(side.zw, corner.z);
-    ao.w = vertex_ao(side.wx, corner.w);
-
-    return 1.0 - ao;
-}
-fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
-    return x - y * floor(x / y);
+    ao.w = vertex_ao(side.yw, corner.w);
+    return ao;
 }
 
 @fragment
@@ -222,10 +224,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
     let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
-    let center_in_grid = vec3f(
+    var center_in_grid = vec3f(
         vec3i(i32(voxel_uniforms.chunk_size * voxel_uniforms.offsets_grid_size))  
         / 2
     );
+    if voxel_uniforms.offsets_grid_size % 2u == 1u {
+        center_in_grid -= vec3f(f32(voxel_uniforms.chunk_size)) / 2.0;
+    }
 
     let camera_inverse = view.inverse_view_proj;
     let pos1 = camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
@@ -236,7 +241,6 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var ray = Ray(constrained_pos, dir);
 
     let hit = shoot_ray(ray, 0u);
-    var steps = hit.steps;
 
     // lighting
     var indirect_lighting = vec3(0.0);
@@ -249,11 +253,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     if hit.hit {
         // voxel ao
-        let texture_coords = hit.pos;
-        let ao = voxel_ao(texture_coords, hit.normal.zxy, hit.normal.yzx);
-        let uv = glmod(vec2(dot(hit.normal * texture_coords.yzx, vec3(1.0)), dot(hit.normal * texture_coords.zxy, vec3(1.0))), vec2(1.0));
-        let interpolated_ao_pweig = mix(mix(ao.z, ao.w, uv.x), mix(ao.y, ao.x, uv.x), uv.y);
-        let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 3.0);
+        let ao = voxel_ao(hit.pos + hit.normal / 2.0, hit.tangent1, hit.tangent2);
+        let interpolated_ao_pweig = mix(mix(ao.w, ao.z, hit.uv.x), mix(ao.x, ao.y, hit.uv.x), hit.uv.y);
+        let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 2.0);
         indirect_lighting = vec3(2.0 * voxel_ao);
         output_colour = (indirect_lighting) * color.xyz;
     }
@@ -262,7 +264,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     if trace_uniforms.show_ray_steps != 0u {
-        output_colour = vec3<f32>(f32(steps) / 100.0);
+        output_colour = vec3<f32>(f32(hit.steps) / 100.0);
     }
 
     output_colour = max(output_colour, vec3(0.0));
