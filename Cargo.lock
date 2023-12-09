@@ -764,7 +764,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "752764558a1f429c20704c3b836a019fa308961c43fdfef4f08e339d456c96be"
 dependencies = [
- "glam 0.24.2",
+ "glam",
  "serde",
 ]
 
@@ -774,22 +774,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b596c41a56f2268ec7cde560edc588bc7b5886e4b49c8b27c4dcc9f7c743424c"
 dependencies = [
- "glam 0.24.2",
-]
-
-[[package]]
-name = "bevy_mod_debugdump"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4db8601f41ea570b7d32f3177292a608196c59bdf3298001a9e202d5e7439438"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_render",
- "bevy_utils",
- "once_cell",
- "petgraph",
- "pretty-type-name",
+ "glam",
 ]
 
 [[package]]
@@ -836,7 +821,7 @@ dependencies = [
  "bevy_utils",
  "downcast-rs",
  "erased-serde",
- "glam 0.24.2",
+ "glam",
  "serde",
  "smallvec",
  "smol_str",
@@ -1195,17 +1180,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 
 [[package]]
-name = "block-mesh"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c0345520b5aa77d7d154bd578a18e7a974350931b5f41f641a7844e951b978f"
-dependencies = [
- "ilattice",
- "ndcopy",
- "ndshape",
-]
-
-[[package]]
 name = "block-sys"
 version = "0.1.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1558,18 +1532,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b"
 
 [[package]]
-name = "dot_vox"
-version = "5.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd05cab02d6074145c6f92ddf1b57357e4bc1424f87c790c044de62bdc94c13a"
-dependencies = [
- "ahash",
- "lazy_static",
- "log",
- "nom",
-]
-
-[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1612,7 +1574,7 @@ checksum = "8fce2eeef77fd4a293a54b62aa00ac9daebfbcda4bf8998c5a815635b004aa1c"
 dependencies = [
  "const_panic",
  "encase_derive",
- "glam 0.24.2",
+ "glam",
  "thiserror",
 ]
 
@@ -1915,12 +1877,6 @@ checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
 
 [[package]]
 name = "glam"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b8509e6791516e81c1a630d0bd7fbac36d2fa8712a9da8662e716b52d5051ca"
-
-[[package]]
-name = "glam"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5418c17512bdf42730f9032c74e1ae39afc408745ebb2acf72fbc4691c17945"
@@ -2100,7 +2056,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cb3df16a7bcb1b5bc092abd55e14f77ca70aea14445026e264586fc62889a10"
 dependencies = [
  "constgebra",
- "glam 0.24.2",
+ "glam",
 ]
 
 [[package]]
@@ -2126,15 +2082,6 @@ checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
-]
-
-[[package]]
-name = "ilattice"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3db9046391c0e0658a18e23877706d16e48cc8b4711702b9f703776410c2b84"
-dependencies = [
- "glam 0.19.0",
 ]
 
 [[package]]
@@ -2533,15 +2480,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ndcopy"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24f4e41b81e3f7a4b742755be1bb368a6faafc43af555fe135c36b0efe095c59"
-dependencies = [
- "ndshape",
-]
-
-[[package]]
 name = "ndk"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2568,15 +2506,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cf2aae958bd232cac5069850591667ad422d263686d75b52a065f9badeee5a3"
 dependencies = [
  "jni-sys",
-]
-
-[[package]]
-name = "ndshape"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975bce586ad637e27f6dc26ee907c07050686a588695bfd64b7873a9d48a700c"
-dependencies = [
- "static_assertions",
 ]
 
 [[package]]
@@ -2980,12 +2909,6 @@ name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
-
-[[package]]
-name = "pretty-type-name"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f73cdaf19b52e6143685c3606206e114a4dfa969d6b14ec3894c88eb38bd4b"
 
 [[package]]
 name = "proc-macro-crate"
@@ -3670,12 +3593,39 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "bevy_flycam",
- "bevy_mod_debugdump",
- "block-mesh",
- "bytemuck",
- "dot_vox",
  "rand",
  "rand_chacha",
+ "voxel_physics",
+ "voxel_render",
+ "voxel_storage",
+]
+
+[[package]]
+name = "voxel_gen"
+version = "0.1.0"
+
+[[package]]
+name = "voxel_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "voxel_storage",
+]
+
+[[package]]
+name = "voxel_render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "voxel_storage",
+]
+
+[[package]]
+name = "voxel_storage"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bytemuck",
 ]
 
 [[package]]

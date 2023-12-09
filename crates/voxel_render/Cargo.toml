@@ -1,0 +1,9 @@
+[package]
+name = "voxel_render"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.12.0"
+
+voxel_storage = { path = "../voxel_storage" }

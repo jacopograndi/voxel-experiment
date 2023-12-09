@@ -1,6 +1,6 @@
 use bevy::math::{IVec3, Vec3};
 
-use super::voxel_world::ChunkMap;
+use voxel_storage::chunk_map::ChunkMap;
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
@@ -65,7 +65,8 @@ pub fn raycast(start: Vec3, direction: Vec3, chunk_map: &ChunkMap) -> Option<(IV
             }
         }
         if let Some(voxel) = chunk_map.get_at(&grid_pos) {
-            if voxel[1] & 16 == 16 {
+            // hardcoded flag 16 to be collision detection
+            if voxel.flags & 16 == 16 {
                 let dist = match side {
                     Side::X => sidedist.x - deltadist.x,
                     Side::Y => sidedist.y - deltadist.y,
@@ -80,6 +81,5 @@ pub fn raycast(start: Vec3, direction: Vec3, chunk_map: &ChunkMap) -> Option<(IV
             }
         }
     }
-    //println!("out of raycast iterations");
     None
 }

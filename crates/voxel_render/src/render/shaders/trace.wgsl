@@ -1,27 +1,21 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+#import bevy_render::view::View
+#import bevy_render::globals::Globals
 #import bevy_voxel_engine::common::{
     VoxelUniforms, TraceUniforms, Ray, VOXELS_PER_METER, hash, 
     clip_aabb, ray_plane, in_bounds, ray_box_dist, PORTAL_FLAG, cosine_hemisphere, skybox
 }
 
-@group(0) @binding(0)
-var<uniform> voxel_uniforms: VoxelUniforms;
-@group(0) @binding(1)
-var<storage, read_write> chunks: array<u32>;
-@group(0) @binding(2)
-var<storage, read> chunks_offsets: array<u32>;
+@group(0) @binding(0) var<uniform> voxel_uniforms: VoxelUniforms;
+@group(0) @binding(1) var<storage, read_write> chunks: array<u32>;
+@group(0) @binding(2) var<storage, read> chunks_offsets: array<u32>;
 
-@group(1) @binding(0)
-var<uniform> trace_uniforms: TraceUniforms;
-@group(1) @binding(2)
-var normal: texture_storage_2d<rgba16float, read_write>;
-@group(1) @binding(3)
-var position: texture_storage_2d<rgba32float, read_write>;
+@group(1) @binding(0) var<uniform> trace_uniforms: TraceUniforms;
+@group(1) @binding(1) var<uniform> view: View;
+@group(1) @binding(2) var<uniform> globals: Globals;
 
-@group(2) @binding(0)
-var texture_sheet: texture_2d<f32>;
-@group(2) @binding(1)
-var texture_sheet_sampler: sampler;
+@group(2) @binding(0) var texture_sheet: texture_2d<f32>;
+@group(2) @binding(1) var texture_sheet_sampler: sampler;
 
 const MAX_RAY_CHUNK_ITERS = 1000u;
 const MAX_RAY_ITERS = 1000;
@@ -71,7 +65,6 @@ fn get_value(pos: vec3<f32>) -> Voxel {
 struct HitInfo {
     hit: bool,
     data: u32,
-    material: vec4<f32>,
     pos: vec3<f32>,
     reprojection_pos: vec3<f32>,
     normal: vec3<f32>,
@@ -88,7 +81,7 @@ const IDENTITY = mat4x4<f32>(
 
 fn intersect_scene(r: Ray, steps: u32) -> HitInfo {
     let infinity = 1000000000.0 * r.dir;
-    return HitInfo(false, 0u, vec4(0.0), infinity, infinity, vec3(0.0), vec3(0.0), steps);
+    return HitInfo(false, 0u, infinity, infinity, vec3(0.0), vec3(0.0), steps);
 }
 
 const PI: f32 = 3.14159265358979323846264338327950288;
@@ -196,7 +189,6 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     var hit_info : HitInfo;
     hit_info.hit = hit;
     hit_info.data = voxel.data;
-    hit_info.material = voxel_uniforms.materials[voxel.data & 0xFFu];
     hit_info.pos = end_ray_pos;
     hit_info.reprojection_pos = ray.pos;
     hit_info.normal = -ray_step * mask;
@@ -209,6 +201,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
 const light_dir = vec3<f32>(0.8, -1.0, 0.8);
 const light_colour = vec3<f32>(1.0, 1.0, 1.0);
 
+/*
 fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode: u32, seed: vec3<u32>, shadow_samples: u32) -> vec3<f32> {
     // diffuse
     let diffuse = max(dot(normal, -normalize(light_dir)), 0.0);
@@ -238,6 +231,7 @@ fn calculate_direct(material: vec4<f32>, pos: vec3<f32>, normal: vec3<f32>, mode
 
     return diffuse * shadow * light_colour + emissive;
 }
+*/
 
 fn get_voxel(pos: vec3<f32>) -> f32 {
     let grid = vec3<i32>(pos).xyz;
@@ -267,8 +261,8 @@ fn glmod(x: vec2<f32>, y: vec2<f32>) -> vec2<f32> {
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let seed = vec3<u32>(in.position.xyz) * 100u + u32(trace_uniforms.time * 120.0) * 15236u;
-    let resolution = vec2<f32>(textureDimensions(normal));
+    let seed = vec3<u32>(in.position.xyz) * 100u + u32(globals.time * 120.0) * 15236u;
+    let resolution = vec2<f32>(view.viewport.zw);
     var jitter = vec2(0.0);
     /*
     if (trace_uniforms.indirect_lighting != 0u) {
@@ -285,11 +279,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         / 2
     );
 
-    let pos1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
-    let dir1 = trace_uniforms.camera_inverse * vec4(clip_space.x, clip_space.y, 0.01, 1.0);
+    let camera_inverse = view.inverse_view_proj;
+    let pos1 = camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
+    let dir1 = camera_inverse * vec4(clip_space.x, clip_space.y, 0.01, 1.0);
     let pos = pos1.xyz / pos1.w;
     let dir = normalize(dir1.xyz / dir1.w - pos);
-    var constrained_pos = trace_uniforms.camera_pos % chunk_size + center_in_grid;
+    var constrained_pos = view.world_position % chunk_size + center_in_grid;
     var ray = Ray(constrained_pos, dir);
 
     let hit = shoot_ray(ray, 0u);
@@ -306,6 +301,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     if hit.hit {
         //direct_lighting = calculate_direct(hit.material, hit.pos, hit.normal, mode, seed + 1u, trace_uniforms.samples);
         if mode == 2u {
+            /*
             // raytraced indirect lighting
             for (var i = 0u; i < trace_uniforms.samples; i += 1u) {
                 let indirect_dir = cosine_hemisphere(hit.normal, seed + i);
@@ -319,6 +315,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 }
                 indirect_lighting += lighting / f32(trace_uniforms.samples);
             }
+            */
         } else {
             // voxel ao
             /*

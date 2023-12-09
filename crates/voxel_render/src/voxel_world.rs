@@ -1,7 +1,6 @@
-use crate::voxels::grid::{Grid, Palette};
-use crate::voxels::LoadVoxelWorld;
-use crate::Handles;
+use bevy::render::camera::ExtractedCamera;
 use bevy::render::render_asset::RenderAssets;
+use bevy::render::view::ExtractedView;
 use bevy::utils::{HashMap, HashSet};
 use bevy::{
     prelude::*,
@@ -12,7 +11,8 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use std::sync::{Arc, RwLock};
+use voxel_storage::chunk_map::{ChunkMap, GridPtr};
+use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
 pub struct VoxelWorldPlugin;
 
@@ -23,16 +23,13 @@ impl Plugin for VoxelWorldPlugin {
         let render_device = render_app.world.resource::<RenderDevice>();
         let render_queue = render_app.world.resource::<RenderQueue>();
 
-        let gh = Grid::flatland(32);
-
-        let buffer_size = gh.get_buffer_u8_size();
-        let chunk_size = gh.size;
+        let buffer_size = CHUNK_VOLUME * 4;
+        let chunk_size = CHUNK_SIDE as u32;
         let chunks_grid = 24;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
         let voxel_uniforms = VoxelUniforms {
-            palette: gh.palette.into(),
             chunk_size,
             offsets_grid_size: chunks_grid,
         };
@@ -101,20 +98,11 @@ impl Plugin for VoxelWorldPlugin {
         let bind_group = render_device.create_bind_group(
             None,
             &bind_group_layout,
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.binding().unwrap(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: chunks.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: offsets_grid.as_entire_binding(),
-                },
-            ],
+            &BindGroupEntries::sequential((
+                uniform_buffer.binding().unwrap(),
+                chunks.as_entire_binding(),
+                offsets_grid.as_entire_binding(),
+            )),
         );
 
         let texture_bind_group_layout =
@@ -148,17 +136,14 @@ impl Plugin for VoxelWorldPlugin {
             ..default()
         };
 
-        app.insert_resource(LoadVoxelWorld::None)
-            .insert_resource(ChunkMap::default())
+        app.insert_resource(ChunkMap::default())
             .insert_resource(ExtractedImage::default())
-            .insert_resource(ExtractedCameraPosition::default())
+            .insert_resource(RenderHandles::default())
             .insert_resource(voxel_uniforms)
             .add_plugins(ExtractResourcePlugin::<ChunkMap>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
             .add_plugins(ExtractResourcePlugin::<ExtractedImage>::default())
-            .add_plugins(ExtractResourcePlugin::<ExtractedCameraPosition>::default())
-            .add_systems(Update, extract_images)
-            .add_systems(Update, extract_cam);
+            .add_systems(Update, extract_images);
 
         app.sub_app_mut(RenderApp)
             .insert_resource(VoxelData {
@@ -173,13 +158,15 @@ impl Plugin for VoxelWorldPlugin {
                 texture_bind_group: None,
             })
             .insert_resource(render_chunk_map)
-            .add_systems(Render, prepare_chunks.in_set(RenderSet::Prepare))
             .add_systems(
                 Render,
-                (prepare_uniforms, load_voxel_world_prepare).in_set(RenderSet::Queue),
+                (prepare_chunks, prepare_uniforms, load_voxel_world_prepare)
+                    .in_set(RenderSet::Prepare),
             )
-            .add_systems(Render, queue_bind_group.in_set(RenderSet::Prepare))
-            .add_systems(Render, bind_images.in_set(RenderSet::Prepare));
+            .add_systems(
+                Render,
+                (queue_bind_group, bind_images).in_set(RenderSet::PrepareBindGroups),
+            );
     }
 }
 
@@ -194,47 +181,6 @@ pub struct VoxelData {
     pub bind_group: BindGroup,
     pub texture_bind_group_layout: BindGroupLayout,
     pub texture_bind_group: Option<BindGroup>,
-}
-
-#[derive(Debug, Clone)]
-pub struct GridPtr(pub Arc<RwLock<Grid>>);
-
-#[derive(Debug, Clone)]
-pub struct Chunk {
-    pub grid: GridPtr,
-    pub version: u32,
-}
-
-/// Game resource, it's mutations are propagated to `RenderChunkMap`
-/// and written to the gpu buffer.
-#[derive(Resource, ExtractResource, Debug, Clone, Default)]
-pub struct ChunkMap {
-    pub chunks: HashMap<IVec3, Chunk>,
-}
-
-impl ChunkMap {
-    pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
-        // hardcoded chunk size
-        let chunk_size = IVec3::splat(32);
-        let chunk_pos = (pos.div_euclid(chunk_size)) * chunk_size;
-        let inner_pos = pos.rem_euclid(chunk_size);
-        (chunk_pos, inner_pos)
-    }
-
-    pub fn get_at(&self, pos: &IVec3) -> Option<[u8; 4]> {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
-        self.chunks
-            .get(&chunk_pos)
-            .map(|chunk| chunk.grid.0.read().unwrap().get_at(inner_pos))
-    }
-
-    pub fn set_at(&mut self, pos: &IVec3, data: [u8; 4]) {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
-        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.grid.0.write().unwrap().set_at(inner_pos, data);
-            chunk.version = chunk.version.wrapping_add(1);
-        }
-    }
 }
 
 #[derive(Resource, Clone, Default)]
@@ -311,24 +257,8 @@ pub struct ExtractedImage {
     handle: AssetId<Image>,
 }
 
-#[derive(Default, Debug, Clone, Copy, ShaderType)]
-pub struct PaletteEntry {
-    pub colour: Vec4,
-}
-
-impl Into<[PaletteEntry; 256]> for Palette {
-    fn into(self) -> [PaletteEntry; 256] {
-        let mut pallete = [PaletteEntry::default(); 256];
-        for i in 0..256 {
-            pallete[i].colour = self[i].into();
-        }
-        pallete
-    }
-}
-
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
 pub struct VoxelUniforms {
-    pub palette: [PaletteEntry; 256],
     pub offsets_grid_size: u32,
     pub chunk_size: u32,
 }
@@ -345,35 +275,30 @@ fn prepare_uniforms(
         .write_buffer(&render_device, &render_queue);
 }
 
-fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<Handles>) {
+#[derive(Resource, Debug, Clone, Default)]
+pub struct RenderHandles {
+    pub texture_blocks: Handle<Image>,
+}
+
+fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<RenderHandles>) {
     extr.handle = handles.texture_blocks.id();
-}
-
-fn extract_cam(mut cam_pos: ResMut<ExtractedCameraPosition>, camera: Query<(&Camera, &Transform)>) {
-    let camera_pos = if let Ok((_, tr)) = camera.get_single() {
-        tr.translation
-    } else {
-        Vec3::ZERO
-    };
-
-    cam_pos.pos = camera_pos;
-}
-
-#[derive(Resource, ExtractResource, Clone, Default)]
-pub struct ExtractedCameraPosition {
-    pub pos: Vec3,
 }
 
 fn prepare_chunks(
     voxel_uniforms: Res<VoxelUniforms>,
-    mut chunk_map: ResMut<ChunkMap>,
+    chunk_map: Res<ChunkMap>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
-    cam_pos: Res<ExtractedCameraPosition>,
+    view_query: Query<(&ExtractedView, &ExtractedCamera)>,
 ) {
+    let Ok((view, ..)) = view_query.get_single() else {
+        return;
+    };
+    let cam_pos = view.transform.translation();
+
     let chunk_view_distance: u32 = 200;
 
     let chunk_side = voxel_uniforms.chunk_size;
-    let camera_chunk_pos = (cam_pos.pos / chunk_side as f32) * chunk_side as f32;
+    let camera_chunk_pos = (cam_pos / chunk_side as f32) * chunk_side as f32;
 
     let visible_chunks: HashSet<IVec3> = chunk_map
         .chunks
@@ -442,16 +367,20 @@ fn prepare_chunks(
 fn load_voxel_world_prepare(
     voxel_uniforms: Res<VoxelUniforms>,
     voxel_data: Res<VoxelData>,
-    //render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
-    cam_pos: Res<ExtractedCameraPosition>,
+    view_query: Query<(&ExtractedView, &ExtractedCamera)>,
 ) {
+    let Ok((view, ..)) = view_query.get_single() else {
+        return;
+    };
+    let cam_pos = view.transform.translation();
+
     let chunk_side = voxel_uniforms.chunk_size;
     let chunk_volume = chunk_side * chunk_side * chunk_side;
     let outer = voxel_uniforms.offsets_grid_size;
 
-    let camera_chunk_pos = (cam_pos.pos / chunk_side as f32).as_ivec3() * chunk_side as i32;
+    let camera_chunk_pos = (cam_pos / chunk_side as f32).as_ivec3() * chunk_side as i32;
     let center = IVec3::splat(outer as i32) / 2 * chunk_side as i32;
 
     // voxel outer grid
@@ -485,8 +414,8 @@ fn load_voxel_world_prepare(
         for (offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
             let grid = grid_ptr.0.read().unwrap();
             let offset = *offset as u32 * chunk_volume as u32;
-            assert_eq!(grid.voxels.len() as u32, chunk_volume * 4);
-            linear_chunks.extend(&grid.voxels);
+            assert_eq!(grid.voxels.len() as u32, chunk_volume);
+            linear_chunks.extend(grid.to_bytes());
             linear_chunks_offsets.extend(offset.to_le_bytes());
         }
         render_queue.write_buffer(&voxel_data.chunks_loading, 0, &linear_chunks);
@@ -496,7 +425,6 @@ fn load_voxel_world_prepare(
             0,
             &linear_chunks_offsets,
         );
-        //println!("written {} chunks", render_chunk_map.to_be_written.len());
         render_chunk_map.to_be_written.clear();
     } else {
         // reset
@@ -513,20 +441,11 @@ fn queue_bind_group(render_device: Res<RenderDevice>, mut voxel_data: ResMut<Vox
     let bind_group = render_device.create_bind_group(
         None,
         &voxel_data.bind_group_layout,
-        &[
-            BindGroupEntry {
-                binding: 0,
-                resource: voxel_data.uniform_buffer.binding().unwrap(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: voxel_data.chunks.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: voxel_data.chunks_pos.as_entire_binding(),
-            },
-        ],
+        &BindGroupEntries::sequential((
+            voxel_data.uniform_buffer.binding().unwrap(),
+            voxel_data.chunks.as_entire_binding(),
+            voxel_data.chunks_pos.as_entire_binding(),
+        )),
     );
     voxel_data.bind_group = bind_group;
 }
@@ -541,16 +460,10 @@ fn bind_images(
         let bind_group = render_device.create_bind_group(
             None,
             &voxel_data.texture_bind_group_layout,
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: image.texture_view.into_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: image.sampler.into_binding(),
-                },
-            ],
+            &BindGroupEntries::sequential((
+                image.texture_view.into_binding(),
+                image.sampler.into_binding(),
+            )),
         );
         voxel_data.texture_bind_group = Some(bind_group);
     }

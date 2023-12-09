@@ -10,14 +10,13 @@ use bevy::{
 
 use bevy_flycam::prelude::*;
 
-mod voxels;
-use voxels::{
-    grid::Grid,
-    voxel_world::{Chunk, ChunkMap, GridPtr},
-    BevyVoxelEnginePlugin, VoxelCameraBundle,
+use voxel_physics::raycast;
+use voxel_render::{voxel_world::RenderHandles, BevyVoxelEnginePlugin, VoxelCameraBundle};
+use voxel_storage::{
+    chunk_map::{Chunk, ChunkMap, GridPtr},
+    grid::{Grid, Voxel},
+    CHUNK_SIDE,
 };
-
-use crate::voxels::raycast;
 
 fn main() {
     let mut app = App::new();
@@ -47,8 +46,6 @@ fn main() {
 
     app.add_systems(Update, voxel_break);
 
-    //bevy_mod_debugdump::print_render_graph(&mut app);
-
     app.run();
 }
 
@@ -76,15 +73,28 @@ fn voxel_break(
             if let Some((pos, norm, dist)) =
                 raycast::raycast(tr.translation, tr.forward(), &chunk_map)
             {
-                dbg!(pos);
                 if dist.is_finite() {
                     match act {
                         Act::RemoveBlock => {
-                            chunk_map.set_at(&pos, [0, 0, 0, 0]);
+                            chunk_map.set_at(
+                                &pos,
+                                Voxel {
+                                    id: 0,
+                                    flags: 0,
+                                    ..default()
+                                },
+                            );
                         }
                         Act::PlaceBlock => {
                             let pos = pos + norm;
-                            chunk_map.set_at(&pos, [2, 16, 0, 0]);
+                            chunk_map.set_at(
+                                &pos,
+                                Voxel {
+                                    id: 2,
+                                    flags: 16,
+                                    ..default()
+                                },
+                            );
                         }
                     };
                 }
@@ -107,8 +117,13 @@ struct Handles {
     texture_blocks: Handle<Image>,
 }
 
-fn load(mut handles: ResMut<Handles>, asset_server: Res<AssetServer>) {
+fn load(
+    mut handles: ResMut<Handles>,
+    asset_server: Res<AssetServer>,
+    mut render_handles: ResMut<RenderHandles>,
+) {
     handles.texture_blocks = asset_server.load("textures/blocks.png");
+    render_handles.texture_blocks = handles.texture_blocks.clone();
 }
 
 fn check_loading(
@@ -123,12 +138,10 @@ fn check_loading(
 }
 
 fn gen_chunk(pos: IVec3) -> GridPtr {
-    let mut grid = if pos.y == 0 {
-        Grid::flatland(32)
-    } else if pos.y < 0 {
-        Grid::filled(32)
+    let grid = if pos.y < 0 {
+        Grid::filled()
     } else {
-        Grid::empty(32)
+        Grid::empty()
     };
     GridPtr(Arc::new(RwLock::new(grid)))
 }
@@ -142,17 +155,17 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
         return;
     };
 
-    let camera_chunk_pos = (camera_pos / 32.0).as_ivec3() * 32;
+    let camera_chunk_pos = (camera_pos / CHUNK_SIDE as f32).as_ivec3() * CHUNK_SIDE as i32;
 
     // hardcoded chunk size
-    let load_view_distance_chunk = load_view_distance as i32 / 32;
+    let load_view_distance_chunk = load_view_distance as i32 / CHUNK_SIDE as i32;
     let lvdc = load_view_distance_chunk;
 
     // sphere centered on the player
     for x in -lvdc..=lvdc {
         for y in -lvdc..=lvdc {
             for z in -lvdc..=lvdc {
-                let rel = IVec3::new(x, y, z) * 32;
+                let rel = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
                 if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
                     let pos = camera_chunk_pos + rel;
                     if let None = chunk_map.chunks.get(&pos) {
@@ -171,18 +184,9 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
             }
         }
     }
-
-    /*
-    println!(
-        "{:?}",
-        chunk_map.chunks.iter().map(|o| o.0).collect::<Vec<_>>()
-    );
-    */
-
-    //dbg!(chunk_map.chunks.len());
 }
 
-fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
+fn setup(mut commands: Commands) {
     // bevy-fly-cam camera settings
     // bevy-fly-cam is prototype only
     commands.insert_resource(MovementSettings {
@@ -194,26 +198,6 @@ fn setup(mut commands: Commands, mut chunk_map: ResMut<ChunkMap>) {
         move_descend: KeyCode::Q,
         ..Default::default()
     });
-
-    // voxel world
-    /*
-    let size = 10;
-    for x in -size..size {
-        for y in -size..size {
-            for z in -size..size {
-                let pos = IVec3::new(x, y, z);
-                chunk_map.chunks.insert(
-                    // hardcoded chunk size
-                    pos * 32,
-                    Chunk {
-                        grid: GridPtr(Arc::new(RwLock::new(Grid::filled(32, pos)))),
-                        was_mutated: false,
-                    },
-                );
-            }
-        }
-    }
-    */
 
     // voxel camera
     commands.spawn((

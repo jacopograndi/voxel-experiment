@@ -15,25 +15,16 @@ struct Portal {
 }
 
 struct VoxelUniforms {
-    materials: array<vec4<f32>, 256>,
     offsets_grid_size: u32,
     chunk_size: u32,
 };
 
 struct TraceUniforms {
-    camera_pos: vec3<f32>,
-    camera: mat4x4<f32>,
-    camera_inverse: mat4x4<f32>,
-    last_camera: mat4x4<f32>,
-    projection: mat4x4<f32>,
-    time: f32,
     show_ray_steps: u32,
     indirect_lighting: u32,
     samples: u32,
     reprojection_factor: f32,
     shadows: u32,
-    misc_bool: u32,
-    misc_float: f32,
 };
 
 

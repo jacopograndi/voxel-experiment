@@ -1,11 +1,10 @@
-use crate::voxels::render::{
+use crate::render::{
     compute::ComputeResourcesPlugin,
-    denoise::{DenoiseNode, DenoisePlugin},
     stream::StreamNode,
     trace::{TraceNode, TracePlugin, TraceSettings},
 };
 
-use self::{render::attachments::AttachmentsPlugin, voxel_world::VoxelWorldPlugin};
+use self::voxel_world::VoxelWorldPlugin;
 use bevy::{
     core_pipeline::{
         fxaa::FxaaNode,
@@ -23,8 +22,6 @@ use bevy::{
     },
 };
 
-pub mod grid;
-pub mod raycast;
 pub mod render;
 pub mod voxel_world;
 
@@ -34,7 +31,6 @@ pub mod graph {
     pub const NAME: &'static str = "voxel";
     pub mod node {
         pub const TRACE: &str = "trace";
-        pub const DENOISE: &str = "denoise";
         pub const TONEMAPPING: &str = "tonemapping";
         pub const FXAA: &str = "fxaa";
         pub const UPSCALING: &str = "upscaling";
@@ -48,10 +44,8 @@ impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(RenderGraphSettings::default())
             .add_plugins(ExtractResourcePlugin::<RenderGraphSettings>::default())
-            .add_plugins(AttachmentsPlugin)
             .add_plugins(VoxelWorldPlugin)
             .add_plugins(TracePlugin)
-            .add_plugins(DenoisePlugin)
             .add_plugins(ComputeResourcesPlugin);
 
         let render_app = match app.get_sub_app_mut(RenderApp) {
@@ -63,36 +57,16 @@ impl Plugin for RenderPlugin {
         render_app
             .add_render_sub_graph(VOXEL)
             .add_render_graph_node::<ViewNodeRunner<StreamNode>>(VOXEL, STREAM)
-            //.add_render_graph_node::<ViewNodeRunner<RebuildNode>>(VOXEL, REBUILD)
             .add_render_graph_node::<ViewNodeRunner<TraceNode>>(VOXEL, TRACE)
-            .add_render_graph_node::<ViewNodeRunner<DenoiseNode>>(VOXEL, DENOISE)
             .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(VOXEL, TONEMAPPING)
             .add_render_graph_node::<ViewNodeRunner<FxaaNode>>(VOXEL, FXAA)
             .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(VOXEL, UPSCALING)
-            .add_render_graph_edges(
-                VOXEL,
-                &[
-                    //MIP, REBUILD,
-                    STREAM,
-                    TRACE,
-                    DENOISE,
-                    TONEMAPPING,
-                    FXAA,
-                    UPSCALING,
-                ],
-            );
+            .add_render_graph_edges(VOXEL, &[STREAM, TRACE, TONEMAPPING, FXAA, UPSCALING]);
     }
 }
 
 #[derive(Resource, Clone, ExtractResource)]
 pub struct RenderGraphSettings {
-    pub clear: bool,
-    pub automata: bool,
-    pub animation: bool,
-    pub voxelization: bool,
-    pub rebuild: bool,
-    pub mip: bool,
-    pub physics: bool,
     pub trace: bool,
     pub denoise: bool,
 }
@@ -100,13 +74,6 @@ pub struct RenderGraphSettings {
 impl Default for RenderGraphSettings {
     fn default() -> Self {
         Self {
-            clear: false,
-            automata: false,
-            animation: false,
-            voxelization: false,
-            rebuild: false,
-            mip: false,
-            physics: false,
             trace: true,
             denoise: true,
         }
@@ -129,7 +96,7 @@ pub struct VoxelCameraBundle {
 impl Default for VoxelCameraBundle {
     fn default() -> Self {
         Self {
-            camera_render_graph: CameraRenderGraph::new("voxel"),
+            camera_render_graph: CameraRenderGraph::new(VOXEL),
             tonemapping: Tonemapping::ReinhardLuminance,
             camera: Camera {
                 hdr: true,
@@ -151,14 +118,4 @@ impl Plugin for BevyVoxelEnginePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Msaa::Off).add_plugins(RenderPlugin);
     }
-}
-
-//j this will be handled by an AssetLoader
-#[allow(dead_code)]
-#[derive(Resource)]
-pub enum LoadVoxelWorld {
-    Empty(u32),
-    File(String),
-    Flatland(u32),
-    None,
 }
