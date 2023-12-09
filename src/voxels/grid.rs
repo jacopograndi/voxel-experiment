@@ -58,19 +58,23 @@ impl Grid {
         gh
     }
 
-    pub fn get_at(&self, pos: IVec3) -> u32 {
+    pub fn get_at(&self, pos: IVec3) -> [u8; 4] {
         let size = self.size as i32;
         let index = (pos.x * size * size + pos.y * size + pos.z) as usize;
         let id = self.voxels[index * 4] as u32;
         let flags = self.voxels[index * 4 + 1] as u32;
         //j todo: this drops two bytes
-        (id << 8) + flags
+        self.voxels[index * 4..index * 4 + 4].try_into().unwrap()
     }
 
-    pub fn set_at(&mut self, pos: IVec3, data: u8) {
+    pub fn set_at(&mut self, pos: IVec3, data: [u8; 4]) {
         let size = self.size as i32;
         let index = (pos.x * size * size + pos.y * size + pos.z) as usize;
-        self.voxels[index * 4] = data;
+        //j todo: this is wrong
+        self.voxels[index * 4] = data[0];
+        self.voxels[index * 4 + 1] = data[1];
+        self.voxels[index * 4 + 2] = data[2];
+        self.voxels[index * 4 + 3] = data[3];
     }
 
     pub fn get_buffer_u8_size(&self) -> u32 {

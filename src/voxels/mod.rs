@@ -23,7 +23,7 @@ use bevy::{
     },
 };
 
-pub mod grid_hierarchy;
+pub mod grid;
 pub mod raycast;
 pub mod render;
 pub mod voxel_world;

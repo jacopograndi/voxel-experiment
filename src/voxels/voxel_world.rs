@@ -1,4 +1,4 @@
-use crate::voxels::grid_hierarchy::{Grid, Palette};
+use crate::voxels::grid::{Grid, Palette};
 use crate::voxels::LoadVoxelWorld;
 use crate::Handles;
 use bevy::render::render_asset::RenderAssets;
@@ -27,7 +27,7 @@ impl Plugin for VoxelWorldPlugin {
 
         let buffer_size = gh.get_buffer_u8_size();
         let chunk_size = gh.size;
-        let chunks_grid = 12;
+        let chunks_grid = 24;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
@@ -210,6 +210,31 @@ pub struct Chunk {
 #[derive(Resource, ExtractResource, Debug, Clone, Default)]
 pub struct ChunkMap {
     pub chunks: HashMap<IVec3, Chunk>,
+}
+
+impl ChunkMap {
+    pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
+        // hardcoded chunk size
+        let chunk_size = IVec3::splat(32);
+        let chunk_pos = (pos.div_euclid(chunk_size)) * chunk_size;
+        let inner_pos = pos.rem_euclid(chunk_size);
+        (chunk_pos, inner_pos)
+    }
+
+    pub fn get_at(&self, pos: &IVec3) -> Option<[u8; 4]> {
+        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
+        self.chunks
+            .get(&chunk_pos)
+            .map(|chunk| chunk.grid.0.read().unwrap().get_at(inner_pos))
+    }
+
+    pub fn set_at(&mut self, pos: &IVec3, data: [u8; 4]) {
+        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.grid.0.write().unwrap().set_at(inner_pos, data);
+            chunk.version = chunk.version.wrapping_add(1);
+        }
+    }
 }
 
 #[derive(Resource, Clone, Default)]

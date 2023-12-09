@@ -1,14 +1,9 @@
 use bevy::math::{IVec3, Vec3};
 
-use super::{grid_hierarchy::Grid, voxel_world::ChunkMap};
+use super::voxel_world::ChunkMap;
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
-// this code is pretty bad
-// i think there is a bug based on direction
-// needs to be fast and correct
-// -> a lot of generated tests
-// -> some benchmarks on different Grid structs
 /// http://www.cs.yorku.ca/~amana/research/grid.pdf
 pub fn raycast(start: Vec3, direction: Vec3, chunk_map: &ChunkMap) -> Option<(IVec3, IVec3, f32)> {
     if direction.length_squared() == 0. {
@@ -69,24 +64,19 @@ pub fn raycast(start: Vec3, direction: Vec3, chunk_map: &ChunkMap) -> Option<(IV
                 side = Side::Z;
             }
         }
-        let chunk_pos = (grid_pos / 32) * 32;
-        let voxel_pos = grid_pos % 32;
-        if let Some(chunk) = chunk_map.chunks.get(&chunk_pos) {
-            let grid = chunk.grid.0.read().unwrap();
-            if grid.contains(&voxel_pos) {
-                if grid.get_at(voxel_pos) & 16 == 16 {
-                    let dist = match side {
-                        Side::X => sidedist.x - deltadist.x,
-                        Side::Y => sidedist.y - deltadist.y,
-                        Side::Z => sidedist.z - deltadist.z,
-                    };
-                    let norm = match side {
-                        Side::X => -IVec3::X * step.x,
-                        Side::Y => -IVec3::Y * step.y,
-                        Side::Z => -IVec3::Z * step.z,
-                    };
-                    return Some((grid_pos, norm, dist.abs()));
-                }
+        if let Some(voxel) = chunk_map.get_at(&grid_pos) {
+            if voxel[1] & 16 == 16 {
+                let dist = match side {
+                    Side::X => sidedist.x - deltadist.x,
+                    Side::Y => sidedist.y - deltadist.y,
+                    Side::Z => sidedist.z - deltadist.z,
+                };
+                let norm = match side {
+                    Side::X => -IVec3::X * step.x,
+                    Side::Y => -IVec3::Y * step.y,
+                    Side::Z => -IVec3::Z * step.z,
+                };
+                return Some((grid_pos, norm, dist.abs()));
             }
         }
     }

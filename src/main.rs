@@ -5,7 +5,6 @@ use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
-    utils::HashMap,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -13,9 +12,9 @@ use bevy_flycam::prelude::*;
 
 mod voxels;
 use voxels::{
-    grid_hierarchy::Grid,
+    grid::Grid,
     voxel_world::{Chunk, ChunkMap, GridPtr},
-    BevyVoxelEnginePlugin, LoadVoxelWorld, VoxelCameraBundle,
+    BevyVoxelEnginePlugin, VoxelCameraBundle,
 };
 
 use crate::voxels::raycast;
@@ -77,36 +76,15 @@ fn voxel_break(
             if let Some((pos, norm, dist)) =
                 raycast::raycast(tr.translation, tr.forward(), &chunk_map)
             {
+                dbg!(pos);
                 if dist.is_finite() {
                     match act {
                         Act::RemoveBlock => {
-                            let grid_pos = (pos / 32) * 32;
-                            let voxel_pos = pos % 32;
-                            let chunk: &mut Chunk = chunk_map.chunks.get_mut(&grid_pos).unwrap();
-                            let mut grid = chunk.grid.0.write().unwrap();
-                            let s = grid.size as i32;
-                            if grid.contains(&voxel_pos) {
-                                let i = (voxel_pos.z + voxel_pos.y * s + voxel_pos.x * s * s) * 4;
-                                grid.voxels[i as usize] = 0;
-                                grid.voxels[i as usize + 1] = 0;
-                                chunk.version = chunk.version.wrapping_add(1);
-                            }
+                            chunk_map.set_at(&pos, [0, 0, 0, 0]);
                         }
                         Act::PlaceBlock => {
                             let pos = pos + norm;
-                            let grid_pos = (pos / 32) * 32;
-                            let voxel_pos = pos % 32;
-                            if let Some(mut chunk) = chunk_map.chunks.get_mut(&grid_pos) {
-                                let mut grid = chunk.grid.0.write().unwrap();
-                                let s = grid.size as i32;
-                                if grid.contains(&voxel_pos) {
-                                    let i =
-                                        (voxel_pos.z + voxel_pos.y * s + voxel_pos.x * s * s) * 4;
-                                    grid.voxels[i as usize] = 2;
-                                    grid.voxels[i as usize + 1] = 16;
-                                    chunk.version = chunk.version.wrapping_add(1);
-                                }
-                            }
+                            chunk_map.set_at(&pos, [2, 16, 0, 0]);
                         }
                     };
                 }
