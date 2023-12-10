@@ -3,23 +3,33 @@ use std::sync::{Arc, RwLock};
 use bevy::{
     asset::LoadState,
     core_pipeline::fxaa::Fxaa,
-    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
     window::{PresentMode, WindowPlugin},
 };
 
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_flycam::prelude::*;
 
-use voxel_physics::raycast;
+use voxel_physics::{
+    character::{Character, CharacterController, CharacterId, Friction, Velocity},
+    plugin::VoxelPhysicsPlugin,
+    raycast,
+};
 use voxel_render::{
     voxel_world::{RenderHandles, VIEW_DISTANCE},
-    BevyVoxelEnginePlugin, VoxelCameraBundle,
+    VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
     chunk_map::{Chunk, ChunkMap, GridPtr},
     grid::{Grid, Voxel},
     CHUNK_SIDE,
 };
+
+pub const DIAGNOSTIC_FPS: DiagnosticId =
+    DiagnosticId::from_u128(288146834822086093791974408528866909484);
+pub const DIAGNOSTIC_FRAME_TIME: DiagnosticId =
+    DiagnosticId::from_u128(54021991829115352065418785002088010278);
 
 fn main() {
     let mut app = App::new();
@@ -33,19 +43,25 @@ fn main() {
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
-        FrameTimeDiagnosticsPlugin,
-        LogDiagnosticsPlugin::default(),
         NoCameraPlayerPlugin,
-        BevyVoxelEnginePlugin,
+        VoxelRenderPlugin,
+        VoxelPhysicsPlugin,
+        EguiPlugin,
     ))
+    .register_diagnostic(
+        Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
+    )
+    .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
     .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
     .insert_resource(Handles::default())
     .add_state::<FlowState>()
     .add_systems(Startup, load)
     .add_systems(OnEnter(FlowState::Base), setup)
     .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
-    .add_systems(Update, print_mesh_count)
-    .add_systems(Update, load_and_gen_chunks);
+    .add_systems(Update, ui)
+    .add_systems(Update, load_and_gen_chunks)
+    .add_systems(Update, control)
+    .add_systems(Update, diagnostic_system);
 
     app.add_systems(Update, voxel_break);
 
@@ -63,44 +79,46 @@ fn voxel_break(
         enum Act {
             PlaceBlock,
             RemoveBlock,
+            Inspect,
         }
         let act = match (
             mouse.pressed(MouseButton::Left),
             mouse.pressed(MouseButton::Right),
+            mouse.pressed(MouseButton::Middle),
         ) {
-            (true, false) => Some(Act::PlaceBlock),
-            (false, true) => Some(Act::RemoveBlock),
+            (true, _, _) => Some(Act::PlaceBlock),
+            (_, true, _) => Some(Act::RemoveBlock),
+            (_, _, true) => Some(Act::Inspect),
             _ => None,
         };
         if let Some(act) = act {
-            if let Some((pos, norm, dist)) =
-                raycast::raycast(tr.translation, tr.forward(), &chunk_map)
-            {
-                if dist.is_finite() {
-                    match act {
-                        Act::RemoveBlock => {
-                            chunk_map.set_at(
-                                &pos,
-                                Voxel {
-                                    id: 0,
-                                    flags: 0,
-                                    ..default()
-                                },
-                            );
-                        }
-                        Act::PlaceBlock => {
-                            let pos = pos + norm;
-                            chunk_map.set_at(
-                                &pos,
-                                Voxel {
-                                    id: 2,
-                                    flags: 16,
-                                    ..default()
-                                },
-                            );
-                        }
-                    };
-                }
+            if let Some(hit) = raycast::raycast(tr.translation, tr.forward(), &chunk_map) {
+                match act {
+                    Act::Inspect => {
+                        println!("{:?}, dist:{}", chunk_map.get_at(&hit.pos), hit.distance);
+                    }
+                    Act::RemoveBlock => {
+                        chunk_map.set_at(
+                            &hit.pos,
+                            Voxel {
+                                id: 0,
+                                flags: 0,
+                                ..default()
+                            },
+                        );
+                    }
+                    Act::PlaceBlock => {
+                        let pos = hit.pos + hit.normal;
+                        chunk_map.set_at(
+                            &pos,
+                            Voxel {
+                                id: 2,
+                                flags: 16,
+                                ..default()
+                            },
+                        );
+                    }
+                };
             } else {
                 //dbg!("no hit");
             }
@@ -197,8 +215,12 @@ fn setup(mut commands: Commands) {
         speed: 30.0,
     });
     commands.insert_resource(KeyBindings {
-        move_ascend: KeyCode::E,
-        move_descend: KeyCode::Q,
+        move_ascend: KeyCode::U,
+        move_descend: KeyCode::O,
+        move_forward: KeyCode::I,
+        move_backward: KeyCode::K,
+        move_left: KeyCode::J,
+        move_right: KeyCode::L,
         ..Default::default()
     });
 
@@ -214,31 +236,138 @@ fn setup(mut commands: Commands) {
         },
         Fxaa::default(),
         FlyCam,
+        //Velocity::default(),
+        Friction {
+            air: Vec3::splat(0.8),
+            ground: Vec3::splat(0.8),
+        },
+        Character {
+            id: CharacterId(0),
+            size: Vec3::new(1.5, 1.5, 1.5),
+            speed: 20.0,
+        },
+        CharacterController {
+            acceleration: Vec3::splat(0.0),
+        },
     ));
+
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Px(5.0),
+                    height: Val::Px(5.0),
+                    ..default()
+                },
+                background_color: Color::rgba(0.1, 0.1, 0.1, 0.3).into(),
+                ..default()
+            });
+        });
 }
 
-// System for printing the number of meshes on every tick of the timer
-fn print_mesh_count(
-    time: Res<Time>,
-    mut timer: Local<PrintingTimer>,
-    sprites: Query<(&Handle<Mesh>, &ViewVisibility)>,
+fn control(
+    mut character_query: Query<(&mut CharacterController, &Transform)>,
+    keys: Res<Input<KeyCode>>,
 ) {
-    timer.tick(time.delta());
-
-    if timer.just_finished() {
-        info!(
-            "Meshes: {} - Visible Meshes {}",
-            sprites.iter().len(),
-            sprites.iter().filter(|(_, vis)| vis.get()).count(),
-        );
+    for (mut controller, tr) in character_query.iter_mut() {
+        let mut delta = Vec3::ZERO;
+        if keys.pressed(KeyCode::W) {
+            delta += tr.forward();
+        }
+        if keys.pressed(KeyCode::S) {
+            delta -= tr.forward();
+        }
+        if keys.pressed(KeyCode::A) {
+            delta += tr.left();
+        }
+        if keys.pressed(KeyCode::D) {
+            delta -= tr.left();
+        }
+        if keys.pressed(KeyCode::Q) {
+            delta += Vec3::Y;
+        }
+        if keys.pressed(KeyCode::E) {
+            delta -= Vec3::Y;
+        }
+        delta = delta.normalize_or_zero();
+        controller.acceleration = delta;
     }
 }
 
-#[derive(Deref, DerefMut)]
-struct PrintingTimer(Timer);
+fn ui(mut contexts: EguiContexts, diagnostics: Res<DiagnosticsStore>) {
+    egui::Window::new("Debug menu").show(contexts.ctx_mut(), |ui| {
+        if let Some(value) = diagnostics
+            .get(DIAGNOSTIC_FPS)
+            .and_then(|fps| fps.smoothed())
+        {
+            ui.label(format!("fps: {value:>4.2}"));
+            use egui_plot::{Line, PlotPoints};
+            let n = 1000;
+            let line_points: PlotPoints = if let Some(diag) = diagnostics.get(DIAGNOSTIC_FPS) {
+                diag.values()
+                    .take(n)
+                    .enumerate()
+                    .map(|(i, v)| [i as f64, *v])
+                    .collect()
+            } else {
+                PlotPoints::default()
+            };
+            let line = Line::new(line_points).fill(0.0);
+            egui_plot::Plot::new("fps")
+                .include_y(0.0)
+                .height(70.0)
+                .show_axes([false, true])
+                .show(ui, |plot_ui| plot_ui.line(line))
+                .response;
+        } else {
+            ui.label("no fps data");
+        }
+        if let Some(value) = diagnostics
+            .get(DIAGNOSTIC_FRAME_TIME)
+            .and_then(|ms| ms.value())
+        {
+            ui.label(format!("time: {value:>4.2} ms"));
+            use egui_plot::{Line, PlotPoints};
+            let n = 1000;
+            let line_points: PlotPoints = if let Some(diag) = diagnostics.get(DIAGNOSTIC_FRAME_TIME)
+            {
+                diag.values()
+                    .take(n)
+                    .enumerate()
+                    .map(|(i, v)| [i as f64, *v])
+                    .collect()
+            } else {
+                PlotPoints::default()
+            };
+            let line = Line::new(line_points).fill(0.0);
+            egui_plot::Plot::new("frame time")
+                .include_y(0.0)
+                .height(70.0)
+                .show_axes([false, true])
+                .show(ui, |plot_ui| plot_ui.line(line))
+                .response;
+        } else {
+            ui.label("no frame time data");
+        }
+        ui.separator()
+    });
+}
 
-impl Default for PrintingTimer {
-    fn default() -> Self {
-        Self(Timer::from_seconds(1.0, TimerMode::Repeating))
+pub fn diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real>>) {
+    let delta_seconds = time.delta_seconds_f64();
+    if delta_seconds == 0.0 {
+        return;
     }
+    diagnostics.add_measurement(DIAGNOSTIC_FRAME_TIME, || delta_seconds * 1000.0);
+    diagnostics.add_measurement(DIAGNOSTIC_FPS, || 1.0 / delta_seconds);
 }

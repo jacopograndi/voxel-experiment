@@ -116,7 +116,12 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     var scale = chunk_size.x;
     var delta_dist = abs(vec3f(length(ray.dir)) / ray.dir);
     var ray_step = sign(ray.dir);
-    var side_dist = (sign(ray.dir) * (map_pos - ray.pos) + (sign(ray.dir) * 0.5) + 0.5) * delta_dist; 
+    var side_dist = (
+            sign(ray.dir) * 
+            (map_pos - ray.pos) + 
+            (sign(ray.dir) * 0.5) + 0.5
+        ) * delta_dist
+    ; 
     var mask = vec3f(0.0);
     var hit = false;
     var voxel: Voxel;

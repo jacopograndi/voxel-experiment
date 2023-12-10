@@ -16,10 +16,11 @@ use bevy::{
         camera::CameraRenderGraph,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         primitives::Frustum,
-        render_graph::{RenderGraphApp, ViewNodeRunner},
+        render_graph::{RenderGraph, RenderGraphApp, RunGraphOnViewNode, ViewNodeRunner},
         view::VisibleEntities,
         RenderApp,
     },
+    ui::{draw_ui_graph, UiPassNode},
 };
 
 pub mod pipeline;
@@ -35,7 +36,6 @@ pub mod graph {
         pub const FXAA: &str = "fxaa";
         pub const UPSCALING: &str = "upscaling";
         pub const STREAM: &str = "stream";
-        pub const REBUILD: &str = "rebuild";
     }
 }
 pub const VOXEL: &str = graph::NAME;
@@ -62,6 +62,20 @@ impl Plugin for RenderPlugin {
             .add_render_graph_node::<ViewNodeRunner<FxaaNode>>(VOXEL, FXAA)
             .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(VOXEL, UPSCALING)
             .add_render_graph_edges(VOXEL, &[STREAM, TRACE, TONEMAPPING, FXAA, UPSCALING]);
+
+        let ui_pass_node = UiPassNode::new(&mut render_app.world);
+        let mut ui_graph = RenderGraph::default();
+        ui_graph.add_node(draw_ui_graph::node::UI_PASS, ui_pass_node);
+        let mut graph = render_app.world.resource_mut::<RenderGraph>();
+        if let Some(graph_voxel) = graph.get_sub_graph_mut(VOXEL) {
+            graph_voxel.add_sub_graph(draw_ui_graph::NAME, ui_graph);
+            graph_voxel.add_node(
+                draw_ui_graph::node::UI_PASS,
+                RunGraphOnViewNode::new(draw_ui_graph::NAME),
+            );
+            graph_voxel.add_node_edge(FXAA, draw_ui_graph::node::UI_PASS);
+            graph_voxel.add_node_edge(draw_ui_graph::node::UI_PASS, UPSCALING);
+        }
     }
 }
 
@@ -113,8 +127,8 @@ impl Default for VoxelCameraBundle {
     }
 }
 
-pub struct BevyVoxelEnginePlugin;
-impl Plugin for BevyVoxelEnginePlugin {
+pub struct VoxelRenderPlugin;
+impl Plugin for VoxelRenderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Msaa::Off).add_plugins(RenderPlugin);
     }
