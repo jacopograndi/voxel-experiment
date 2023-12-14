@@ -42,41 +42,54 @@ pub fn movement(
         &mut Friction,
     )>,
     chunk_map: Res<ChunkMap>,
-    time: Res<Time>,
 ) {
     for (character, controller, mut tr, mut vel, friction) in character_query.iter_mut() {
-        vel.vel += controller.acceleration * character.speed * time.delta_seconds();
+        vel.vel += controller.acceleration * character.speed;
+        vel.vel -= Vec3::Y * 0.02;
+
+        for _ in 0..4 {
+            if let Some(hit) = sweep_aabb(
+                tr.translation,
+                character.size,
+                vel.vel.normalize_or_zero(),
+                vel.vel.length(),
+                &chunk_map,
+            ) {
+                tr.translation += vel.vel.normalize_or_zero() * (hit.distance - MARGIN_EPSILON);
+                vel.vel *= (IVec3::ONE - hit.blocked).as_vec3();
+                if vel.vel.length() < MARGIN_EPSILON {
+                    break;
+                }
+            }
+        }
+        tr.translation += vel.vel;
         /*
-        if let Some(hit) = sweep_aabb(tr.translation, character.size, vel.vel, &chunk_map) {
-            vel.vel.x *= if hit.blocked.x { 0.0 } else { 1.0 };
-            vel.vel.y *= if hit.blocked.y { 0.0 } else { 1.0 };
-            vel.vel.z *= if hit.blocked.z { 0.0 } else { 1.0 };
-            tr.translation += vel.vel * time.delta_seconds();
-        } else {
-            tr.translation += vel.vel * time.delta_seconds();
-        }
-        */
-        if vel.vel.length_squared() == 0.0 {
-            return;
-        }
-        let dist = (vel.vel * time.delta_seconds()).length();
-        if let Some(hit) = raycast(tr.translation, vel.vel.normalize_or_zero(), &chunk_map) {
+        if let Some(hit) = raycast(
+            tr.translation,
+            vel.vel.normalize_or_zero(),
+            20.0,
+            &chunk_map,
+        ) {
             if hit.distance <= dist {
                 tr.translation += vel.vel.normalize_or_zero() * (hit.distance - MARGIN_EPSILON);
                 vel.vel = Vec3::ZERO;
-            //tr.translation += vel.vel * time.delta_seconds();
+                //tr.translation += vel.vel * time.delta_seconds();
             } else {
                 tr.translation += vel.vel * time.delta_seconds();
             }
         } else {
             tr.translation += vel.vel * time.delta_seconds();
         }
+        */
+        vel.vel *= friction.air;
+        /*
         if let Some(hit) = raycast(tr.translation, Vec3::NEG_Y, &chunk_map) {
-            if hit.distance == 0.0 {
+            if hit.distance <= MARGIN_EPSILON {
                 vel.vel *= friction.ground;
             } else {
                 vel.vel *= friction.air;
             }
         }
+        */
     }
 }

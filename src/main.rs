@@ -92,10 +92,15 @@ fn voxel_break(
             _ => None,
         };
         if let Some(act) = act {
-            if let Some(hit) = raycast::raycast(tr.translation, tr.forward(), &chunk_map) {
+            if let Some(hit) = raycast::raycast(tr.translation, tr.forward(), 4.5, &chunk_map) {
                 match act {
                     Act::Inspect => {
-                        println!("{:?}, dist:{}", chunk_map.get_at(&hit.pos), hit.distance);
+                        println!(
+                            "pos:{}, {:?}, dist:{}",
+                            hit.pos,
+                            chunk_map.get_at(&hit.pos),
+                            hit.distance
+                        );
                     }
                     Act::RemoveBlock => {
                         chunk_map.set_at(
@@ -236,15 +241,15 @@ fn setup(mut commands: Commands) {
         },
         Fxaa::default(),
         FlyCam,
-        //Velocity::default(),
+        Velocity::default(),
         Friction {
-            air: Vec3::splat(0.8),
-            ground: Vec3::splat(0.8),
+            air: Vec3::splat(0.9),
+            ground: Vec3::splat(0.9),
         },
         Character {
             id: CharacterId(0),
-            size: Vec3::new(1.5, 1.5, 1.5),
-            speed: 20.0,
+            size: Vec3::new(0.5, 1.5, 0.5),
+            speed: 0.04,
         },
         CharacterController {
             acceleration: Vec3::splat(0.0),

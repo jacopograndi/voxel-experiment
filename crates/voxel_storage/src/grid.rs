@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use crate::{CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
 
 #[repr(C)]
-#[derive(Debug, Clone, Pod, Zeroable, Copy, Default)]
+#[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
 pub struct Voxel {
     pub id: u8,
     pub flags: u8,
