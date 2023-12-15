@@ -9,10 +9,11 @@ use bevy::{
 };
 
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use bevy_flycam::prelude::*;
 
 use voxel_physics::{
-    character::{Character, CharacterController, CharacterId, Friction, Velocity},
+    character::{
+        CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
+    },
     plugin::VoxelPhysicsPlugin,
     raycast,
 };
@@ -43,7 +44,6 @@ fn main() {
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
-        NoCameraPlayerPlugin,
         VoxelRenderPlugin,
         VoxelPhysicsPlugin,
         EguiPlugin,
@@ -70,7 +70,7 @@ fn main() {
 
 // just for prototype
 fn voxel_break(
-    camera_query: Query<(&Camera, &Transform)>,
+    camera_query: Query<(&CameraController, &GlobalTransform)>,
     mut chunk_map: ResMut<ChunkMap>,
     mouse: Res<Input<MouseButton>>,
 ) {
@@ -82,9 +82,9 @@ fn voxel_break(
             Inspect,
         }
         let act = match (
-            mouse.pressed(MouseButton::Left),
-            mouse.pressed(MouseButton::Right),
-            mouse.pressed(MouseButton::Middle),
+            mouse.just_pressed(MouseButton::Left),
+            mouse.just_pressed(MouseButton::Right),
+            mouse.just_pressed(MouseButton::Middle),
         ) {
             (true, _, _) => Some(Act::PlaceBlock),
             (_, true, _) => Some(Act::RemoveBlock),
@@ -92,7 +92,7 @@ fn voxel_break(
             _ => None,
         };
         if let Some(act) = act {
-            if let Some(hit) = raycast::raycast(tr.translation, tr.forward(), 4.5, &chunk_map) {
+            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &chunk_map) {
                 match act {
                     Act::Inspect => {
                         println!(
@@ -213,49 +213,43 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
 }
 
 fn setup(mut commands: Commands) {
-    // bevy-fly-cam camera settings
-    // bevy-fly-cam is prototype only
-    commands.insert_resource(MovementSettings {
-        sensitivity: 0.00015,
-        speed: 30.0,
-    });
-    commands.insert_resource(KeyBindings {
-        move_ascend: KeyCode::U,
-        move_descend: KeyCode::O,
-        move_forward: KeyCode::I,
-        move_backward: KeyCode::K,
-        move_left: KeyCode::J,
-        move_right: KeyCode::L,
-        ..Default::default()
-    });
+    // player character
+    commands
+        .spawn((
+            SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0)),
+            Character {
+                id: CharacterId(0),
+                size: Vec3::new(0.5, 1.5, 0.5),
+                air_speed: 0.001,
+                ground_speed: 0.03,
+                jump_strenght: 0.17,
+            },
+            CharacterController {
+                acceleration: Vec3::splat(0.0),
+                jumping: false,
+            },
+            Velocity::default(),
+            Friction {
+                air: Vec3::splat(0.99),
+                ground: Vec3::splat(0.78),
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                VoxelCameraBundle {
+                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                    projection: Projection::Perspective(PerspectiveProjection {
+                        fov: 1.57,
+                        ..default()
+                    }),
+                    ..default()
+                },
+                Fxaa::default(),
+                CameraController::default(),
+            ));
+        });
 
-    // voxel camera
-    commands.spawn((
-        VoxelCameraBundle {
-            transform: Transform::from_xyz(5.0, 5.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
-            projection: Projection::Perspective(PerspectiveProjection {
-                fov: 1.57,
-                ..default()
-            }),
-            ..default()
-        },
-        Fxaa::default(),
-        FlyCam,
-        Velocity::default(),
-        Friction {
-            air: Vec3::splat(0.9),
-            ground: Vec3::splat(0.9),
-        },
-        Character {
-            id: CharacterId(0),
-            size: Vec3::new(0.5, 1.5, 0.5),
-            speed: 0.04,
-        },
-        CharacterController {
-            acceleration: Vec3::splat(0.0),
-        },
-    ));
-
+    // center cursor
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -298,14 +292,13 @@ fn control(
         if keys.pressed(KeyCode::D) {
             delta -= tr.left();
         }
-        if keys.pressed(KeyCode::Q) {
-            delta += Vec3::Y;
-        }
-        if keys.pressed(KeyCode::E) {
-            delta -= Vec3::Y;
-        }
         delta = delta.normalize_or_zero();
         controller.acceleration = delta;
+        if keys.pressed(KeyCode::Space) {
+            controller.jumping = true;
+        } else {
+            controller.jumping = false;
+        }
     }
 }
 

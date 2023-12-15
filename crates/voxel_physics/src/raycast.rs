@@ -165,17 +165,11 @@ pub fn sweep_aabb(
     if direction.length_squared() < MARGIN_EPSILON {
         return None;
     }
-    if max_distance < MARGIN_EPSILON {
-        return None;
-    }
 
     let leading_vertex = get_leading_aabb_vertex(size, direction);
     let start = leading_vertex + pos;
 
-    //println!("{}, {}, {}", pos, start, leading_vertex);
-
     let mut ray = Ray::new(start, direction);
-    //println!("AAAAAAAAAAAAA{}AAAAAAAAAAa{:?}", max_distance, ray);
     for _i in 0..RAYCAST_MAX_ITERATIONS {
         ray.step();
         if ray.distance() > max_distance {
@@ -186,19 +180,12 @@ pub fn sweep_aabb(
         let inv_mask = IVec3::ONE - ray.mask;
         let center_pos = vert_pos - leading_vertex * inv_mask.as_vec3()
             + (ray.mask * ray.grid_step).as_vec3() * size * 0.5;
-        //let center_pos = vert_pos - leading_vertex + (ray.mask * ray.grid_step).as_vec3();
         let min = (center_pos - size * 0.5 * inv_mask.as_vec3())
             .floor()
             .as_ivec3();
         let max = (center_pos + size * 0.5 * inv_mask.as_vec3())
             .floor()
             .as_ivec3();
-        /*
-        println!(
-            "ray: ({}, {}), {}, {}, {} {}",
-            ray.grid_pos, ray.mask, vert_pos, center_pos, min, max
-        );
-        */
         for x in min.x..max.x + 1 {
             for y in min.y..max.y + 1 {
                 for z in min.z..max.z + 1 {
@@ -210,7 +197,6 @@ pub fn sweep_aabb(
                                 distance: ray.distance(),
                                 normal: ray.normal(),
                             };
-                            println!("{:?}, {}", &hit, sample_pos);
                             return Some(hit);
                         }
                     }

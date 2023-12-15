@@ -43,6 +43,20 @@ mod test {
     }
 
     #[test]
+    fn zero_length() {
+        let map = single_block_map();
+        let center = Vec3::ONE * 0.5;
+        assert!(raycast(center + Vec3::X * 0.5, -Vec3::X, 0.000001, &map).is_some());
+    }
+
+    #[test]
+    fn sweep_zero_length() {
+        let map = single_block_map();
+        let center = Vec3::ONE * 0.5;
+        assert!(sweep_aabb(center + Vec3::X * 1.0, Vec3::ONE, -Vec3::X, 0.000001, &map).is_some());
+    }
+
+    #[test]
     fn axis_aligned() {
         let map = single_block_map();
         let axis = vec![Vec3::X, Vec3::Y, Vec3::Z];
