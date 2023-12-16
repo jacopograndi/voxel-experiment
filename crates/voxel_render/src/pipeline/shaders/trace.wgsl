@@ -22,15 +22,6 @@ const MAX_RAY_ITERS = 1000;
 
 const EMPTY_CHUNK = 4294967295u;
 
-/*
-// possibly better structure
-var<storage, read> chunks: array<Chunk>;
-const CHUNK_SIZE = 32768u; // 32^3
-struct Chunk {
-    data: array<u32, CHUNK_SIZE>,
-};
-*/
-
 struct Voxel {
     data: u32,
     pos: vec3<f32>,
@@ -45,12 +36,11 @@ fn get_at(grid: vec3<i32>) -> u32 {
     let outer_pos = floor(pos / chunk_size);
     let chunk_i = u32(outer_pos.x) * (outer * outer) + u32(outer_pos.y) * outer + u32(outer_pos.z);
     let offset = chunks_offsets[chunk_i];
-    if (offset != EMPTY_CHUNK) {
+    if offset != EMPTY_CHUNK {
         let voxel_map = pos % chunk_size;
         let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
         return chunks[offset + voxel_i];
-    }
-    else {
+    } else {
         return 0u;
     }
 }
@@ -59,6 +49,7 @@ struct HitInfo {
     hit: bool,
     data: u32,
     pos: vec3<f32>,
+    distance: f32,
     reprojection_pos: vec3<f32>,
     normal: vec3<f32>,
     tangent1: vec3<f32>,
@@ -69,16 +60,14 @@ struct HitInfo {
 
 fn intersect_scene(r: Ray, steps: u32) -> HitInfo {
     let infinity = 1000000000.0 * r.dir;
-    var hit_info : HitInfo;
+    var hit_info: HitInfo;
     hit_info.hit = false;
     return hit_info;
 }
 
-fn in_chunk_bounds (v: vec3f, offset: vec3f, size: vec3f) -> bool {
+fn in_chunk_bounds(v: vec3f, offset: vec3f, size: vec3f) -> bool {
     return 
-        v.x >= offset.x && v.x < offset.x + size.x &&
-        v.y >= offset.y && v.y < offset.y + size.y &&
-        v.z >= offset.z && v.z < offset.z + size.z
+        v.x >= offset.x && v.x < offset.x + size.x && v.y >= offset.y && v.y < offset.y + size.y && v.z >= offset.z && v.z < offset.z + size.z
     ;
 }
 
@@ -95,17 +84,16 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
 
     // initial raycast against the outer chunks bounds
     // only done if the ray.pos is outside the chunks bounds
-    if (!in_chunk_bounds(map_pos, vec3f(0.0), chunk_grid_size * chunk_size)) {
+    if !in_chunk_bounds(map_pos, vec3f(0.0), chunk_grid_size * chunk_size) {
         let chunk_pos = vec3f(0.0);
         let dist = ray_box_dist(
-            ray, 
-            chunk_pos + vec3f(-epsilon), 
+            ray,
+            chunk_pos + vec3f(-epsilon),
             chunk_pos + vec3f(chunk_grid_size * chunk_size + epsilon)
         ).x;
-        if (dist == 0.0) {
+        if dist == 0.0 {
             return intersect_scene(ray, 1u);
-        }
-        else {
+        } else {
             //return intersect_scene(ray, 99u);
             ray.pos = ray.pos + ray.dir * dist;
             map_pos = floor(ray.pos);
@@ -116,71 +104,62 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     var scale = chunk_size.x;
     var delta_dist = abs(vec3f(length(ray.dir)) / ray.dir);
     var ray_step = sign(ray.dir);
-    var side_dist = (
-            sign(ray.dir) * 
-            (map_pos - ray.pos) + 
-            (sign(ray.dir) * 0.5) + 0.5
-        ) * delta_dist
-    ; 
+    var side_dist = (sign(ray.dir) * (map_pos - ray.pos) + (sign(ray.dir) * 0.5) + 0.5) * delta_dist
+    ;
     var mask = vec3f(0.0);
     var hit = false;
     var voxel: Voxel;
     var iters = 0u;
     for (iters = 0u; iters < MAX_RAY_CHUNK_ITERS; iters++) {
-		mask = step(side_dist.xyz, side_dist.yzx) * step(side_dist.xyz, side_dist.zxy);
-		side_dist += mask * delta_dist;
-		map_pos += mask * ray_step;
+        mask = step(side_dist.xyz, side_dist.yzx) * step(side_dist.xyz, side_dist.zxy);
+        side_dist += mask * delta_dist;
+        map_pos += mask * ray_step;
 
         // out of bounds
-        if (!in_chunk_bounds(map_pos, vec3f(0.0), chunk_grid_size * chunk_size)) {
+        if !in_chunk_bounds(map_pos, vec3f(0.0), chunk_grid_size * chunk_size) {
             return intersect_scene(ray, 2u);
         }
 
         let outer_pos = floor(map_pos / chunk_size);
         let chunk_i = u32(outer_pos.x) * (outer * outer) + u32(outer_pos.y) * outer + u32(outer_pos.z);
         let offset = chunks_offsets[chunk_i];
-        if (offset != EMPTY_CHUNK) {
+        if offset != EMPTY_CHUNK {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
             voxel = Voxel(chunks[offset + voxel_i], map_pos, side);
-            if ((voxel.data & 0xFFu) != 0u && (((voxel.data >> 8u) & flags) > 0u || flags == 0u)) {
+            if (voxel.data & 0xFFu) != 0u && (((voxel.data >> 8u) & flags) > 0u || flags == 0u) {
                 hit = true;
                 break;
             }
-        }
-        else {
+        } else {
             // todo skip empty chunks
         }
-	}
-    let end_ray_pos = ray.dir 
-        / dot(mask * ray.dir, vec3f(1.0)) 
-        * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) 
-        + ray.pos
+    }
+    let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos
     ;
-   	var uv = vec3f(0.0);
+    var uv = vec3f(0.0);
     var tangent1 = vec3f(0.0);
     var tangent2 = vec3f(0.0);
-    if (abs(mask.x) > 0.0) {
+    if abs(mask.x) > 0.0 {
         uv = vec3f(end_ray_pos.yz, 0.0);
         tangent1 = vec3f(0.0, 1.0, 0.0);
         tangent2 = vec3f(0.0, 0.0, 1.0);
-    }
-    else if (abs(mask.y) > 0.) {
+    } else if abs(mask.y) > 0. {
         uv = vec3f(end_ray_pos.xz, 0.0);
         tangent1 = vec3f(1.0, 0.0, 0.0);
         tangent2 = vec3f(0.0, 0.0, 1.0);
-    }
-    else {
+    } else {
         uv = vec3f(end_ray_pos.xy, 0.0);
         tangent1 = vec3f(1.0, 0.0, 0.0);
         tangent2 = vec3f(0.0, 1.0, 0.0);
     }
     uv = fract(uv);
 
-    var hit_info : HitInfo;
+    var hit_info: HitInfo;
     hit_info.hit = hit;
     hit_info.data = voxel.data;
     hit_info.pos = end_ray_pos;
+    hit_info.distance = length(ray.pos - end_ray_pos);
     hit_info.reprojection_pos = ray.pos;
     hit_info.normal = -ray_step * mask;
     hit_info.tangent1 = tangent1;
@@ -201,15 +180,15 @@ fn vertex_ao(side: vec2<f32>, corner: f32) -> f32 {
 }
 fn voxel_ao(pos: vec3<f32>, s: vec3<f32>, t: vec3<f32>) -> vec4<f32> {
     let side = vec4(
-        get_voxel(pos + t), 
-        get_voxel(pos - s), 
-        get_voxel(pos + s), 
+        get_voxel(pos + t),
+        get_voxel(pos - s),
+        get_voxel(pos + s),
         get_voxel(pos - t)
     );
     let corner = vec4(
-        get_voxel(pos - s + t), 
-        get_voxel(pos + s + t), 
-        get_voxel(pos + s - t), 
+        get_voxel(pos - s + t),
+        get_voxel(pos + s + t),
+        get_voxel(pos + s - t),
         get_voxel(pos - s - t)
     );
     var ao: vec4<f32>;
@@ -218,6 +197,56 @@ fn voxel_ao(pos: vec3<f32>, s: vec3<f32>, t: vec3<f32>) -> vec4<f32> {
     ao.z = vertex_ao(side.zw, corner.z);
     ao.w = vertex_ao(side.yw, corner.w);
     return ao;
+}
+
+// https://iquilezles.org/articles/boxfunctions
+fn intersect_box(
+    ray_world: Ray, world_to_box: mat4x4<f32>, box_to_world: mat4x4<f32>, rad: vec3f
+) -> vec4f {
+    // convert from ray to box space
+    var ray_box: Ray;
+    ray_box.pos = (world_to_box * vec4f(ray_world.pos, 1.0)).xyz;
+    ray_box.dir = (world_to_box * vec4f(ray_world.dir, 0.0)).xyz;
+
+	// ray-box intersection in box space
+    let m = 1.0 / ray_box.dir;
+    //let k = -step(ray_box.dir, vec3f(0.0)) * rad;
+    //let t1 = (-ray_box.pos - k) * m;
+    //let t2 = (-ray_box.pos + k) * m;
+    let n = m * ray_box.pos;
+    let k = abs(m) * rad;
+    let t1 = -n - k;
+    let t2 = -n + k;
+
+    let tN = max(max(t1.x, t1.y), t1.z);
+    let tF = min(min(t2.x, t2.y), t2.z);
+    
+    // no intersection
+    if tN > tF || tF < 0.0 {
+        return vec4(-1.0);
+    }
+
+    var res = vec4f(0.0);
+    if tN > 0.0 {
+        res = vec4(tN, step(vec3f(tN), t1));
+    } else {
+        res = vec4(tF, step(t2, vec3f(tF)));
+    }
+    // add sign to normal and convert to ray space
+    res = vec4f(res.x, (box_to_world * vec4(-sign(ray_box.dir) * res.yzw, 0.0)).xyz);
+    return res;
+}
+
+fn slow_inverse(m: mat4x4<f32>) -> mat4x4<f32> {
+    return mat4x4<f32>(
+        m[0][0], m[1][0], m[2][0], 0.0,
+        m[0][1], m[1][1], m[2][1], 0.0,
+        m[0][2], m[1][2], m[2][2], 0.0,
+        -dot(m[0].xyz, m[3].xyz),
+        -dot(m[1].xyz, m[3].xyz),
+        -dot(m[2].xyz, m[3].xyz),
+        1.0
+    );
 }
 
 @fragment
@@ -230,8 +259,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let chunk_size = vec3f(f32(voxel_uniforms.chunk_size));
     let chunk_grid_size = vec3f(f32(voxel_uniforms.offsets_grid_size));
     var center_in_grid = vec3f(
-        vec3i(i32(voxel_uniforms.chunk_size * voxel_uniforms.offsets_grid_size))  
-        / 2
+        vec3i(i32(voxel_uniforms.chunk_size * voxel_uniforms.offsets_grid_size)) / 2
     );
     if voxel_uniforms.offsets_grid_size % 2u == 1u {
         center_in_grid -= vec3f(f32(voxel_uniforms.chunk_size)) / 2.0;
@@ -253,7 +281,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var uv = hit.uv.xy;
     uv = vec2f(1.0) - uv;
     uv /= 16.0;
-    uv.x += f32(hit.data& 0xFFu) / 16.0;
+    uv.x += f32(hit.data & 0xFFu) / 16.0;
     let color = textureSample(texture_sheet, texture_sheet_sampler, uv);
 
     if hit.hit {
@@ -263,9 +291,34 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 2.0);
         indirect_lighting = vec3(2.0 * voxel_ao);
         output_colour = (indirect_lighting) * color.xyz;
-    }
-    else {
+    } else {
         output_colour = skybox(ray.dir, 10.0);
+    }
+
+    let b = vec3f(3.0, 0.0, 3.0) + center_in_grid;
+    let box_to_world = mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(b.x, b.y, b.z, 1.0),
+    );
+    let world_to_box = slow_inverse(box_to_world);
+    let rad = vec3f(2.0);
+    let res = intersect_box(
+        ray,
+        world_to_box,
+        box_to_world,
+        rad,
+    );
+    if res.x > 0.0 && res.x < 10000.0 {
+        if hit.hit {
+            if hit.distance > res.x {
+                output_colour = abs(vec3f(res.yzw));
+            }
+        }
+        else {
+                output_colour = abs(vec3f(res.yzw));
+        }
     }
 
     if trace_uniforms.show_ray_steps != 0u {

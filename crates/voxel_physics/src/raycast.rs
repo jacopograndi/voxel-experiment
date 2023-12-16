@@ -1,4 +1,4 @@
-use bevy::math::{BVec3, IVec3, Vec3, Vec3Swizzles};
+use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
 use voxel_storage::chunk_map::ChunkMap;
 
