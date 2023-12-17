@@ -1,10 +1,13 @@
-use crate::pipeline::{
-    compute::ComputeResourcesPlugin,
-    stream::StreamNode,
-    trace::{TraceNode, TracePlugin, TraceSettings},
+use crate::{
+    boxes_world::BoxesWorldPlugin,
+    voxel_world::VoxelWorldPlugin,
+    pipeline::{
+        compute::ComputeResourcesPlugin,
+        stream::StreamNode,
+        trace::{TraceNode, TracePlugin, TraceSettings},
+    },
 };
 
-use self::voxel_world::VoxelWorldPlugin;
 use bevy::{
     core_pipeline::{
         fxaa::FxaaNode,
@@ -23,6 +26,7 @@ use bevy::{
     ui::{draw_ui_graph, UiPassNode},
 };
 
+pub mod boxes_world;
 pub mod pipeline;
 pub mod voxel_world;
 
@@ -45,6 +49,7 @@ impl Plugin for RenderPlugin {
         app.insert_resource(RenderGraphSettings::default())
             .add_plugins(ExtractResourcePlugin::<RenderGraphSettings>::default())
             .add_plugins(VoxelWorldPlugin)
+            .add_plugins(BoxesWorldPlugin)
             .add_plugins(TracePlugin)
             .add_plugins(ComputeResourcesPlugin);
 

@@ -18,6 +18,7 @@ use voxel_physics::{
     raycast,
 };
 use voxel_render::{
+    boxes_world::TexturedBox,
     voxel_world::{RenderHandles, VIEW_DISTANCE},
     VoxelCameraBundle, VoxelRenderPlugin,
 };
@@ -98,13 +99,13 @@ fn voxel_break(
                         println!(
                             "pos:{}, {:?}, dist:{}",
                             hit.pos,
-                            chunk_map.get_at(&hit.pos),
+                            chunk_map.get_at(&hit.grid_pos),
                             hit.distance
                         );
                     }
                     Act::RemoveBlock => {
                         chunk_map.set_at(
-                            &hit.pos,
+                            &hit.grid_pos,
                             Voxel {
                                 id: 0,
                                 flags: 0,
@@ -113,7 +114,7 @@ fn voxel_break(
                         );
                     }
                     Act::PlaceBlock => {
-                        let pos = hit.pos + hit.normal;
+                        let pos = hit.grid_pos + hit.normal;
                         chunk_map.set_at(
                             &pos,
                             Voxel {
@@ -272,6 +273,13 @@ fn setup(mut commands: Commands) {
                 ..default()
             });
         });
+
+    commands.spawn((
+        SpatialBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+        TexturedBox {
+            size: Vec3::new(0.5, 0.5, 0.5),
+        },
+    ));
 }
 
 fn control(

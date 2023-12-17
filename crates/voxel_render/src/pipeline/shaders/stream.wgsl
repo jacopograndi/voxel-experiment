@@ -12,7 +12,6 @@ var<storage, read> chunks_loading_offsets: array<u32>;
 const EMPTY_CHUNK = 4294967295u;
 const MAX_COPY_ITERS = 100000u;
 
-// increase parallelism using workgroup_size
 @compute @workgroup_size(4, 4, 4)
 fn copy(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let chunk_size = voxel_uniforms.chunk_size;

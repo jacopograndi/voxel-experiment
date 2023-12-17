@@ -1,4 +1,4 @@
-use crate::{voxel_world::VoxelData, RenderGraphSettings};
+use crate::{boxes_world::BoxesData, voxel_world::VoxelData, RenderGraphSettings};
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
@@ -125,6 +125,7 @@ fn prepare_uniforms(
 impl FromWorld for TracePipelineData {
     fn from_world(render_world: &mut World) -> Self {
         let voxel_data = render_world.get_resource::<VoxelData>().unwrap();
+        let boxes_data = render_world.get_resource::<BoxesData>().unwrap();
 
         let voxel_bind_group_layout = voxel_data.bind_group_layout.clone();
         let trace_bind_group_layout = render_world
@@ -187,6 +188,7 @@ impl FromWorld for TracePipelineData {
                     },
                 ],
             });
+        let boxes_bind_group_layout = boxes_data.bind_group_layout.clone();
 
         let trace_pipeline_descriptor = RenderPipelineDescriptor {
             label: Some("trace pipeline".into()),
@@ -194,6 +196,7 @@ impl FromWorld for TracePipelineData {
                 voxel_bind_group_layout.clone(),
                 trace_bind_group_layout.clone(),
                 texture_bind_group_layout.clone(),
+                boxes_bind_group_layout.clone(),
             ],
             vertex: fullscreen_shader_vertex_state(),
             fragment: Some(FragmentState {
@@ -240,6 +243,7 @@ impl ViewNode for TraceNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let voxel_data = world.get_resource::<VoxelData>().unwrap();
+        let boxes_data = world.get_resource::<BoxesData>().unwrap();
         let trace_pipeline_data = world.get_resource::<TracePipelineData>().unwrap();
         let render_graph_settings = world.get_resource::<RenderGraphSettings>().unwrap();
 
@@ -288,6 +292,7 @@ impl ViewNode for TraceNode {
                 &[view_uniform_offset.offset],
             );
             render_pass.set_bind_group(2, &texture_bind_group, &[]);
+            render_pass.set_bind_group(3, &boxes_data.bind_group, &[]);
 
             render_pass.set_pipeline(trace_pipeline);
             render_pass.draw(0..3, 0..1);

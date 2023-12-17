@@ -8,9 +8,10 @@ const RAYCAST_MAX_ITERATIONS: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RaycastHit {
-    pub pos: IVec3,
+    pub grid_pos: IVec3,
     pub normal: IVec3,
     pub distance: f32,
+    pub pos: Vec3,
 }
 
 fn step(edge: f32, x: f32) -> i32 {
@@ -113,10 +114,12 @@ impl Ray {
     }
 
     fn raycast_hit(&self) -> RaycastHit {
+        let final_pos = self.final_pos();
         RaycastHit {
-            pos: self.grid_pos,
+            grid_pos: self.grid_pos,
             normal: self.normal(),
-            distance: (self.start_pos - self.final_pos()).length(),
+            distance: (self.start_pos - final_pos).length(),
+            pos: final_pos,
         }
     }
 }

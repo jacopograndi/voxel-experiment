@@ -17,6 +17,8 @@
 @group(2) @binding(0) var texture_sheet: texture_2d<f32>;
 @group(2) @binding(1) var texture_sheet_sampler: sampler;
 
+@group(3) @binding(0) var<storage, read> boxes: BoxStorage;
+
 const MAX_RAY_CHUNK_ITERS = 1000u;
 const MAX_RAY_ITERS = 1000;
 
@@ -27,6 +29,17 @@ struct Voxel {
     pos: vec3<f32>,
     grid_size: u32,
 };
+
+struct BoxStorage {
+    length: u32,
+    boxes: array<Box>,
+}
+
+struct Box {
+    world_to_box: mat4x4<f32>,
+    box_to_world: mat4x4<f32>,
+    rad: vec4<f32>,
+}
 
 fn get_at(grid: vec3<i32>) -> u32 {
     let outer = voxel_uniforms.offsets_grid_size;
@@ -210,7 +223,7 @@ fn intersect_box(
 
 	// ray-box intersection in box space
     let m = 1.0 / ray_box.dir;
-    //let k = -step(ray_box.dir, vec3f(0.0)) * rad;
+    //let k = step(vec3f(0.0), ray_box.dir) * rad;
     //let t1 = (-ray_box.pos - k) * m;
     //let t2 = (-ray_box.pos + k) * m;
     let n = m * ray_box.pos;
@@ -272,6 +285,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let dir = normalize(dir1.xyz / dir1.w - pos);
     var constrained_pos = view.world_position % chunk_size + center_in_grid;
     var ray = Ray(constrained_pos, dir);
+    var unconstrained_ray = Ray(pos, dir);
 
     let hit = shoot_ray(ray, 0u);
 
@@ -295,29 +309,22 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         output_colour = skybox(ray.dir, 10.0);
     }
 
-    let b = vec3f(3.0, 0.0, 3.0) + center_in_grid;
-    let box_to_world = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(b.x, b.y, b.z, 1.0),
-    );
-    let world_to_box = slow_inverse(box_to_world);
-    let rad = vec3f(2.0);
-    let res = intersect_box(
-        ray,
-        world_to_box,
-        box_to_world,
-        rad,
-    );
-    if res.x > 0.0 && res.x < 10000.0 {
-        if hit.hit {
-            if hit.distance > res.x {
+    var min_distance = 1000000.0;
+    if hit.hit {
+        min_distance = hit.distance;
+    }
+    for (var i = 0u; i < boxes.length; i = i + 1u) {
+        let res = intersect_box(
+            unconstrained_ray,
+            boxes.boxes[i].world_to_box,
+            boxes.boxes[i].box_to_world,
+            boxes.boxes[i].rad.xyz,
+        );
+        if res.x > 0.0 && res.x < 10000.0 {
+            if min_distance > res.x {
                 output_colour = abs(vec3f(res.yzw));
+                min_distance = res.x;
             }
-        }
-        else {
-                output_colour = abs(vec3f(res.yzw));
         }
     }
 
