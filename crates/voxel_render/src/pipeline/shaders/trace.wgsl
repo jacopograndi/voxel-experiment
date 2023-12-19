@@ -18,8 +18,10 @@
 @group(2) @binding(1) var texture_sheet_sampler: sampler;
 
 @group(3) @binding(0) var<storage, read> boxes: BoxStorage;
+@group(3) @binding(1) var<storage, read> vox_textures: VoxTextureStorage;
 
 const MAX_RAY_CHUNK_ITERS = 1000u;
+const MAX_RAY_VOX_TEXTURE_ITERS = 100u;
 const MAX_RAY_ITERS = 1000;
 
 const EMPTY_CHUNK = 4294967295u;
@@ -39,6 +41,15 @@ struct Box {
     world_to_box: mat4x4<f32>,
     box_to_world: mat4x4<f32>,
     rad: vec4<f32>,
+    index: u32,
+    _padding1: u32,
+    _padding2: u32,
+    _padding3: u32,
+}
+
+struct VoxTextureStorage {
+    offsets: array<u32, 1024>,
+    textures: array<u32>,
 }
 
 fn get_at(grid: vec3<i32>) -> u32 {
@@ -182,6 +193,59 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     return hit_info;
 }
 
+struct HitInfoVox {
+    hit: bool,
+    color: u32,
+    steps: u32,
+}
+
+fn shoot_ray_vox(inray: Ray, vox_index: u32, box_size: vec3<f32>) -> HitInfoVox {
+    let vox_offset = vox_textures.offsets[vox_index];
+    let vox_size = vec3u(
+        vox_textures.textures[vox_offset],
+        vox_textures.textures[vox_offset + 1u],
+        vox_textures.textures[vox_offset + 2u]
+    );
+    let vox_size_f = vec3f(vox_size);
+    let vox_offset_voxels = vox_offset + 4u + 256u;
+
+    var ray = inray;
+    let epsilon = 0.00001;
+
+    let map_size = vec3i(box_size);
+    var map_pos = floor(ray.pos);
+
+    var delta_dist = abs(vec3f(length(ray.dir)) / ray.dir);
+    var ray_step = sign(ray.dir);
+    var side_dist = (sign(ray.dir) * (map_pos - ray.pos) + (sign(ray.dir) * 0.5) + 0.5) * delta_dist;
+    var mask = vec3f(0.0);
+    var hit = false;
+    var color_index: u32;
+    var iters = 0u;
+    for (iters = 0u; iters < MAX_RAY_VOX_TEXTURE_ITERS; iters++) {
+        mask = step(side_dist.xyz, side_dist.yzx) * step(side_dist.xyz, side_dist.zxy);
+        side_dist += mask * delta_dist;
+        map_pos += mask * ray_step;
+        if !in_chunk_bounds(map_pos, vec3f(0.0), vox_size_f) {
+            return HitInfoVox(false, 0u, 50u);
+        }
+        let voxel_i = u32(map_pos.x) * (vox_size.y * vox_size.z) + u32(map_pos.y) * vox_size.z + u32(map_pos.z);
+        let data = vox_textures.textures[vox_offset_voxels + voxel_i];
+        if (data & 0xFFu) != 0u {
+            hit = true;
+            color_index = data & 0xFFu;
+            break;
+        }
+    }
+    let color = vox_textures.textures[vox_offset_voxels + 4u + color_index];
+
+    var hit_info: HitInfoVox;
+    hit_info.hit = hit;
+    hit_info.color = color;
+    hit_info.steps = iters;
+    return hit_info;
+}
+
 fn get_voxel(pos: vec3<f32>) -> f32 {
     let data = get_at(vec3i(pos));
     return min(f32(data & 0xFFu), 1.0);
@@ -322,8 +386,20 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         );
         if res.x > 0.0 && res.x < 10000.0 {
             if min_distance > res.x {
-                output_colour = abs(vec3f(res.yzw));
-                min_distance = res.x;
+                var ray_world: Ray;
+                ray_world.pos = unconstrained_ray.pos * unconstrained_ray.dir * min_distance;
+                ray_world.pos = ray_world.pos - boxes.boxes[i].world_to_box.w.xyz;
+                ray_world.dir = unconstrained_ray.dir;
+                var ray_box: Ray;
+                ray_box.pos = (boxes.boxes[i].world_to_box * vec4f(ray_world.pos, 1.0)).xyz;
+                ray_box.dir = (boxes.boxes[i].world_to_box * vec4f(ray_world.dir, 0.0)).xyz;
+
+                let voxhit = shoot_ray_vox(ray_box, boxes.boxes[i].index, boxes.boxes[i].rad.xyz);
+                output_colour = vec3<f32>(f32(voxhit.steps) / 100.0);
+                if voxhit.hit {
+                    output_colour = unpack4x8unorm(voxhit.color).xyz / 256.0;
+                    min_distance = res.x;
+                }
             }
         }
     }

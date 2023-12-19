@@ -18,7 +18,7 @@ use voxel_physics::{
     raycast,
 };
 use voxel_render::{
-    boxes_world::TexturedBox,
+    boxes_world::{TexturedBox, VoxTextureIndex, VoxTextureLoadQueue},
     voxel_world::{RenderHandles, VIEW_DISTANCE},
     VoxelCameraBundle, VoxelRenderPlugin,
 };
@@ -213,7 +213,11 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
     }
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
+    queue
+        .to_load
+        .push(("assets/voxels/car.vox".to_string(), VoxTextureIndex(0)));
+
     // player character
     commands
         .spawn((
@@ -278,6 +282,15 @@ fn setup(mut commands: Commands) {
         SpatialBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
         TexturedBox {
             size: Vec3::new(0.5, 0.5, 0.5),
+            vox_texture_index: VoxTextureIndex(0),
+        },
+    ));
+
+    commands.spawn((
+        SpatialBundle::from_transform(Transform::from_xyz(3.0, 0.0, 0.0)),
+        TexturedBox {
+            size: Vec3::new(0.5, 0.5, 0.5),
+            vox_texture_index: VoxTextureIndex(0),
         },
     ));
 }

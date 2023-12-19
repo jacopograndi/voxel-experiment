@@ -1532,6 +1532,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b"
 
 [[package]]
+name = "dot_vox"
+version = "5.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd05cab02d6074145c6f92ddf1b57357e4bc1424f87c790c044de62bdc94c13a"
+dependencies = [
+ "ahash",
+ "lazy_static",
+ "log",
+ "nom",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3637,6 +3649,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "dot_vox",
 ]
 
 [[package]]
