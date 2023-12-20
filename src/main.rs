@@ -217,6 +217,9 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     queue
         .to_load
         .push(("assets/voxels/car.vox".to_string(), VoxTextureIndex(0)));
+    queue
+        .to_load
+        .push(("assets/voxels/car2.vox".to_string(), VoxTextureIndex(1)));
 
     // player character
     commands
@@ -279,18 +282,23 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
         });
 
     commands.spawn((
-        SpatialBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+        SpatialBundle::from_transform(Transform {
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            scale: Vec3::new(15.0, 15.0, 34.0) / 16.0,
+            ..default()
+        }),
         TexturedBox {
-            size: Vec3::new(0.5, 0.5, 0.5),
             vox_texture_index: VoxTextureIndex(0),
         },
     ));
 
     commands.spawn((
-        SpatialBundle::from_transform(Transform::from_xyz(3.0, 0.0, 0.0)),
+        SpatialBundle::from_transform(Transform {
+            translation: Vec3::new(2.0, 0.0, 2.0),
+            ..default()
+        }),
         TexturedBox {
-            size: Vec3::new(0.5, 0.5, 0.5),
-            vox_texture_index: VoxTextureIndex(0),
+            vox_texture_index: VoxTextureIndex(1),
         },
     ));
 }

@@ -105,7 +105,6 @@ impl Plugin for BoxesWorldPlugin {
 
 #[derive(Component, Default, Debug, Clone)]
 pub struct TexturedBox {
-    pub size: Vec3,
     pub vox_texture_index: VoxTextureIndex,
 }
 
@@ -173,19 +172,27 @@ fn load_vox_textures(
 }
 
 fn extract_boxes(
-    box_query: Extract<Query<(Entity, &GlobalTransform, &TexturedBox, &ViewVisibility)>>,
+    box_query: Extract<
+        Query<(
+            Entity,
+            &Transform,
+            &GlobalTransform,
+            &TexturedBox,
+            &ViewVisibility,
+        )>,
+    >,
     mut extracted_boxes: ResMut<ExtractedTexturedBoxes>,
 ) {
     extracted_boxes.boxes.clear();
-    for (entity, transform, texbox, view_visibility) in box_query.iter() {
+    for (entity, tr, global_tr, texbox, view_visibility) in box_query.iter() {
         if !view_visibility.get() {
             continue;
         }
         extracted_boxes.boxes.insert(
             entity,
             ExtractedTexturedBox {
-                transform: *transform,
-                size: texbox.size,
+                transform: *global_tr,
+                size: tr.scale,
                 index: texbox.vox_texture_index.clone(),
             },
         );
@@ -259,14 +266,15 @@ fn write_boxes(
     render_queue.write_buffer(&boxes_data.boxes_buffer, 0, &bytes);
 }
 
+const MAX_VOX_TEXTURE_STORAGE: u32 = 1024;
+
 fn write_vox_textures(
     render_queue: Res<RenderQueue>,
     boxes_data: Res<BoxesData>,
     loaded: ResMut<LoadedVoxTextures>,
 ) {
     let mut bytes: Vec<u8> = vec![];
-    let mut offset: u32 = 1024;
-    let offsets = [0; std::mem::size_of::<u32>() * 1024];
+    let offsets = [0; (MAX_VOX_TEXTURE_STORAGE * 4) as usize];
     bytes.extend(offsets);
 
     let mut textures: Vec<(VoxTextureIndex, VoxGridPtr)> = loaded
@@ -276,15 +284,16 @@ fn write_vox_textures(
         .collect();
     textures.sort_by(|a, b| a.0.cmp(&b.0));
 
+    let mut texture_offset: u32 = 0;
     for (i, (_id, vox_texture)) in textures.iter().enumerate() {
         let vox = vox_texture.0.read().unwrap().to_bytes_vec();
         let len = vox.len();
         bytes.extend(vox);
-        let offset_bytes = offset.to_le_bytes();
+        let offset_bytes = texture_offset.to_le_bytes();
         for j in 0..4 {
-            bytes[i + j] = offset_bytes[j];
+            bytes[i * 4 + j] = offset_bytes[j];
         }
-        offset += len as u32;
+        texture_offset += len as u32 / 4;
     }
     render_queue.write_buffer(&boxes_data.vox_texture_buffer, 0, &bytes);
 }
