@@ -34,13 +34,15 @@ struct Voxel {
 
 struct BoxStorage {
     length: u32,
+    _padding1: u32,
+    _padding2: u32,
+    _padding3: u32,
     boxes: array<Box>,
 }
 
 struct Box {
     world_to_box: mat4x4<f32>,
     box_to_world: mat4x4<f32>,
-    rad: vec4<f32>,
     index: u32,
     _padding1: u32,
     _padding2: u32,
@@ -234,8 +236,8 @@ fn shoot_ray_vox(inray: Ray, vox_index: u32) -> HitInfoVox {
         side_dist += mask * delta_dist;
         map_pos += mask * ray_step;
         if !in_chunk_bounds(map_pos, vec3f(0.0), vox_size_f) {
-            //return HitInfoVox(false, 0u, 50u, vec3f(0.8, 0.3, 0.5));
-            //return HitInfoVox(false, 0u, 50u, vec3f(1.0));
+            //return HitInfoVox(false, 0u, 50u, vec3f(0.8, 0.8, 0.8));
+            return HitInfoVox(false, 0u, 50u, vec3f(1.0));
         }
         let voxel_i = u32(map_pos.x) * (vox_size.y * vox_size.z) + u32(map_pos.y) * vox_size.z + u32(map_pos.z);
         let data = vox_textures.textures[vox_offset_voxels + voxel_i];
@@ -245,7 +247,7 @@ fn shoot_ray_vox(inray: Ray, vox_index: u32) -> HitInfoVox {
             break;
         }
     }
-    let color = vox_textures.textures[vox_offset_voxels + 4u + color_index];
+    let color = vox_textures.textures[vox_offset + 4u + color_index];
 
     var hit_info: HitInfoVox;
     hit_info.hit = hit;
@@ -390,7 +392,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             unconstrained_ray,
             boxes.boxes[i].world_to_box,
             boxes.boxes[i].box_to_world,
-            boxes.boxes[i].rad.xyz / 2.0,
+            vec3f(0.5)
         );
         if res.x > 0.0 && res.x < 10000.0 {
             if min_distance > res.x {
@@ -400,16 +402,34 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 var ray_box: Ray;
                 ray_box.pos = (boxes.boxes[i].world_to_box * vec4f(ray_world.pos, 1.0)).xyz;
                 ray_box.dir = (boxes.boxes[i].world_to_box * vec4f(ray_world.dir, 0.0)).xyz;
-                //ray_box.pos -= boxes.boxes[i].world_to_box.w.xyz;
+
+                //ray_box.pos = ray_box.pos + boxes.boxes[i].rad.xyz / 2.0;
                 ray_box.pos = ray_box.pos + vec3f(0.5);
+                //ray_box.pos = ray_box.pos + vec3f(0.5);
+
+                //let norm_box = (boxes.boxes[i].world_to_box * vec4f(res.yzw, 0.0)).xyz;
+                //ray_box.pos = ray_box.pos + norm_box * 0.01;
+
+                //ray_box.dir = normalize(ray_box.dir);
+                
+                ray_box.dir = ray_box.dir / vec3(
+                    boxes.boxes[i].world_to_box.x.x,
+                    boxes.boxes[i].world_to_box.y.y,
+                    boxes.boxes[i].world_to_box.z.z
+                );
+                //ray_box.dir = ray_world.dir;
+
+                if true {
+                    //return vec4f(ray_box.dir, 1.0);
+                }
 
                 let voxhit = shoot_ray_vox(ray_box, boxes.boxes[i].index);
                 //output_colour = vec3<f32>(f32(voxhit.steps) / 100.0);
                 if voxhit.hit {
-                    output_colour = unpack4x8unorm(voxhit.color).xyz / 256.0;
+                    output_colour = unpack4x8unorm(voxhit.color).xyz;
                     min_distance = res.x;
                 } else {
-                    output_colour = voxhit.debug_color;
+                    //output_colour = voxhit.debug_color;
                 }
             }
         }

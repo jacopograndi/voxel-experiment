@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    f32::consts::PI,
+    sync::{Arc, RwLock},
+};
 
 use bevy::{
     asset::LoadState,
@@ -284,7 +287,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     commands.spawn((
         SpatialBundle::from_transform(Transform {
             translation: Vec3::new(0.0, 0.0, 0.0),
-            scale: Vec3::new(15.0, 15.0, 34.0) / 16.0,
+            scale: Vec3::new(34.0, 13.0, 15.0) / 16.0,
             ..default()
         }),
         TexturedBox {
@@ -294,8 +297,9 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
 
     commands.spawn((
         SpatialBundle::from_transform(Transform {
-            translation: Vec3::new(2.0, 0.0, 2.0),
-            ..default()
+            translation: Vec3::new(3.0, 0.0, -2.0),
+            rotation: Quat::from_rotation_y(PI / 2.0),
+            scale: Vec3::new(32.0, 14.0, 15.0) / 16.0,
         }),
         TexturedBox {
             vox_texture_index: VoxTextureIndex(1),

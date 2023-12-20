@@ -124,7 +124,9 @@ impl VoxGrid {
         let vox = dot_vox::load_bytes(file)?;
 
         let size = vox.models[0].size;
-        let size = UVec3::new(size.x, size.y, size.z).as_ivec3();
+        println!("vox size: {size:?}");
+        let size = UVec3::new(size.y, size.z, size.x).as_ivec3();
+        println!("box size: {size}");
         let mut grid = VoxGrid::new(size);
 
         for i in 0..256 {
@@ -151,9 +153,9 @@ impl VoxGrid {
 
         for voxel in &vox.models[0].voxels {
             let pos = IVec3::new(
-                size.x as i32 - 1 - voxel.x as i32,
+                size.x as i32 - 1 - voxel.y as i32,
                 voxel.z as i32,
-                voxel.y as i32,
+                voxel.x as i32,
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i;

@@ -120,7 +120,6 @@ pub struct ExtractedTexturedBox {
 pub struct PodTexturedBox {
     pub world_to_box: Mat4,
     pub box_to_world: Mat4,
-    pub size: Vec4,
     pub index: u32,
     pub _padding0: u32,
     pub _padding1: u32,
@@ -175,7 +174,6 @@ fn extract_boxes(
     box_query: Extract<
         Query<(
             Entity,
-            &Transform,
             &GlobalTransform,
             &TexturedBox,
             &ViewVisibility,
@@ -184,7 +182,7 @@ fn extract_boxes(
     mut extracted_boxes: ResMut<ExtractedTexturedBoxes>,
 ) {
     extracted_boxes.boxes.clear();
-    for (entity, tr, global_tr, texbox, view_visibility) in box_query.iter() {
+    for (entity, global_tr, texbox, view_visibility) in box_query.iter() {
         if !view_visibility.get() {
             continue;
         }
@@ -192,7 +190,7 @@ fn extract_boxes(
             entity,
             ExtractedTexturedBox {
                 transform: *global_tr,
-                size: tr.scale,
+                size: Vec3::ONE,
                 index: texbox.vox_texture_index.clone(),
             },
         );
@@ -243,7 +241,6 @@ fn write_boxes(
             PodTexturedBox {
                 world_to_box,
                 box_to_world,
-                size: texbox.size.extend(0.0),
                 index: texbox.index.0,
                 _padding0: 0,
                 _padding1: 0,
@@ -256,6 +253,7 @@ fn write_boxes(
     let len = boxes.len() as u32;
     let bytes: Vec<u8> = [
         len.to_le_bytes().as_slice(),
+        // duplicated for alignment to 16 bytes
         len.to_le_bytes().as_slice(),
         len.to_le_bytes().as_slice(),
         len.to_le_bytes().as_slice(),
