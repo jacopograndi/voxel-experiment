@@ -65,7 +65,8 @@ fn main() {
     .add_systems(Update, ui)
     .add_systems(Update, load_and_gen_chunks)
     .add_systems(Update, control)
-    .add_systems(Update, diagnostic_system);
+    .add_systems(Update, diagnostic_system)
+    .add_systems(Update, spin);
 
     app.add_systems(Update, voxel_break);
 
@@ -121,7 +122,7 @@ fn voxel_break(
                         chunk_map.set_at(
                             &pos,
                             Voxel {
-                                id: 2,
+                                id: 3,
                                 flags: 16,
                                 ..default()
                             },
@@ -223,6 +224,9 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     queue
         .to_load
         .push(("assets/voxels/car2.vox".to_string(), VoxTextureIndex(1)));
+    queue
+        .to_load
+        .push(("assets/voxels/fence.vox".to_string(), VoxTextureIndex(2)));
 
     // player character
     commands
@@ -286,7 +290,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
 
     commands.spawn((
         SpatialBundle::from_transform(Transform {
-            translation: Vec3::new(0.0, 0.0, 0.0),
+            translation: Vec3::new(0.0, 13.0 / 16.0 * 0.5, 0.0),
             scale: Vec3::new(34.0, 13.0, 15.0) / 16.0,
             ..default()
         }),
@@ -297,14 +301,30 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
 
     commands.spawn((
         SpatialBundle::from_transform(Transform {
-            translation: Vec3::new(3.0, 0.0, -2.0),
+            translation: Vec3::new(3.0, 14.0 / 16.0 * 0.5, -2.0),
             rotation: Quat::from_rotation_y(PI / 2.0),
             scale: Vec3::new(32.0, 14.0, 15.0) / 16.0,
         }),
         TexturedBox {
             vox_texture_index: VoxTextureIndex(1),
         },
+        Party::default(),
     ));
+}
+
+#[derive(Component, Clone, Default, Debug)]
+struct Party {
+    scale: Option<Vec3>,
+}
+
+fn spin(mut q: Query<(&mut Transform, &mut Party)>, time: Res<Time<Real>>) {
+    for (mut tr, mut party) in q.iter_mut() {
+        tr.rotate_y(0.1);
+        if let None = party.scale {
+            party.scale = Some(tr.scale)
+        }
+        tr.scale = party.scale.unwrap() * f32::cos(time.elapsed_seconds());
+    }
 }
 
 fn control(

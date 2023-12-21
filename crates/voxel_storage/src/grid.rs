@@ -44,7 +44,7 @@ impl Grid {
 
     pub fn filled() -> Grid {
         let voxel = Voxel {
-            id: 1,
+            id: 3,
             flags: 16,
             ..Default::default()
         };
