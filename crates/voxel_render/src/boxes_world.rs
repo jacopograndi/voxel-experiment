@@ -171,14 +171,7 @@ fn load_vox_textures(
 }
 
 fn extract_boxes(
-    box_query: Extract<
-        Query<(
-            Entity,
-            &GlobalTransform,
-            &TexturedBox,
-            &ViewVisibility,
-        )>,
-    >,
+    box_query: Extract<Query<(Entity, &GlobalTransform, &TexturedBox, &ViewVisibility)>>,
     mut extracted_boxes: ResMut<ExtractedTexturedBoxes>,
 ) {
     extracted_boxes.boxes.clear();
