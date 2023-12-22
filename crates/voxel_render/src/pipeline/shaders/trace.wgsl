@@ -266,7 +266,7 @@ fn shoot_ray_vox(inray: Ray, vox_index: u32) -> HitInfoVox {
     hit_info.hit = hit;
     hit_info.color = color;
     hit_info.steps = iters;
-    hit_info.distance = length(ray.pos - end_ray_pos);
+    hit_info.distance = length((ray.pos - end_ray_pos) / vox_size_f);
     return hit_info;
 }
 
@@ -438,9 +438,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 );
 
                 let voxhit = shoot_ray_vox(ray_box, boxes.boxes[i].index);
-                if voxhit.hit {
+                if voxhit.hit && res.x + voxhit.distance < min_distance {
                     output_colour = unpack4x8unorm(voxhit.color).xyz;
-                    min_distance = res.x;
+                    min_distance = res.x + voxhit.distance;
                 }
             }
         }

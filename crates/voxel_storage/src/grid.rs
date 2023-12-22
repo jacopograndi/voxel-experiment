@@ -44,7 +44,7 @@ impl Grid {
 
     pub fn filled() -> Grid {
         let voxel = Voxel {
-            id: 3,
+            id: 1,
             flags: 16,
             ..Default::default()
         };
@@ -124,9 +124,7 @@ impl VoxGrid {
         let vox = dot_vox::load_bytes(file)?;
 
         let size = vox.models[0].size;
-        println!("vox size: {size:?}");
         let size = UVec3::new(size.y, size.z, size.x).as_ivec3();
-        println!("box size: {size}");
         let mut grid = VoxGrid::new(size);
 
         for i in 0..256 {
