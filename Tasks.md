@@ -50,8 +50,19 @@
             Contains a voxel model made of tiny colored voxels.
 
         - Block: grid of 16x16x16 Voxels
-            - ChunkGrid: grid of 32x32x32 Blocks
+            - ChunkGrid: grid of 32x32x32 Blocks 
                 - WorldGrid: grid of ChunkGrids
+
+    Alternative removing the confusing "Grid" terminology which is in fact just a buffer:
+
+    - Voxel: Tiny colored cube 1/16th meters side.
+        - Entity: 
+            A cuboid that can be translated, rotated and scaled.
+            Contains a voxel model made of tiny colored voxels.
+            THE DISTINCTION BETWEEN BLOCK AND ENTITY IS NOT INTERACTIVITY, BUT ONLY POSITION GRANULARITY. Moves by no less than one block? Block. Moves by fraction of a block? Entity. Minecraft is more blurred than this but WE ARE NOT
+        - Block (file block.rs): grid of 16x16x16 Voxels. I propose it to have only id (u8), light (u8) and _flags(u16). _flags should not be accessible directly but only by getters/setters like functions 
+            - Chunk (file chunk.rs): grid of 32x32x32 Blocks as merge of current grid and chunk. Has Arc<RwLock<Vec>> as blocks buffer and a single _flags(u8) that contains version
+                - World (file world.rs): grid of Chunks
 
 
 - Floodfill lighting
