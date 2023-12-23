@@ -10,7 +10,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use voxel_storage::chunk_map::{ChunkMap, GridPtr};
+use voxel_storage::universe::{GridPtr, Universe};
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
 pub const VIEW_DISTANCE: u32 = 220;
@@ -111,9 +111,8 @@ impl Plugin for VoxelWorldPlugin {
             ..default()
         };
 
-        app.insert_resource(ChunkMap::default())
-            .insert_resource(voxel_uniforms)
-            .add_plugins(ExtractResourcePlugin::<ChunkMap>::default())
+        app.insert_resource(voxel_uniforms)
+            .add_plugins(ExtractResourcePlugin::<Universe>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default());
 
         app.sub_app_mut(RenderApp)
@@ -223,7 +222,7 @@ fn prepare_uniforms(
 
 fn prepare_chunks(
     voxel_uniforms: Res<VoxelUniforms>,
-    chunk_map: Res<ChunkMap>,
+    universe: Res<Universe>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
 ) {
@@ -235,7 +234,7 @@ fn prepare_chunks(
     let chunk_side = voxel_uniforms.chunk_size;
     let camera_chunk_pos = (cam_pos / chunk_side as f32) * chunk_side as f32;
 
-    let visible_chunks: HashSet<IVec3> = chunk_map
+    let visible_chunks: HashSet<IVec3> = universe
         .chunks
         .iter()
         .filter_map(|(pos, _chunk)| {
@@ -258,7 +257,7 @@ fn prepare_chunks(
         render_chunk_map.versions.remove(&pos);
     }
 
-    let to_be_rendered: HashSet<IVec3> = chunk_map
+    let to_be_rendered: HashSet<IVec3> = universe
         .chunks
         .iter()
         .filter_map(|(pos, chunk)| {
@@ -283,7 +282,7 @@ fn prepare_chunks(
         .collect();
 
     for &pos in to_be_rendered.iter() {
-        let chunk = chunk_map.chunks.get(&pos).unwrap();
+        let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.grid.clone();
         render_chunk_map.versions.insert(pos, chunk.version);
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {

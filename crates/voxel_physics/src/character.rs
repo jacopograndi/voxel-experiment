@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 
-use voxel_storage::chunk_map::ChunkMap;
+use voxel_storage::universe::Universe;
 
 use crate::{raycast::*, MARGIN_EPSILON};
 
@@ -58,7 +58,7 @@ pub fn character_controller_movement(
         &mut Velocity,
         &mut Friction,
     )>,
-    chunk_map: Res<ChunkMap>,
+    universe: Res<Universe>,
 ) {
     for (character, controller, mut tr, mut vel, friction) in character_query.iter_mut() {
         vel.vel -= Vec3::Y * 0.01;
@@ -69,7 +69,7 @@ pub fn character_controller_movement(
             character.size,
             Vec3::NEG_Y,
             MARGIN_EPSILON * 2.,
-            &chunk_map,
+            &universe,
         ) {
             if hit.distance <= MARGIN_EPSILON * 2. {
                 grounded = true;
@@ -95,7 +95,7 @@ pub fn character_controller_movement(
                 character.size,
                 vel.vel.normalize_or_zero(),
                 vel.vel.length(),
-                &chunk_map,
+                &universe,
             ) {
                 tr.translation += vel.vel.normalize_or_zero() * (hit.distance - MARGIN_EPSILON);
                 vel.vel *= (IVec3::ONE - hit.blocked).as_vec3();
@@ -105,7 +105,7 @@ pub fn character_controller_movement(
             }
         }
         tr.translation += vel.vel;
-}
+    }
 }
 
 pub fn camera_controller_movement(

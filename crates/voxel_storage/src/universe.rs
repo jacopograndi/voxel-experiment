@@ -15,14 +15,14 @@ pub struct Chunk {
     pub version: u32,
 }
 
-/// Game resource, it's mutations are propagated to `RenderChunkMap`
+/// Game resource, it's mutations are propagated to `RenderUniverse`
 /// and written to the gpu buffer.
 #[derive(Resource, ExtractResource, Debug, Clone, Default)]
-pub struct ChunkMap {
+pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
 }
 
-impl ChunkMap {
+impl Universe {
     pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
         let chunk_size = IVec3::splat(CHUNK_SIDE as i32);
         let chunk_pos = (pos.div_euclid(chunk_size)) * chunk_size;

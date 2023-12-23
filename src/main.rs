@@ -25,9 +25,9 @@ use voxel_render::{
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
-    chunk_map::{Chunk, ChunkMap, GridPtr},
     grid::{Grid, Voxel},
-    CHUNK_SIDE,
+    universe::{Chunk, GridPtr, Universe},
+    CHUNK_SIDE, VoxelStoragePlugin,
 };
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =
@@ -49,6 +49,7 @@ fn main() {
             .set(ImagePlugin::default_nearest()),
         VoxelRenderPlugin,
         VoxelPhysicsPlugin,
+        VoxelStoragePlugin,
         EguiPlugin,
     ))
     .register_diagnostic(
@@ -71,7 +72,7 @@ fn main() {
 // just for prototype
 fn voxel_break(
     camera_query: Query<(&CameraController, &GlobalTransform)>,
-    mut chunk_map: ResMut<ChunkMap>,
+    mut chunk_map: ResMut<Universe>,
     mouse: Res<Input<MouseButton>>,
 ) {
     if let Ok((_cam, tr)) = camera_query.get_single() {
@@ -140,7 +141,7 @@ fn gen_chunk(pos: IVec3) -> GridPtr {
     GridPtr(Arc::new(RwLock::new(grid)))
 }
 
-fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, &Transform)>) {
+fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &Transform)>) {
     let load_view_distance: u32 = VIEW_DISTANCE + CHUNK_SIDE as u32 * 2;
 
     let camera_pos = if let Ok((_, tr)) = camera.get_single() {
@@ -162,11 +163,11 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
                 let rel = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
                 if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
                     let pos = camera_chunk_pos + rel;
-                    if let None = chunk_map.chunks.get(&pos) {
+                    if let None = universe.chunks.get(&pos) {
                         // gen chunk
                         //println!("gen {:?}", pos);
                         let grid_ptr = gen_chunk(pos);
-                        chunk_map.chunks.insert(
+                        universe.chunks.insert(
                             pos,
                             Chunk {
                                 grid: grid_ptr,

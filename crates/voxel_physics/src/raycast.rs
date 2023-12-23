@@ -1,6 +1,6 @@
 use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
-use voxel_storage::chunk_map::ChunkMap;
+use voxel_storage::universe::{Universe};
 
 use crate::MARGIN_EPSILON;
 
@@ -129,7 +129,7 @@ pub fn raycast(
     start: Vec3,
     direction: Vec3,
     max_distance: f32,
-    chunk_map: &ChunkMap,
+    universe: &Universe,
 ) -> Option<RaycastHit> {
     if direction.length_squared() <= MARGIN_EPSILON {
         return None;
@@ -140,7 +140,7 @@ pub fn raycast(
         if ray.distance() > max_distance {
             return None;
         }
-        if let Some(voxel) = chunk_map.get_at(&ray.grid_pos) {
+        if let Some(voxel) = universe.get_at(&ray.grid_pos) {
             // hardcoded flag 16 to be collision detection
             if voxel.flags & 16 == 16 {
                 return Some(ray.raycast_hit());
@@ -163,7 +163,7 @@ pub fn sweep_aabb(
     size: Vec3,
     direction: Vec3,
     max_distance: f32,
-    chunk_map: &ChunkMap,
+    universe: &Universe,
 ) -> Option<SweepHit> {
     if direction.length_squared() < MARGIN_EPSILON {
         return None;
@@ -193,7 +193,7 @@ pub fn sweep_aabb(
             for y in min.y..max.y + 1 {
                 for z in min.z..max.z + 1 {
                     let sample_pos = IVec3::new(x, y, z);
-                    if let Some(voxel) = chunk_map.get_at(&sample_pos) {
+                    if let Some(voxel) = universe.get_at(&sample_pos) {
                         if voxel.flags & 16 == 16 {
                             let hit = SweepHit {
                                 blocked: ray.mask,
