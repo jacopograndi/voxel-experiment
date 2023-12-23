@@ -20,14 +20,14 @@ use voxel_physics::{
     raycast,
 };
 use voxel_render::{
-    boxes_world::{TexturedBox, VoxTextureIndex, VoxTextureLoadQueue},
+    boxes_world::{Ghost, VoxTextureIndex, VoxTextureLoadQueue},
     voxel_world::VIEW_DISTANCE,
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
     grid::{Grid, Voxel},
     universe::{Chunk, GridPtr, Universe},
-    CHUNK_SIDE, VoxelStoragePlugin,
+    VoxelStoragePlugin, CHUNK_SIDE,
 };
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =
@@ -257,7 +257,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
             translation: Vec3::new(0.0, 13.0 / 16.0 * 0.5, 0.0),
             ..default()
         }),
-        TexturedBox {
+        Ghost {
             vox_texture_index: VoxTextureIndex(0),
         },
     ));
@@ -268,7 +268,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
             rotation: Quat::from_rotation_y(PI / 2.0),
             ..default()
         }),
-        TexturedBox {
+        Ghost {
             vox_texture_index: VoxTextureIndex(1),
         },
         Party::default(),

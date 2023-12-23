@@ -104,7 +104,7 @@ impl Plugin for BoxesWorldPlugin {
 }
 
 #[derive(Component, Default, Debug, Clone)]
-pub struct TexturedBox {
+pub struct Ghost {
     pub vox_texture_index: VoxTextureIndex,
 }
 
@@ -171,7 +171,7 @@ fn load_vox_textures(
 }
 
 fn extract_boxes(
-    box_query: Extract<Query<(Entity, &GlobalTransform, &TexturedBox, &ViewVisibility)>>,
+    box_query: Extract<Query<(Entity, &GlobalTransform, &Ghost, &ViewVisibility)>>,
     mut extracted_boxes: ResMut<ExtractedTexturedBoxes>,
 ) {
     extracted_boxes.boxes.clear();
