@@ -4,7 +4,6 @@ use std::{
 };
 
 use bevy::{
-    asset::LoadState,
     core_pipeline::fxaa::Fxaa,
     diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
@@ -22,7 +21,7 @@ use voxel_physics::{
 };
 use voxel_render::{
     boxes_world::{TexturedBox, VoxTextureIndex, VoxTextureLoadQueue},
-    voxel_world::{RenderHandles, VIEW_DISTANCE},
+    voxel_world::VIEW_DISTANCE,
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
@@ -57,11 +56,7 @@ fn main() {
     )
     .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
     .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
-    .insert_resource(Handles::default())
-    .add_state::<FlowState>()
-    .add_systems(Startup, load)
-    .add_systems(OnEnter(FlowState::Base), setup)
-    .add_systems(Update, check_loading.run_if(in_state(FlowState::Loading)))
+    .add_systems(Startup, setup)
     .add_systems(Update, ui)
     .add_systems(Update, load_and_gen_chunks)
     .add_systems(Update, control)
@@ -136,38 +131,6 @@ fn voxel_break(
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
-enum FlowState {
-    #[default]
-    Loading,
-    Base,
-}
-
-#[derive(Resource, Default)]
-struct Handles {
-    texture_blocks: Handle<Image>,
-}
-
-fn load(
-    mut handles: ResMut<Handles>,
-    asset_server: Res<AssetServer>,
-    mut render_handles: ResMut<RenderHandles>,
-) {
-    handles.texture_blocks = asset_server.load("textures/blocks.png");
-    render_handles.texture_blocks = handles.texture_blocks.clone();
-}
-
-fn check_loading(
-    handles: Res<Handles>,
-    asset_server: Res<AssetServer>,
-    mut next_state: ResMut<NextState<FlowState>>,
-) {
-    match asset_server.get_load_state(handles.texture_blocks.clone()) {
-        Some(LoadState::Loaded) => next_state.set(FlowState::Base),
-        _ => (),
-    }
-}
-
 fn gen_chunk(pos: IVec3) -> GridPtr {
     let grid = if pos.y < 0 {
         Grid::filled()
@@ -220,13 +183,13 @@ fn load_and_gen_chunks(mut chunk_map: ResMut<ChunkMap>, camera: Query<(&Camera, 
 fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     queue
         .to_load
-        .push(("assets/voxels/car.vox".to_string(), VoxTextureIndex(0)));
+        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(0)));
     queue
         .to_load
-        .push(("assets/voxels/car2.vox".to_string(), VoxTextureIndex(1)));
+        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(1)));
     queue
         .to_load
-        .push(("assets/voxels/fence.vox".to_string(), VoxTextureIndex(2)));
+        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(2)));
 
     // player character
     commands
@@ -291,7 +254,6 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     commands.spawn((
         SpatialBundle::from_transform(Transform {
             translation: Vec3::new(0.0, 13.0 / 16.0 * 0.5, 0.0),
-            scale: Vec3::new(34.0, 13.0, 15.0) / 16.0,
             ..default()
         }),
         TexturedBox {
@@ -303,7 +265,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
         SpatialBundle::from_transform(Transform {
             translation: Vec3::new(3.0, 14.0 / 16.0 * 0.5, -2.0),
             rotation: Quat::from_rotation_y(PI / 2.0),
-            scale: Vec3::new(32.0, 14.0, 15.0) / 16.0,
+            ..default()
         }),
         TexturedBox {
             vox_texture_index: VoxTextureIndex(1),

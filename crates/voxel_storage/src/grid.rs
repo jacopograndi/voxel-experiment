@@ -127,7 +127,13 @@ impl VoxGrid {
         let size = UVec3::new(size.y, size.z, size.x).as_ivec3();
         let mut grid = VoxGrid::new(size);
 
-        for i in 0..256 {
+        println!("{:?}", vox.palette);
+
+        if vox.palette.len() > 255 {
+            panic!("The zeroeth color is used for transparency");
+        }
+
+        for i in 0..vox.palette.len() {
             let colour = vox.palette[i];
             let mut material = Vec4::new(
                 colour.r as f32 / 255.0,
@@ -146,7 +152,7 @@ impl VoxGrid {
                     material.w = 1.0;
                 }
             }
-            grid.palette[i] = material.into();
+            grid.palette[i + 1] = material.into();
         }
 
         for voxel in &vox.models[0].voxels {
@@ -156,7 +162,7 @@ impl VoxGrid {
                 voxel.x as i32,
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
-            grid.voxels[index as usize].id = voxel.i;
+            grid.voxels[index as usize].id = voxel.i + 1;
             grid.voxels[index as usize].flags = 16; // set the collision flag
         }
 

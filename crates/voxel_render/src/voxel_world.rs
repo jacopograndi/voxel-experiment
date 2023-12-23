@@ -1,5 +1,4 @@
 use bevy::render::camera::ExtractedCamera;
-use bevy::render::render_asset::RenderAssets;
 use bevy::render::view::ExtractedView;
 use bevy::utils::{HashMap, HashSet};
 use bevy::{
@@ -107,42 +106,15 @@ impl Plugin for VoxelWorldPlugin {
             )),
         );
 
-        let texture_bind_group_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            multisampled: false,
-                            sample_type: TextureSampleType::Float { filterable: false },
-                            view_dimension: TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                ],
-                label: Some("tilemap_material_layout"),
-            });
-
         let render_chunk_map = RenderChunkMap {
             buffer_alloc: ChunkAllocator::new(chunks_volume as usize),
             ..default()
         };
 
         app.insert_resource(ChunkMap::default())
-            .insert_resource(ExtractedImage::default())
-            .insert_resource(RenderHandles::default())
             .insert_resource(voxel_uniforms)
             .add_plugins(ExtractResourcePlugin::<ChunkMap>::default())
-            .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default())
-            .add_plugins(ExtractResourcePlugin::<ExtractedImage>::default())
-            .add_systems(Update, extract_images);
+            .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default());
 
         app.sub_app_mut(RenderApp)
             .insert_resource(VoxelData {
@@ -153,8 +125,6 @@ impl Plugin for VoxelWorldPlugin {
                 chunks_loading_offsets,
                 bind_group_layout,
                 bind_group,
-                texture_bind_group_layout,
-                texture_bind_group: None,
             })
             .insert_resource(render_chunk_map)
             .add_systems(
@@ -164,25 +134,10 @@ impl Plugin for VoxelWorldPlugin {
                     prepare_chunks,
                     write_chunks,
                     bind_voxel_data,
-                    bind_images,
                 )
                     .in_set(RenderSet::Prepare),
             );
     }
-}
-
-#[derive(Resource, ExtractResource, Clone, Default)]
-pub struct ExtractedImage {
-    handle: AssetId<Image>,
-}
-
-#[derive(Resource, Debug, Clone, Default)]
-pub struct RenderHandles {
-    pub texture_blocks: Handle<Image>,
-}
-
-fn extract_images(mut extr: ResMut<ExtractedImage>, handles: Res<RenderHandles>) {
-    extr.handle = handles.texture_blocks.id();
 }
 
 #[derive(Resource, ExtractResource, Clone, ShaderType)]
@@ -200,8 +155,6 @@ pub struct VoxelData {
     pub chunks_loading_offsets: Buffer,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
-    pub texture_bind_group_layout: BindGroupLayout,
-    pub texture_bind_group: Option<BindGroup>,
 }
 
 #[derive(Resource, Clone, Default)]
@@ -428,23 +381,4 @@ fn bind_voxel_data(render_device: Res<RenderDevice>, mut voxel_data: ResMut<Voxe
         )),
     );
     voxel_data.bind_group = bind_group;
-}
-
-fn bind_images(
-    mut voxel_data: ResMut<VoxelData>,
-    extr: Res<ExtractedImage>,
-    render_device: Res<RenderDevice>,
-    render_images: Res<RenderAssets<Image>>,
-) {
-    if let Some(image) = render_images.get(extr.handle) {
-        let bind_group = render_device.create_bind_group(
-            None,
-            &voxel_data.texture_bind_group_layout,
-            &BindGroupEntries::sequential((
-                image.texture_view.into_binding(),
-                image.sampler.into_binding(),
-            )),
-        );
-        voxel_data.texture_bind_group = Some(bind_group);
-    }
 }

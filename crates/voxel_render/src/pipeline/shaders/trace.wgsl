@@ -14,11 +14,8 @@
 @group(1) @binding(1) var<uniform> view: View;
 @group(1) @binding(2) var<uniform> globals: Globals;
 
-@group(2) @binding(0) var texture_sheet: texture_2d<f32>;
-@group(2) @binding(1) var texture_sheet_sampler: sampler;
-
-@group(3) @binding(0) var<storage, read> boxes: BoxStorage;
-@group(3) @binding(1) var<storage, read> vox_textures: VoxTextureStorage;
+@group(2) @binding(0) var<storage, read> boxes: BoxStorage;
+@group(2) @binding(1) var<storage, read> vox_textures: VoxTextureStorage;
 
 const MAX_RAY_CHUNK_ITERS = 1000u;
 const MAX_RAY_VOX_TEXTURE_ITERS = 100u;
@@ -137,6 +134,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     var hit = false;
     var voxel: Voxel;
     var iters = 0u;
+    var voxhit: HitInfoVox;
     for (iters = 0u; iters < MAX_RAY_CHUNK_ITERS; iters++) {
         mask = step(side_dist.xyz, side_dist.yzx) * step(side_dist.xyz, side_dist.zxy);
         side_dist += mask * delta_dist;
@@ -154,7 +152,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
             voxel = Voxel(chunks[offset + voxel_i], map_pos, side);
-            if (voxel.data & 0xFFu) == 3u {
+            if ((voxel.data >> 8u) & 16u) > 0u {
                 // inner 16x16x16 voxel grid
                 let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos;
                 var ray_box: Ray;
@@ -162,17 +160,10 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
                 let norm_box = -ray_step * mask;
                 ray_box.pos = ray_box.pos + norm_box * 0.00001;
                 ray_box.dir = ray.dir;
-                let voxhit = shoot_ray_vox(ray_box, 2u);
+                voxhit = shoot_ray_vox(ray_box, 2u);
                 if voxhit.hit {
-                    var hit_info: HitInfo;
-                    hit_info.distance = length(ray.pos - end_ray_pos);
-                    hit_info.vox = voxhit;
-                    return hit_info;
+                    break;
                 }
-            } else if (voxel.data & 0xFFu) != 0u && (((voxel.data >> 8u) & flags) > 0u || flags == 0u) {
-                // normal uv voxel
-                hit = true;
-                break;
             }
         } else {
             // todo skip empty chunks
@@ -209,6 +200,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
     hit_info.tangent2 = tangent2;
     hit_info.uv = uv;
     hit_info.steps = u32(iters);
+    hit_info.vox = voxhit;
     return hit_info;
 }
 
@@ -386,32 +378,22 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // lighting
     var indirect_lighting = vec3(0.0);
 
-    var uv = hit.uv.xy;
-    uv = vec2f(1.0) - uv;
-    uv /= 16.0;
-    uv.x += f32(hit.data & 0xFFu) / 16.0;
-    let color = textureSample(texture_sheet, texture_sheet_sampler, uv);
-
-    if hit.hit {
+    var min_distance = 1000000.0;
+    let vox_distance = hit.vox.distance + hit.distance;
+    if hit.vox.hit && vox_distance < min_distance {
         // voxel ao
+        output_colour = unpack4x8unorm(hit.vox.color).xyz;
+        min_distance = hit.vox.distance + hit.distance;
         let ao = voxel_ao(hit.pos + hit.normal / 2.0, hit.tangent1, hit.tangent2);
         let interpolated_ao_pweig = mix(mix(ao.w, ao.z, hit.uv.x), mix(ao.x, ao.y, hit.uv.x), hit.uv.y);
         let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 2.0);
         indirect_lighting = vec3(2.0 * voxel_ao);
-        output_colour = (indirect_lighting) * color.xyz;
+        let color = unpack4x8unorm(hit.vox.color).xyz;
+        output_colour = (indirect_lighting) * color;
     } else {
         output_colour = skybox(ray.dir, 10.0);
     }
 
-    var min_distance = 1000000.0;
-    if hit.hit {
-        min_distance = hit.distance;
-    }
-    let vox_distance = hit.vox.distance + hit.distance;
-    if hit.vox.hit && vox_distance < min_distance {
-        output_colour = unpack4x8unorm(hit.vox.color).xyz;
-        min_distance = hit.vox.distance + hit.distance;
-    }
     for (var i = 0u; i < boxes.length; i = i + 1u) {
         let res = intersect_box(
             unconstrained_ray,

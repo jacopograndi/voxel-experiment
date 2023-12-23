@@ -165,29 +165,6 @@ impl FromWorld for TracePipelineData {
                     },
                 ],
             });
-        let texture_bind_group_layout = render_world
-            .resource::<RenderDevice>()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("texture bind group layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: false },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                ],
-            });
         let boxes_bind_group_layout = boxes_data.bind_group_layout.clone();
 
         let trace_pipeline_descriptor = RenderPipelineDescriptor {
@@ -195,7 +172,6 @@ impl FromWorld for TracePipelineData {
             layout: vec![
                 voxel_bind_group_layout.clone(),
                 trace_bind_group_layout.clone(),
-                texture_bind_group_layout.clone(),
                 boxes_bind_group_layout.clone(),
             ],
             vertex: fullscreen_shader_vertex_state(),
@@ -247,11 +223,6 @@ impl ViewNode for TraceNode {
         let trace_pipeline_data = world.get_resource::<TracePipelineData>().unwrap();
         let render_graph_settings = world.get_resource::<RenderGraphSettings>().unwrap();
 
-        let Some(texture_bind_group) = voxel_data.texture_bind_group.as_ref() else {
-            println!("No texture");
-            return Ok(());
-        };
-
         if !render_graph_settings.trace {
             return Ok(());
         }
@@ -291,8 +262,7 @@ impl ViewNode for TraceNode {
                 &trace_bind_group.bind_group,
                 &[view_uniform_offset.offset],
             );
-            render_pass.set_bind_group(2, &texture_bind_group, &[]);
-            render_pass.set_bind_group(3, &boxes_data.bind_group, &[]);
+            render_pass.set_bind_group(2, &boxes_data.bind_group, &[]);
 
             render_pass.set_pipeline(trace_pipeline);
             render_pass.draw(0..3, 0..1);
