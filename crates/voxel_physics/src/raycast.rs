@@ -1,6 +1,6 @@
 use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
-use voxel_storage::universe::{Universe};
+use voxel_storage::universe::Universe;
 
 use crate::MARGIN_EPSILON;
 
@@ -142,7 +142,7 @@ pub fn raycast(
         }
         if let Some(voxel) = universe.get_at(&ray.grid_pos) {
             // hardcoded flag 16 to be collision detection
-            if voxel.flags & 16 == 16 {
+            if voxel.is_collision() {
                 return Some(ray.raycast_hit());
             }
         }
@@ -194,7 +194,7 @@ pub fn sweep_aabb(
                 for z in min.z..max.z + 1 {
                     let sample_pos = IVec3::new(x, y, z);
                     if let Some(voxel) = universe.get_at(&sample_pos) {
-                        if voxel.flags & 16 == 16 {
+                        if voxel.is_collision() {
                             let hit = SweepHit {
                                 blocked: ray.mask,
                                 distance: ray.distance(),

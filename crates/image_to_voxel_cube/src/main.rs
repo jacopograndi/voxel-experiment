@@ -28,6 +28,10 @@ fn main() {
             name: "wood-oak",
             method: Method::equal_sides(Uv(5, 1), Uv(5, 1), Uv(4, 1)),
         },
+        Block {
+            name: "glowstone",
+            method: Method::Single(Uv(9, 6)),
+        },
     ];
 
     let sheet = image::open(PATH_IN).unwrap();

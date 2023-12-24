@@ -51,6 +51,10 @@ struct VoxTextureStorage {
     textures: array<u32>,
 }
 
+fn get_at_f(pos: vec3<f32>) -> u32 {
+    return get_at(vec3<i32>(pos));
+}
+
 fn get_at(grid: vec3<i32>) -> u32 {
     let outer = voxel_uniforms.offsets_grid_size;
     let side = voxel_uniforms.chunk_size;
@@ -66,6 +70,21 @@ fn get_at(grid: vec3<i32>) -> u32 {
     } else {
         return 0u;
     }
+}
+
+fn is_solid(data: u32) -> bool {
+    return (data & 0xFFu) != 0u;
+}
+
+fn is_opaque(data: u32) -> bool {
+    return ((data >> 8u) & 1u) > 0u;
+}
+
+fn light(data: u32) -> u32 {
+    let torch_light = (data >> 16u) & 0xFFu;
+    let sun_light = (data >> 24u) & 0xFFu;
+    // sun_light to be later modulated by time_of_day
+    return max(torch_light, sun_light);
 }
 
 struct HitInfo {
@@ -152,7 +171,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
             voxel = Voxel(chunks[offset + voxel_i], map_pos, side);
-            if ((voxel.data >> 8u) & 16u) > 0u {
+            if is_solid(voxel.data) {
                 // inner 16x16x16 voxel grid
                 let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos;
                 var ray_box: Ray;
@@ -160,7 +179,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
                 let norm_box = -ray_step * mask;
                 ray_box.pos = ray_box.pos + norm_box * 0.00001;
                 ray_box.dir = ray.dir;
-                voxhit = shoot_ray_vox(ray_box, 2u);
+                voxhit = shoot_ray_vox(ray_box, voxel.data & 0xFFu);
                 if voxhit.hit {
                     break;
                 }
@@ -169,8 +188,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
             // todo skip empty chunks
         }
     }
-    let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos
-    ;
+    let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos;
     var uv = vec3f(0.0);
     var tangent1 = vec3f(0.0);
     var tangent2 = vec3f(0.0);
@@ -262,34 +280,50 @@ fn shoot_ray_vox(inray: Ray, vox_index: u32) -> HitInfoVox {
     return hit_info;
 }
 
-fn get_voxel(pos: vec3<f32>) -> f32 {
-    let data = get_at(vec3i(pos));
-    return min(f32(data & 0xFFu), 1.0);
+// https://www.shadertoy.com/view/ldl3DS
+fn vertex_ao(side: vec2<u32>, corner: u32) -> f32 {
+    let sx = u32(is_opaque(side.x));
+    let sy = u32(is_opaque(side.y));
+    let c = u32(is_opaque(corner));
+    return 1.0 - f32(sx + sy + max(c, sx * sy)) / 3.1;
 }
 
-// https://www.shadertoy.com/view/ldl3DS
-fn vertex_ao(side: vec2<f32>, corner: f32) -> f32 {
-    return 1.0 - (side.x + side.y + max(corner, side.x * side.y)) / 3.1;
+fn max24(a: u32, b: u32, c: u32, d: u32) -> u32 {
+    return max(max(a, b), max(c, d));
 }
-fn voxel_ao(pos: vec3<f32>, s: vec3<f32>, t: vec3<f32>) -> vec4<f32> {
+
+fn voxel_light(pos: vec3<f32>, s: vec3<f32>, t: vec3<f32>, uv: vec3<f32>) -> vec3<f32> {
+    let center = get_at_f(pos);
     let side = vec4(
-        get_voxel(pos + t),
-        get_voxel(pos - s),
-        get_voxel(pos + s),
-        get_voxel(pos - t)
+        get_at_f(pos + t),
+        get_at_f(pos - s),
+        get_at_f(pos + s),
+        get_at_f(pos - t)
     );
     let corner = vec4(
-        get_voxel(pos - s + t),
-        get_voxel(pos + s + t),
-        get_voxel(pos + s - t),
-        get_voxel(pos - s - t)
+        get_at_f(pos - s + t),
+        get_at_f(pos + s + t),
+        get_at_f(pos + s - t),
+        get_at_f(pos - s - t)
     );
+
     var ao: vec4<f32>;
     ao.x = vertex_ao(side.xy, corner.x);
     ao.y = vertex_ao(side.xz, corner.y);
     ao.z = vertex_ao(side.zw, corner.z);
     ao.w = vertex_ao(side.yw, corner.w);
-    return ao;
+    let interpolated_ao = mix(mix(ao.w, ao.z, uv.x), mix(ao.x, ao.y, uv.x), uv.y);
+    let ao_intensity = pow(interpolated_ao, 1.0 / 2.0);
+    let ao_color = vec3<f32>(2.0 * ao_intensity);
+
+    let light1 = f32(max24(light(corner.x), light(side.x), light(side.y), light(center)));
+    let light2 = f32(max24(light(corner.y), light(side.x), light(side.z), light(center)));
+    let light3 = f32(max24(light(corner.z), light(side.w), light(side.z), light(center)));
+    let light4 = f32(max24(light(corner.w), light(side.w), light(side.y), light(center)));
+    let light_intensity = mix(mix(light4, light3, uv.x), mix(light1, light2, uv.x), uv.y);
+    let light_color = vec3<f32>(light_intensity / 16.0) * 0.95 + 0.05;
+
+    return ao_color * light_color;
 }
 
 struct IntersectBoxHit {
@@ -384,12 +418,10 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // voxel ao
         output_colour = unpack4x8unorm(hit.vox.color).xyz;
         min_distance = hit.vox.distance + hit.distance;
-        let ao = voxel_ao(hit.pos + hit.normal / 2.0, hit.tangent1, hit.tangent2);
-        let interpolated_ao_pweig = mix(mix(ao.w, ao.z, hit.uv.x), mix(ao.x, ao.y, hit.uv.x), hit.uv.y);
-        let voxel_ao = pow(interpolated_ao_pweig, 1.0 / 2.0);
-        indirect_lighting = vec3(2.0 * voxel_ao);
+        indirect_lighting = voxel_light(hit.pos + hit.normal / 2.0, hit.tangent1, hit.tangent2, hit.uv);
+
         let color = unpack4x8unorm(hit.vox.color).xyz;
-        output_colour = (indirect_lighting) * color;
+        output_colour = indirect_lighting * color;
     } else {
         output_colour = skybox(ray.dir, 10.0);
     }

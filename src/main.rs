@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     f32::consts::PI,
     sync::{Arc, RwLock},
 };
@@ -7,6 +8,7 @@ use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
+    utils::HashSet,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -25,9 +27,9 @@ use voxel_render::{
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
-    grid::{Grid, Voxel},
+    grid::{Grid, LightType, Voxel, MAX_LIGHT},
     universe::{Chunk, GridPtr, Universe},
-    VoxelStoragePlugin, CHUNK_SIDE,
+    VoxelStoragePlugin, CHUNK_SIDE, CHUNK_VOLUME,
 };
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =
@@ -72,9 +74,14 @@ fn main() {
 // just for prototype
 fn voxel_break(
     camera_query: Query<(&CameraController, &GlobalTransform)>,
-    mut chunk_map: ResMut<Universe>,
+    mut universe: ResMut<Universe>,
     mouse: Res<Input<MouseButton>>,
+    keys: Res<Input<KeyCode>>,
 ) {
+    if keys.just_pressed(KeyCode::R) {
+        let chunks = universe.chunks.iter().map(|v| v.0.clone()).collect();
+        recalc_lights(&mut universe, chunks);
+    }
     if let Ok((_cam, tr)) = camera_query.get_single() {
         #[derive(PartialEq)]
         enum Act {
@@ -93,18 +100,19 @@ fn voxel_break(
             _ => None,
         };
         if let Some(act) = act {
-            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &chunk_map) {
+            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &universe) {
                 match act {
                     Act::Inspect => {
                         println!(
-                            "pos:{}, {:?}, dist:{}",
+                            "hit(pos:{}, block:{:?}, dist:{}), head(block:{:?})",
                             hit.pos,
-                            chunk_map.get_at(&hit.grid_pos),
-                            hit.distance
+                            universe.get_at(&hit.grid_pos),
+                            hit.distance,
+                            universe.get_at(&tr.translation().floor().as_ivec3()),
                         );
                     }
                     Act::RemoveBlock => {
-                        chunk_map.set_at(
+                        universe.set_at(
                             &hit.grid_pos,
                             Voxel {
                                 id: 0,
@@ -115,12 +123,21 @@ fn voxel_break(
                     }
                     Act::PlaceBlock => {
                         let pos = hit.grid_pos + hit.normal;
-                        chunk_map.set_at(
+                        universe.set_at(
                             &pos,
-                            Voxel {
-                                id: 3,
-                                flags: 16,
-                                ..default()
+                            if keys.pressed(KeyCode::Key3) {
+                                Voxel {
+                                    id: 3,
+                                    flags: 2,
+                                    light0: 15,
+                                    ..default()
+                                }
+                            } else {
+                                Voxel {
+                                    id: 1,
+                                    flags: 3,
+                                    ..default()
+                                }
                             },
                         );
                     }
@@ -141,8 +158,107 @@ fn gen_chunk(pos: IVec3) -> GridPtr {
     GridPtr(Arc::new(RwLock::new(grid)))
 }
 
+fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
+    println!("lighting {:?} chunks", chunks);
+
+    // calculate sunlight beams
+    let mut suns: Vec<IVec3> = vec![];
+    for pos in chunks.iter() {
+        let chunk = universe.chunks.get_mut(pos).unwrap();
+        chunk.set_dirty();
+        let mut grid = chunk.grid.0.write().unwrap();
+        for x in 0..CHUNK_SIDE {
+            for z in 0..CHUNK_SIDE {
+                let mut sunlight = MAX_LIGHT;
+                for y in (0..CHUNK_SIDE).rev() {
+                    let xyz = IVec3::new(x as i32, y as i32, z as i32);
+                    let voxel = grid.get_at_mut(xyz);
+                    if voxel.is_opaque() {
+                        sunlight = 0;
+                    }
+                    if sunlight > 0 {
+                        suns.push(*pos + xyz);
+                    }
+                    voxel.set_light(LightType::Sun, sunlight);
+                    voxel.set_light(LightType::Torch, 0);
+                }
+            }
+        }
+    }
+
+    // find new light sources
+    let mut torches: Vec<IVec3> = vec![];
+    for pos in chunks.iter() {
+        let chunk = universe.chunks.get(pos).unwrap();
+        let mut grid = chunk.grid.0.write().unwrap();
+        for i in 0..CHUNK_VOLUME {
+            let xyz = Grid::index_to_xyz(i);
+            let voxel = grid.get_at_mut(xyz);
+            // todo: fetch from BlockInfo when implemented
+            if voxel.id == 3 {
+                torches.push(*pos + xyz);
+                voxel.set_light(LightType::Torch, 15);
+            }
+        }
+    }
+
+    if !suns.is_empty() {
+        propagate_light(universe, suns, LightType::Sun);
+    }
+
+    if !torches.is_empty() {
+        propagate_light(universe, torches, LightType::Torch);
+    }
+}
+
+fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
+    const DIRS: [IVec3; 6] = [
+        IVec3::X,
+        IVec3::Y,
+        IVec3::Z,
+        IVec3::NEG_X,
+        IVec3::NEG_Y,
+        IVec3::NEG_Z,
+    ];
+    const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+
+    println!("{} sources of {lt} light", sources.len());
+    let mut frontier: VecDeque<IVec3> = sources.clone().into();
+    let mut visited: HashSet<IVec3> = sources.into_iter().collect();
+    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+        if let Some(pos) = frontier.pop_front() {
+            let voxel = universe.get_at(&pos).unwrap();
+            for dir in DIRS.iter() {
+                let target = pos + *dir;
+                if visited.contains(&target) {
+                    continue;
+                }
+                let mut lit: Option<Voxel> = None;
+                if let Some(neighbor) = universe.get_at(&target) {
+                    let light = voxel.get_light(lt);
+                    if !neighbor.is_opaque() && neighbor.get_light(lt) < light && light > 0 {
+                        let mut l = neighbor;
+                        l.set_light(lt, light - 1);
+                        lit = Some(l);
+                    }
+                }
+                if let Some(voxel) = lit {
+                    universe.set_at(&target, voxel);
+                    frontier.push_back(target);
+                    visited.insert(target);
+                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
+                    universe.chunks.get_mut(&c).unwrap().set_dirty();
+                }
+            }
+        } else {
+            println!("{} iters for {lt}", iter);
+            break;
+        }
+    }
+}
+
 fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &Transform)>) {
-    let load_view_distance: u32 = VIEW_DISTANCE + CHUNK_SIDE as u32 * 2;
+    let load_view_distance: u32 = VIEW_DISTANCE;
 
     let camera_pos = if let Ok((_, tr)) = camera.get_single() {
         tr.translation
@@ -155,6 +271,8 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
     // hardcoded chunk size
     let load_view_distance_chunk = load_view_distance as i32 / CHUNK_SIDE as i32;
     let lvdc = load_view_distance_chunk;
+
+    let mut added = vec![];
 
     // sphere centered on the player
     for x in -lvdc..=lvdc {
@@ -174,23 +292,32 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
                                 version: 0,
                             },
                         );
+                        added.push(pos);
                     }
                 }
             }
         }
+    }
+
+    if !added.is_empty() {
+        recalc_lights(&mut universe, added);
     }
 }
 
 fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     queue
         .to_load
-        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(0)));
+        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(1)));
     queue
         .to_load
-        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(1)));
+        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(2)));
     queue
         .to_load
-        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(2)));
+        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(3)));
+    queue.to_load.push((
+        "assets/voxels/glowstone.vox".to_string(),
+        VoxTextureIndex(4),
+    ));
 
     // player character
     commands

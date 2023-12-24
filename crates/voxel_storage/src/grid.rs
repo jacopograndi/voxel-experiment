@@ -1,15 +1,69 @@
 use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
+use std::fmt::Display;
 
 use crate::{CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
+
+pub const MAX_LIGHT: u8 = 15;
 
 #[repr(C)]
 #[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
 pub struct Voxel {
     pub id: u8,
     pub flags: u8,
-    pub light: u8,
-    pub unused: u8,
+
+    // for now i'm using light0 as torchlight and light1 as sunlight
+    // in the future they could be a u16 divided into 4 u4
+    // that encode red, green and blue torchlight and sunlight.
+    pub light0: u8,
+    pub light1: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightType {
+    Torch,
+    Sun,
+}
+impl Display for LightType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LightType::Torch => "torch",
+                LightType::Sun => "sun",
+            }
+        )
+    }
+}
+
+impl Voxel {
+    pub fn is_opaque(&self) -> bool {
+        self.flags & (1 << 0) > 0
+    }
+    pub fn set_is_opaque(&mut self, v: bool) {
+        self.flags |= (if v { 1 } else { 0 } << 0);
+    }
+    pub fn is_collision(&self) -> bool {
+        self.flags & (1 << 1) > 0
+    }
+    pub fn set_is_collision(&mut self, v: bool) {
+        self.flags |= (if v { 1 } else { 0 } << 1);
+    }
+
+    pub fn get_light(&self, light_type: LightType) -> u8 {
+        match light_type {
+            LightType::Torch => self.light0,
+            LightType::Sun => self.light1,
+        }
+    }
+    pub fn set_light(&mut self, light_type: LightType, v: u8) {
+        assert!((0..=MAX_LIGHT).contains(&v));
+        match light_type {
+            LightType::Torch => self.light0 = v,
+            LightType::Sun => self.light1 = v,
+        }
+    }
 }
 
 /// Cubic section of the voxel world with the cube side = CHUNK_SIDE
@@ -45,7 +99,7 @@ impl Grid {
     pub fn filled() -> Grid {
         let voxel = Voxel {
             id: 1,
-            flags: 16,
+            flags: 3,
             ..Default::default()
         };
         Self {
@@ -62,7 +116,7 @@ impl Grid {
                 grid.voxels[i].flags = 0;
             } else {
                 grid.voxels[i].id = 1;
-                grid.voxels[i].flags = 16;
+                grid.voxels[i].flags = 3;
             }
         }
         grid
@@ -70,6 +124,10 @@ impl Grid {
 
     pub fn get_at(&self, xyz: IVec3) -> Voxel {
         self.voxels[Self::xyz_to_index(xyz)]
+    }
+
+    pub fn get_at_mut(&mut self, xyz: IVec3) -> &mut Voxel {
+        &mut self.voxels[Self::xyz_to_index(xyz)]
     }
 
     pub fn set_at(&mut self, xyz: IVec3, voxel: Voxel) {
@@ -127,8 +185,6 @@ impl VoxGrid {
         let size = UVec3::new(size.y, size.z, size.x).as_ivec3();
         let mut grid = VoxGrid::new(size);
 
-        println!("{:?}", vox.palette);
-
         if vox.palette.len() > 255 {
             panic!("The zeroeth color is used for transparency");
         }
@@ -163,7 +219,7 @@ impl VoxGrid {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].flags = 16; // set the collision flag
+            grid.voxels[index as usize].flags = 3; // set the collision flag
         }
 
         Ok(grid)
