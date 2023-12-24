@@ -8,7 +8,6 @@ use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
-    utils::HashSet,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -112,6 +111,17 @@ fn voxel_break(
                         );
                     }
                     Act::RemoveBlock => {
+                        if let Some(voxel) = universe.get_at(&hit.grid_pos) {
+                            // todo: use BlockInfo.is_light_source
+                            if voxel.id == 3 {
+                                let sources = propagate_darkness(
+                                    &mut universe,
+                                    hit.grid_pos,
+                                    LightType::Torch,
+                                );
+                                propagate_light(&mut universe, sources, LightType::Torch)
+                            }
+                        }
                         universe.set_at(
                             &hit.grid_pos,
                             Voxel {
@@ -123,23 +133,28 @@ fn voxel_break(
                     }
                     Act::PlaceBlock => {
                         let pos = hit.grid_pos + hit.normal;
-                        universe.set_at(
-                            &pos,
-                            if keys.pressed(KeyCode::Key3) {
+                        if keys.pressed(KeyCode::Key3) {
+                            // todo: use BlockInfo
+                            universe.set_at(
+                                &pos,
                                 Voxel {
                                     id: 3,
                                     flags: 2,
-                                    light0: 15,
+                                    light0: 14,
                                     ..default()
-                                }
-                            } else {
+                                },
+                            );
+                            propagate_light(&mut universe, vec![pos], LightType::Torch)
+                        } else {
+                            universe.set_at(
+                                &pos,
                                 Voxel {
                                     id: 1,
                                     flags: 3,
                                     ..default()
-                                }
-                            },
-                        );
+                                },
+                            );
+                        }
                     }
                 };
             } else {
@@ -159,7 +174,7 @@ fn gen_chunk(pos: IVec3) -> GridPtr {
 }
 
 fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
-    println!("lighting {:?} chunks", chunks);
+    println!("lighting {:?} chunks", chunks.len());
 
     // calculate sunlight beams
     let mut suns: Vec<IVec3> = vec![];
@@ -211,6 +226,52 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
     }
 }
 
+const DIRS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::Y,
+    IVec3::Z,
+    IVec3::NEG_X,
+    IVec3::NEG_Y,
+    IVec3::NEG_Z,
+];
+const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+
+fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
+    println!("1 source of {lt} darkness");
+    let voxel = universe.get_at(&source).unwrap();
+    let val = voxel.get_light(lt);
+    let mut new_lights: Vec<IVec3> = vec![];
+    let mut frontier: VecDeque<IVec3> = [source].into();
+    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+        if let Some(pos) = frontier.pop_front() {
+            for dir in DIRS.iter() {
+                let target = pos + *dir;
+                let mut unlit: Option<Voxel> = None;
+                if let Some(neighbor) = universe.get_at(&target) {
+                    let target_light = neighbor.get_light(lt);
+                    if target_light != 0 && target_light < val {
+                        let mut l = neighbor;
+                        l.set_light(lt, 0);
+                        unlit = Some(l);
+                    } else if target_light > val {
+                        new_lights.push(target);
+                    }
+                }
+                if let Some(voxel) = unlit {
+                    universe.set_at(&target, voxel);
+                    frontier.push_back(target);
+                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
+                    universe.chunks.get_mut(&c).unwrap().set_dirty();
+                }
+            }
+        } else {
+            println!("{} iters for {lt} darkness", iter);
+            break;
+        }
+    }
+    new_lights
+}
+
 fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
     const DIRS: [IVec3; 6] = [
         IVec3::X,
@@ -224,19 +285,15 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
 
     println!("{} sources of {lt} light", sources.len());
     let mut frontier: VecDeque<IVec3> = sources.clone().into();
-    let mut visited: HashSet<IVec3> = sources.into_iter().collect();
     for iter in 0..MAX_LIGHTITNG_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
             let voxel = universe.get_at(&pos).unwrap();
+            let light = voxel.get_light(lt);
             for dir in DIRS.iter() {
                 let target = pos + *dir;
-                if visited.contains(&target) {
-                    continue;
-                }
                 let mut lit: Option<Voxel> = None;
                 if let Some(neighbor) = universe.get_at(&target) {
-                    let light = voxel.get_light(lt);
-                    if !neighbor.is_opaque() && neighbor.get_light(lt) < light && light > 0 {
+                    if !neighbor.is_opaque() && neighbor.get_light(lt) + 2 <= light {
                         let mut l = neighbor;
                         l.set_light(lt, light - 1);
                         lit = Some(l);
@@ -245,13 +302,12 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
                 if let Some(voxel) = lit {
                     universe.set_at(&target, voxel);
                     frontier.push_back(target);
-                    visited.insert(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
                     universe.chunks.get_mut(&c).unwrap().set_dirty();
                 }
             }
         } else {
-            println!("{} iters for {lt}", iter);
+            println!("{} iters for {lt} light", iter);
             break;
         }
     }
