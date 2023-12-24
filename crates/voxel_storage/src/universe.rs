@@ -1,5 +1,6 @@
 use crate::{
-    grid::{Grid, Voxel},
+    block::Block,
+    grid::Grid,
     CHUNK_SIDE,
 };
 use std::sync::{Arc, RwLock};
@@ -30,14 +31,14 @@ impl Universe {
         (chunk_pos, inner_pos)
     }
 
-    pub fn get_at(&self, pos: &IVec3) -> Option<Voxel> {
+    pub fn get_at(&self, pos: &IVec3) -> Option<Block> {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         self.chunks
             .get(&chunk_pos)
             .map(|chunk| chunk.grid.0.read().unwrap().get_at(inner_pos))
     }
 
-    pub fn set_at(&mut self, pos: &IVec3, voxel: Voxel) {
+    pub fn set_at(&mut self, pos: &IVec3, voxel: Block) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.grid.0.write().unwrap().set_at(inner_pos, voxel);

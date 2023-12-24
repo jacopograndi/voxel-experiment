@@ -152,7 +152,7 @@ fn shoot_ray(inray: Ray, flags: u32) -> HitInfo {
             let voxel_map = map_pos % chunk_size;
             let voxel_i = u32(voxel_map.x) * (side * side) + u32(voxel_map.y) * side + u32(voxel_map.z);
             voxel = Voxel(chunks[offset + voxel_i], map_pos, side);
-            if ((voxel.data >> 8u) & 16u) > 0u {
+            if ((voxel.data >> 16u) & 1u) > 0u {
                 // inner 16x16x16 voxel grid
                 let end_ray_pos = ray.dir / dot(mask * ray.dir, vec3f(1.0)) * dot(mask * (map_pos + step(ray.dir, vec3f(0.0)) - ray.pos), vec3f(1.0)) + ray.pos;
                 var ray_box: Ray;

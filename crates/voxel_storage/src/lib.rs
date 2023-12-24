@@ -1,6 +1,7 @@
 use bevy::app::{App, Plugin};
 use universe::Universe;
 
+pub mod block;
 pub mod grid;
 pub mod universe;
 

@@ -9,7 +9,7 @@ mod test {
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
         chunk_map::{Chunk, ChunkMap, GridPtr},
-        grid::{Grid, Voxel},
+        grid::{Grid, Block},
     };
 
     #[test]
@@ -121,14 +121,14 @@ mod test {
         };
         chunk_map.set_at(
             &IVec3::ZERO,
-            Voxel {
+            Block {
                 id: 1,
                 flags: 16,
                 ..default()
             },
         );
         assert_eq!(
-            Some(Voxel {
+            Some(Block {
                 id: 1,
                 flags: 16,
                 ..default()
@@ -152,7 +152,7 @@ mod test {
         };
         chunk_map.set_at(
             &IVec3::ZERO,
-            Voxel {
+            Block {
                 id: 1,
                 flags: 16,
                 ..default()

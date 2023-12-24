@@ -1,21 +1,14 @@
 use bevy::prelude::*;
-use bytemuck::{Pod, Zeroable};
 
-use crate::{CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
-
-#[repr(C)]
-#[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
-pub struct Voxel {
-    pub id: u8,
-    pub flags: u8,
-    pub light: u8,
-    pub unused: u8,
-}
+use crate::{
+    CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
+    block::Block
+};
 
 /// Cubic section of the voxel world with the cube side = CHUNK_SIDE
 #[derive(Debug, Clone)]
 pub struct Grid {
-    pub voxels: [Voxel; CHUNK_VOLUME],
+    pub voxels: [Block; CHUNK_VOLUME],
 }
 
 impl Grid {
@@ -25,7 +18,7 @@ impl Grid {
 
     pub fn empty() -> Self {
         Self {
-            voxels: [Voxel::default(); CHUNK_VOLUME],
+            voxels: [Block::default(); CHUNK_VOLUME],
         }
     }
 
@@ -43,11 +36,7 @@ impl Grid {
     }
 
     pub fn filled() -> Grid {
-        let voxel = Voxel {
-            id: 1,
-            flags: 16,
-            ..Default::default()
-        };
+        let voxel = Block::new(1, true);
         Self {
             voxels: [voxel; CHUNK_VOLUME],
         }
@@ -59,20 +48,19 @@ impl Grid {
             let xyz = Self::index_to_xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
                 grid.voxels[i].id = 0;
-                grid.voxels[i].flags = 0;
             } else {
                 grid.voxels[i].id = 1;
-                grid.voxels[i].flags = 16;
+                grid.voxels[i].set_solid();
             }
         }
         grid
     }
 
-    pub fn get_at(&self, xyz: IVec3) -> Voxel {
+    pub fn get_at(&self, xyz: IVec3) -> Block {
         self.voxels[Self::xyz_to_index(xyz)]
     }
 
-    pub fn set_at(&mut self, xyz: IVec3, voxel: Voxel) {
+    pub fn set_at(&mut self, xyz: IVec3, voxel: Block) {
         self.voxels[Self::xyz_to_index(xyz)] = voxel;
     }
 
@@ -88,7 +76,7 @@ pub struct Palette([Color; 256]);
 /// Voxel model with variable size
 #[derive(Debug, Clone)]
 pub struct VoxGrid {
-    pub voxels: Vec<Voxel>,
+    pub voxels: Vec<Block>,
     pub size: IVec3,
     pub palette: Palette,
 }
@@ -97,7 +85,7 @@ impl VoxGrid {
     pub fn new(size: IVec3) -> VoxGrid {
         let volume = size.x * size.y * size.z;
         Self {
-            voxels: vec![Voxel::default(); volume as usize],
+            voxels: vec![Block::default(); volume as usize],
             size,
             palette: Palette([Color::WHITE; 256]),
         }
@@ -163,7 +151,7 @@ impl VoxGrid {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].flags = 16; // set the collision flag
+            grid.voxels[index as usize].set_solid(); // set the collision flag
         }
 
         Ok(grid)
