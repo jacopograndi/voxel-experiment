@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
-    block::Block
+    block::{Block, BlockFlag}
 };
 
 /// Cubic section of the voxel world with the cube side = CHUNK_SIDE
@@ -50,7 +50,7 @@ impl Grid {
                 grid.voxels[i].id = 0;
             } else {
                 grid.voxels[i].id = 1;
-                grid.voxels[i].set_solid();
+                grid.voxels[i].set_flag(BlockFlag::SOLID);
             }
         }
         grid
@@ -151,7 +151,7 @@ impl VoxGrid {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].set_solid(); // set the collision flag
+            grid.voxels[index as usize].set_flag(BlockFlag::SOLID); // set the collision flag
         }
 
         Ok(grid)
