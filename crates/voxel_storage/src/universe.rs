@@ -1,6 +1,6 @@
 use crate::{
     grid::{Grid, Voxel},
-    CHUNK_SIDE,
+    CHUNK_AREA, CHUNK_SIDE,
 };
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
@@ -26,6 +26,9 @@ impl Chunk {
 #[derive(Resource, ExtractResource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
+
+    /// Stores the highest block which still receives sunlight
+    pub heightfield: HashMap<IVec2, i32>,
 }
 
 impl Universe {

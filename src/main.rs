@@ -8,6 +8,7 @@ use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
+    utils::HashSet,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -111,28 +112,79 @@ fn voxel_break(
                         );
                     }
                     Act::RemoveBlock => {
-                        if let Some(voxel) = universe.get_at(&hit.grid_pos) {
+                        println!("removed block");
+
+                        let pos = hit.grid_pos;
+
+                        let mut light_suns = vec![];
+                        let mut light_torches = vec![];
+
+                        if let Some(voxel) = universe.get_at(&pos) {
                             // todo: use BlockInfo.is_light_source
                             if voxel.id == 3 {
-                                let sources = propagate_darkness(
-                                    &mut universe,
-                                    hit.grid_pos,
-                                    LightType::Torch,
-                                );
-                                propagate_light(&mut universe, sources, LightType::Torch)
+                                let new = propagate_darkness(&mut universe, pos, LightType::Torch);
+                                propagate_light(&mut universe, new, LightType::Torch)
                             }
                         }
+
                         universe.set_at(
-                            &hit.grid_pos,
+                            &pos,
                             Voxel {
                                 id: 0,
                                 flags: 0,
                                 ..default()
                             },
                         );
+
+                        let planar = IVec2::new(pos.x, pos.z);
+                        if let Some(height) = universe.heightfield.get(&planar) {
+                            if pos.y == *height {
+                                // recalculate the highest sunlit point
+                                let mut beam = pos.y - 100;
+                                for y in 0..=100 {
+                                    let h = pos.y - y;
+                                    let sample = IVec3::new(pos.x, h, pos.z);
+                                    if let Some(voxel) = universe.get_at(&sample) {
+                                        if voxel.is_opaque() {
+                                            beam = h;
+                                            break;
+                                        } else {
+                                            light_suns.push(sample);
+
+                                            let mut lit = voxel.clone();
+                                            lit.set_light(LightType::Sun, 15);
+                                            universe.set_at(&sample, lit);
+                                        }
+                                    }
+                                }
+                                universe.heightfield.insert(planar, beam);
+                            }
+                        }
+
+                        for dir in DIRS.iter() {
+                            let sample = pos + *dir;
+                            if let Some(voxel) = universe.get_at(&sample) {
+                                if !voxel.is_opaque() {
+                                    if voxel.get_light(LightType::Sun) > 1 {
+                                        light_suns.push(sample);
+                                    }
+                                    if voxel.get_light(LightType::Torch) > 1 {
+                                        light_torches.push(sample);
+                                    }
+                                }
+                            }
+                        }
+
+                        propagate_light(&mut universe, light_suns, LightType::Sun);
+                        propagate_light(&mut universe, light_torches, LightType::Torch);
                     }
                     Act::PlaceBlock => {
+                        println!("placed block");
+
                         let pos = hit.grid_pos + hit.normal;
+
+                        let mut dark_suns = vec![];
+
                         if keys.pressed(KeyCode::Key3) {
                             // todo: use BlockInfo
                             universe.set_at(
@@ -146,6 +198,8 @@ fn voxel_break(
                             );
                             propagate_light(&mut universe, vec![pos], LightType::Torch)
                         } else {
+                            let new = propagate_darkness(&mut universe, pos, LightType::Torch);
+
                             universe.set_at(
                                 &pos,
                                 Voxel {
@@ -154,6 +208,25 @@ fn voxel_break(
                                     ..default()
                                 },
                             );
+
+                            propagate_light(&mut universe, new, LightType::Torch);
+                        }
+
+                        let planar = IVec2::new(pos.x, pos.z);
+                        if let Some(height) = universe.heightfield.get(&planar) {
+                            if pos.y > *height {
+                                // recalculate the highest sunlit point
+                                for y in (*height)..pos.y {
+                                    let sample = IVec3::new(pos.x, y, pos.z);
+                                    dark_suns.push(sample);
+                                }
+                                universe.heightfield.insert(planar, pos.y);
+                            }
+                        }
+
+                        for sun in dark_suns {
+                            let new = propagate_darkness(&mut universe, sun, LightType::Sun);
+                            propagate_light(&mut universe, new, LightType::Sun)
                         }
                     }
                 };
@@ -178,6 +251,8 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
 
     // calculate sunlight beams
     let mut suns: Vec<IVec3> = vec![];
+    let mut planars = HashSet::<IVec2>::new();
+    let mut highest = i32::MIN;
     for pos in chunks.iter() {
         let chunk = universe.chunks.get_mut(pos).unwrap();
         chunk.set_dirty();
@@ -196,8 +271,37 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
                     }
                     voxel.set_light(LightType::Sun, sunlight);
                     voxel.set_light(LightType::Torch, 0);
+                    highest = highest.max(pos.y + y as i32);
+                }
+                let planar = IVec2::new(x as i32 + pos.x, z as i32 + pos.z);
+                planars.insert(planar);
+            }
+        }
+    }
+
+    for planar in planars.iter() {
+        let mut beam = 0;
+        let mut block_found = false;
+        for y in 0..1000 {
+            let h = highest - y;
+            let sample = IVec3::new(planar.x, h, planar.y);
+
+            if let Some(voxel) = universe.get_at(&sample) {
+                block_found = true;
+                if voxel.is_opaque() {
+                    beam = h;
+                    break;
+                }
+            } else {
+                if block_found {
+                    break;
                 }
             }
+        }
+        if let Some(height) = universe.heightfield.get_mut(planar) {
+            *height = (*height).min(beam);
+        } else {
+            universe.heightfield.insert(*planar, beam);
         }
     }
 
@@ -237,9 +341,14 @@ const DIRS: [IVec3; 6] = [
 const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
 
 fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
-    println!("1 source of {lt} darkness");
     let voxel = universe.get_at(&source).unwrap();
     let val = voxel.get_light(lt);
+    let mut dark = voxel.clone();
+    dark.set_light(lt, 0);
+    universe.set_at(&source, dark);
+
+    println!("1 source of {lt} darkness val:{val}");
+
     let mut new_lights: Vec<IVec3> = vec![];
     let mut frontier: VecDeque<IVec3> = [source].into();
     for iter in 0..MAX_LIGHTITNG_PROPAGATION {
@@ -253,7 +362,7 @@ fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> 
                         let mut l = neighbor;
                         l.set_light(lt, 0);
                         unlit = Some(l);
-                    } else if target_light > val {
+                    } else if target_light >= val {
                         new_lights.push(target);
                     }
                 }
