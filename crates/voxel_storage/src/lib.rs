@@ -14,7 +14,7 @@ pub const CHUNK_AREA: usize = CHUNK_SIDE * CHUNK_SIDE;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIDE;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub enum BlockID {
+pub enum BlockId {
     AIR,
     STONE,
     GRASS,
@@ -23,12 +23,12 @@ pub enum BlockID {
 
 // HashMap containing a description for all default flags by block ID --> Is there a cleaner initialization method than this??
 lazy_static! {
-    static ref BLOCK_FLAGS: HashMap<BlockID, Vec<BlockFlag>> = {
+    static ref BLOCK_FLAGS: HashMap<BlockId, Vec<BlockFlag>> = {
         let mut map = HashMap::new();
-        map.insert(BlockID::AIR, vec![]);
-        map.insert(BlockID::STONE, vec![BlockFlag::SOLID]);
-        map.insert(BlockID::GRASS, vec![]);
-        map.insert(BlockID::LOG, vec![BlockFlag::SOLID]);
+        map.insert(BlockId::AIR, vec![]);
+        map.insert(BlockId::STONE, vec![BlockFlag::SOLID]);
+        map.insert(BlockId::GRASS, vec![]);
+        map.insert(BlockId::LOG, vec![BlockFlag::SOLID]);
         map
     };
 }

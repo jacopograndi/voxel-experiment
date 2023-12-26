@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
     block::Block,
-    BlockID
+    BlockId
 };
 
 use voxel_flag_bank::flagbank::FlagBank;
@@ -27,7 +27,7 @@ impl Chunk {
     }
 
     pub fn filled() -> Self {
-        let block = Block::new(BlockID::STONE);
+        let block = Block::new(BlockId::STONE);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
             version: 0,
@@ -40,9 +40,9 @@ impl Chunk {
         for i in 0..CHUNK_VOLUME {
             let xyz = Self::_idx2xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                chunk.set_block(xyz, BlockID::AIR);
+                chunk.set_block(xyz, BlockId::AIR);
             } else {
-                chunk.set_block(xyz, BlockID::STONE);
+                chunk.set_block(xyz, BlockId::STONE);
             }
         }
         chunk
@@ -52,7 +52,7 @@ impl Chunk {
         self._blocks.read().unwrap().clone()
     }
 
-    pub fn set_block(&self, xyz: IVec3, id: BlockID) {
+    pub fn set_block(&self, xyz: IVec3, id: BlockId) {
         self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = Block::new(id);
     }
 

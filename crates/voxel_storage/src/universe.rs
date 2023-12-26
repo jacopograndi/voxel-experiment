@@ -1,7 +1,7 @@
 use crate::{
     block::Block,
     chunk::Chunk,
-    CHUNK_SIDE, BlockID
+    CHUNK_SIDE, BlockId
 };
 
 use::voxel_flag_bank::ChunkFlag;
@@ -30,7 +30,7 @@ impl Universe {
             .map(|chunk| chunk.read_block(inner_pos))
     }
 
-    pub fn set_chunk(&mut self, pos: &IVec3, id: BlockID) {
+    pub fn set_chunk(&mut self, pos: &IVec3, id: BlockId) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, id);

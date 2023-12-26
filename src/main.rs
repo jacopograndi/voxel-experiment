@@ -22,7 +22,7 @@ use voxel_render::{
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
-    BlockID,
+    BlockId,
     chunk::Chunk,
     universe::Universe,
     VoxelStoragePlugin, CHUNK_SIDE,
@@ -104,14 +104,14 @@ fn voxel_break(
                     Act::RemoveBlock => {
                         chunk_map.set_chunk(
                             &hit.grid_pos,
-                            BlockID::AIR,
+                            BlockId::AIR,
                         );
                     }
                     Act::PlaceBlock => {
                         let pos = hit.grid_pos + hit.normal;
                         chunk_map.set_chunk(
                             &pos,
-                            BlockID::LOG,
+                            BlockId::LOG,
                         );
                     }
                 };

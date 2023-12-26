@@ -1,4 +1,4 @@
-use crate::{BlockID, BLOCK_FLAGS};
+use crate::{BlockId, BLOCK_FLAGS};
 use voxel_flag_bank::flagbank::FlagBank;
 use bytemuck::{Pod, Zeroable};
 
@@ -15,7 +15,7 @@ pub struct Block {
 impl Block {
 
     // TODO learn how to navigate a hashmap
-    pub fn new(id:BlockID) -> Self {
+    pub fn new(id:BlockId) -> Self {
         let mut new_block: Block = Self {
             id: id as u8,
             light: 0,

@@ -5,7 +5,7 @@ mod test {
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
-        BlockID,
+        BlockId,
         block::Block,
         chunk::Chunk,
         universe::Universe
@@ -117,10 +117,10 @@ mod test {
         };
         chunk_map.set_chunk(
             &IVec3::ZERO,
-            BlockID::STONE,
+            BlockId::STONE,
         );
         assert_eq!(
-            Some(Block::new(BlockID::STONE)),
+            Some(Block::new(BlockId::STONE)),
             chunk_map.read_chunk(&IVec3::ZERO)
         );
         chunk_map
@@ -137,7 +137,7 @@ mod test {
         };
         chunk_map.set_chunk(
             &IVec3::ZERO,
-            BlockID::STONE,
+            BlockId::STONE,
         );
         chunk_map
     }
