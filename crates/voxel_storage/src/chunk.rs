@@ -7,37 +7,30 @@ use crate::{
     BlockFlag, BlockID
 };
 
-/// Cubic section of the voxel world with the cube side = CHUNK_SIDE
-#[derive(Debug, Clone)]
-pub struct BlockBuffer {
-    pub buffer: [Block; CHUNK_VOLUME],
-}
-
-#[derive(Debug, Clone)]
-pub struct GridPtr(pub Arc<RwLock<BlockBuffer>>);
-
 #[derive(Debug, Clone)]
 pub struct Chunk {
-    pub grid: GridPtr,
+    _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
     pub version: u32,
 }
 
-impl BlockBuffer {
-    pub fn to_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(&self.buffer)
+impl Chunk {
+
+    pub fn clone_blocks(&self) -> [Block; CHUNK_VOLUME] {
+        self._blocks.read().unwrap().clone()
     }
 
     pub fn empty() -> Self {
         Self {
-            buffer: [Block::default(); CHUNK_VOLUME],
+            _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
+            version: 0
         }
     }
 
-    pub fn xyz_to_index(xyz: IVec3) -> usize {
+    pub fn xyz2idx(xyz: IVec3) -> usize {
         xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
     }
 
-    pub fn index_to_xyz(index: usize) -> IVec3 {
+    pub fn idx2xyz(index: usize) -> IVec3 {
         let layer = index / CHUNK_SIDE;
         IVec3 {
             x: (layer / CHUNK_SIDE) as i32,
@@ -46,33 +39,33 @@ impl BlockBuffer {
         }
     }
 
-    pub fn filled() -> BlockBuffer {
-        let voxel = Block::new(BlockID::STONE);
+    pub fn filled() -> Self {
+        let block = Block::new(BlockID::STONE);
         Self {
-            buffer: [voxel; CHUNK_VOLUME],
+            _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
+            version: 0
         }
     }
 
-    pub fn flatland() -> BlockBuffer {
-        let mut grid = BlockBuffer::empty();
+    pub fn flatland() -> Self {
+        let chunk = Self::empty();
         for i in 0..CHUNK_VOLUME {
-            let xyz = Self::index_to_xyz(i);
+            let xyz = Self::idx2xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                grid.buffer[i].id = 0;
+                chunk.set_block(xyz, BlockID::AIR);
             } else {
-                grid.buffer[i].id = 1;
-                grid.buffer[i].set_flag(BlockFlag::SOLID);
+                chunk.set_block(xyz, BlockID::STONE);
             }
         }
-        grid
+        chunk
     }
 
-    pub fn get_at(&self, xyz: IVec3) -> Block {
-        self.buffer[Self::xyz_to_index(xyz)]
+    pub fn set_block(&self, xyz: IVec3, id: BlockID) {
+        self._blocks.write().unwrap()[Self::xyz2idx(xyz)] = Block::new(id);
     }
 
-    pub fn set_at(&mut self, xyz: IVec3, voxel: Block) {
-        self.buffer[Self::xyz_to_index(xyz)] = voxel;
+    pub fn read_block(&self, xyz: IVec3) -> Block {
+        self._blocks.read().unwrap()[Self::xyz2idx(xyz)]
     }
 
     pub fn contains(xyz: &IVec3) -> bool {
@@ -173,15 +166,15 @@ impl VoxGrid {
 mod test {
     use bevy::math::IVec3;
 
-    use crate::chunk::Grid;
+    use crate::chunk::Chunk;
     #[test]
     fn xyz_to_index_to_xyz() {
         for x in 0..32 {
             for y in 0..32 {
                 for z in 0..32 {
                     let xyz0 = IVec3 { x, y, z };
-                    let index = Grid::xyz_to_index(xyz0.clone());
-                    let xyz1 = Grid::index_to_xyz(index);
+                    let index = Chunk::xyz2idx(xyz0.clone());
+                    let xyz1 = Chunk::idx2xyz(index);
                     assert_eq!(xyz0, xyz1);
                 }
             }

@@ -1,7 +1,7 @@
 use crate::{
     block::Block,
     chunk::Chunk,
-    CHUNK_SIDE,
+    CHUNK_SIDE, BlockID,
 };
 
 use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
@@ -25,13 +25,13 @@ impl Universe {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         self.chunks
             .get(&chunk_pos)
-            .map(|chunk| chunk.grid.0.read().unwrap().get_at(inner_pos))
+            .map(|chunk| chunk.read_block(inner_pos))
     }
 
-    pub fn set_at(&mut self, pos: &IVec3, voxel: Block) {
+    pub fn set_at(&mut self, pos: &IVec3, id: BlockID) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.grid.0.write().unwrap().set_at(inner_pos, voxel);
+            chunk.set_block(inner_pos, id);
             chunk.version = chunk.version.wrapping_add(1);
         }
     }

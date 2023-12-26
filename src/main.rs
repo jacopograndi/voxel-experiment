@@ -1,7 +1,4 @@
-use std::{
-    f32::consts::PI,
-    sync::{Arc, RwLock},
-};
+use std::f32::consts::PI;
 
 use bevy::{
     core_pipeline::fxaa::Fxaa,
@@ -26,8 +23,7 @@ use voxel_render::{
 };
 use voxel_storage::{
     BlockID,
-    block::Block,
-    chunk::{Chunk, GridPtr, BlockBuffer},
+    chunk::Chunk,
     universe::Universe,
     VoxelStoragePlugin, CHUNK_SIDE,
 };
@@ -108,14 +104,14 @@ fn voxel_break(
                     Act::RemoveBlock => {
                         chunk_map.set_at(
                             &hit.grid_pos,
-                            Block::new(BlockID::AIR),
+                            BlockID::AIR,
                         );
                     }
                     Act::PlaceBlock => {
                         let pos = hit.grid_pos + hit.normal;
                         chunk_map.set_at(
                             &pos,
-                            Block::new(BlockID::LOG),
+                            BlockID::LOG,
                         );
                     }
                 };
@@ -126,13 +122,12 @@ fn voxel_break(
     }
 }
 
-fn gen_chunk(pos: IVec3) -> GridPtr {
-    let grid = if pos.y < 0 {
-        BlockBuffer::filled()
+fn gen_chunk(pos: IVec3) -> Chunk {
+    if pos.y < 0 {
+        Chunk::filled()
     } else {
-        BlockBuffer::empty()
-    };
-    GridPtr(Arc::new(RwLock::new(grid)))
+        Chunk::empty()
+    }
 }
 
 fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &Transform)>) {
@@ -160,13 +155,10 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
                     if let None = universe.chunks.get(&pos) {
                         // gen chunk
                         //println!("gen {:?}", pos);
-                        let grid_ptr = gen_chunk(pos);
+                        let chunk: Chunk = gen_chunk(pos);
                         universe.chunks.insert(
                             pos,
-                            Chunk {
-                                grid: grid_ptr,
-                                version: 0,
-                            },
+                            chunk
                         );
                     }
                 }

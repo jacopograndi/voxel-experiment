@@ -11,7 +11,7 @@ use bevy::{
     },
 };
 use voxel_storage::{
-    chunk::GridPtr,
+    block::Block,
     universe::Universe
 };
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
@@ -161,7 +161,7 @@ pub struct VoxelData {
 
 #[derive(Resource, Clone, Default)]
 pub struct RenderChunkMap {
-    pub to_be_written: Vec<(u32, GridPtr)>,
+    pub to_be_written: Vec<(u32, [Block; CHUNK_VOLUME])>,
     pub buffer_alloc: ChunkAllocator,
     pub versions: HashMap<IVec3, u32>,
 }
@@ -286,7 +286,7 @@ fn prepare_chunks(
 
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
-        let grid = chunk.grid.clone();
+        let grid = chunk.clone_blocks();
         render_chunk_map.versions.insert(pos, chunk.version);
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
@@ -347,10 +347,9 @@ fn write_chunks(
         let mut linear_chunks_offsets = Vec::<u8>::new();
         let mut linear_chunks = Vec::<u8>::new();
         for (offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
-            let grid = grid_ptr.0.read().unwrap();
             let offset = *offset as u32 * chunk_volume as u32;
-            assert_eq!(grid.buffer.len() as u32, chunk_volume);
-            linear_chunks.extend(grid.to_bytes());
+            assert_eq!(grid_ptr.len() as u32, chunk_volume);
+            linear_chunks.extend(bytemuck::cast_slice(grid_ptr));
             linear_chunks_offsets.extend(offset.to_le_bytes());
         }
         render_queue.write_buffer(&voxel_data.chunks_loading, 0, &linear_chunks);
