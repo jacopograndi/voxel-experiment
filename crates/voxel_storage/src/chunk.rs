@@ -26,11 +26,11 @@ impl Chunk {
         }
     }
 
-    pub fn xyz2idx(xyz: IVec3) -> usize {
+    fn _xyz2idx(xyz: IVec3) -> usize {
         xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
     }
 
-    pub fn idx2xyz(index: usize) -> IVec3 {
+    fn _idx2xyz(index: usize) -> IVec3 {
         let layer = index / CHUNK_SIDE;
         IVec3 {
             x: (layer / CHUNK_SIDE) as i32,
@@ -50,7 +50,7 @@ impl Chunk {
     pub fn flatland() -> Self {
         let chunk = Self::empty();
         for i in 0..CHUNK_VOLUME {
-            let xyz = Self::idx2xyz(i);
+            let xyz = Self::_idx2xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
                 chunk.set_block(xyz, BlockID::AIR);
             } else {
@@ -61,11 +61,11 @@ impl Chunk {
     }
 
     pub fn set_block(&self, xyz: IVec3, id: BlockID) {
-        self._blocks.write().unwrap()[Self::xyz2idx(xyz)] = Block::new(id);
+        self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = Block::new(id);
     }
 
     pub fn read_block(&self, xyz: IVec3) -> Block {
-        self._blocks.read().unwrap()[Self::xyz2idx(xyz)]
+        self._blocks.read().unwrap()[Self::_xyz2idx(xyz)]
     }
 
     pub fn contains(xyz: &IVec3) -> bool {
@@ -173,8 +173,8 @@ mod test {
             for y in 0..32 {
                 for z in 0..32 {
                     let xyz0 = IVec3 { x, y, z };
-                    let index = Chunk::xyz2idx(xyz0.clone());
-                    let xyz1 = Chunk::idx2xyz(index);
+                    let index = Chunk::_xyz2idx(xyz0.clone());
+                    let xyz1 = Chunk::_idx2xyz(index);
                     assert_eq!(xyz0, xyz1);
                 }
             }
