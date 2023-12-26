@@ -4,13 +4,14 @@ use std::sync::{Arc, RwLock};
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
     block::Block,
-    BlockFlag, BlockID
+    BlockFlag, BlockID,
+    ChunkFlag
 };
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
-    pub version: u32,
+    _properties: u8,
 }
 
 impl Chunk {
@@ -22,7 +23,7 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
-            version: 0
+            _properties: 0
         }
     }
 
@@ -43,7 +44,7 @@ impl Chunk {
         let block = Block::new(BlockID::STONE);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
-            version: 0
+            _properties: 0
         }
     }
 
@@ -66,6 +67,14 @@ impl Chunk {
 
     pub fn read_block(&self, xyz: IVec3) -> Block {
         self._blocks.read().unwrap()[Self::_xyz2idx(xyz)]
+    }
+
+    pub fn set_flag(&mut self, flag: ChunkFlag) {
+        self._properties |= 0b1 << flag as u8;
+    }
+
+    pub fn check_flag(&self, flag: ChunkFlag) -> bool {
+        (self._properties >> flag as u8) & 0b1 == 1
     }
 
     pub fn contains(xyz: &IVec3) -> bool {

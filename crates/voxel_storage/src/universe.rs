@@ -1,7 +1,7 @@
 use crate::{
     block::Block,
     chunk::Chunk,
-    CHUNK_SIDE, BlockID,
+    CHUNK_SIDE, BlockID, ChunkFlag
 };
 
 use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
@@ -32,7 +32,7 @@ impl Universe {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, id);
-            chunk.version = chunk.version.wrapping_add(1);
+            chunk.set_flag(ChunkFlag::UPDATED);
         }
     }
 }

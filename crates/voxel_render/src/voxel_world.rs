@@ -12,7 +12,8 @@ use bevy::{
 };
 use voxel_storage::{
     block::Block,
-    universe::Universe
+    universe::Universe,
+    ChunkFlag
 };
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
@@ -163,7 +164,7 @@ pub struct VoxelData {
 pub struct RenderChunkMap {
     pub to_be_written: Vec<(u32, [Block; CHUNK_VOLUME])>,
     pub buffer_alloc: ChunkAllocator,
-    pub versions: HashMap<IVec3, u32>,
+    pub versions: HashMap<IVec3, bool>,
 }
 
 #[derive(Clone, Default, Debug, Hash, PartialEq, Eq)]
@@ -265,8 +266,8 @@ fn prepare_chunks(
         .iter()
         .filter_map(|(pos, chunk)| {
             if visible_chunks.contains(pos) {
-                if let Some(version) = render_chunk_map.versions.get(pos) {
-                    if version != &chunk.version {
+                if let Some(updated) = render_chunk_map.versions.get(pos) {
+                    if *updated {
                         Some(*pos)
                     } else {
                         None
@@ -287,7 +288,7 @@ fn prepare_chunks(
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.clone_blocks();
-        render_chunk_map.versions.insert(pos, chunk.version);
+        render_chunk_map.versions.insert(pos, chunk.check_flag(ChunkFlag::UPDATED));
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
         } else {

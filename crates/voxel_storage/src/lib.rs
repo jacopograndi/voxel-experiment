@@ -38,6 +38,9 @@ lazy_static! {
     };
 }
 
+pub enum ChunkFlag {
+    UPDATED,
+}
 
 pub struct VoxelStoragePlugin;
 
