@@ -85,8 +85,8 @@ fn voxel_break(
             mouse.just_pressed(MouseButton::Right),
             mouse.just_pressed(MouseButton::Middle),
         ) {
-            (true, _, _) => Some(Act::PlaceBlock),
-            (_, true, _) => Some(Act::RemoveBlock),
+            (true, _, _) => Some(Act::RemoveBlock),
+            (_, true, _) => Some(Act::PlaceBlock),
             (_, _, true) => Some(Act::Inspect),
             _ => None,
         };
