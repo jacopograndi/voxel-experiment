@@ -1,7 +1,7 @@
 use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
 use voxel_storage::{
-    block::BlockFlag,
+    BlockFlag,
     universe::Universe
 };
 

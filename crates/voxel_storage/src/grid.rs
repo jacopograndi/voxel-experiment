@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
-    block::{Block, BlockFlag}
+    block::Block,
+    BlockFlag, BlockID
 };
 
 /// Cubic section of the voxel world with the cube side = CHUNK_SIDE
@@ -36,7 +37,7 @@ impl Grid {
     }
 
     pub fn filled() -> Grid {
-        let voxel = Block::new(1, true);
+        let voxel = Block::new(BlockID::STONE);
         Self {
             voxels: [voxel; CHUNK_VOLUME],
         }
