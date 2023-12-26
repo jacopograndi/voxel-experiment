@@ -3,7 +3,6 @@ use bevy::utils::HashMap;
 use universe::Universe;
 use lazy_static::lazy_static;
 
-pub mod flagbank;
 pub mod block;
 pub mod chunk;
 pub mod universe;

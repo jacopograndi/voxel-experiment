@@ -1,4 +1,5 @@
-use crate::{BlockID, BLOCK_FLAGS, flagbank::FlagBank};
+use crate::{BlockID, BLOCK_FLAGS};
+use voxel_flag_bank::flagbank::FlagBank;
 use bytemuck::{Pod, Zeroable};
 
 // Struct representing 1 cubic meter cube inside the game

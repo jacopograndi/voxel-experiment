@@ -3777,6 +3777,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "voxel_flag_bank"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "voxel_gen"
 version = "0.1.0"
 
@@ -3805,6 +3812,7 @@ dependencies = [
  "bevy",
  "bytemuck",
  "lazy_static",
+ "voxel_flag_bank",
 ]
 
 [[package]]

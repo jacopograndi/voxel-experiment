@@ -3,10 +3,11 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
-    flagbank::FlagBank,
     block::Block,
     BlockID
 };
+
+use voxel_flag_bank::flagbank::FlagBank;
 
 #[derive(Debug, Clone)]
 pub struct Chunk {

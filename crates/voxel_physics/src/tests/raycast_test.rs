@@ -8,8 +8,8 @@ mod test {
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
-        chunk_map::{Chunk, ChunkMap, GridPtr},
-        chunk::{BlockBuffer, Block},
+        block::Block,
+        chunk::Chunk,
     };
 
     #[test]

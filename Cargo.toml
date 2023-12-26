@@ -15,5 +15,6 @@ voxel_render = { path = "crates/voxel_render" }
 voxel_storage = { path = "crates/voxel_storage" }
 voxel_physics = { path = "crates/voxel_physics" }
 
+
 [workspace]
 members = ["crates/*"]
