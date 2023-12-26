@@ -1,20 +1,19 @@
 #[cfg(test)]
 mod test {
-    use std::{
-        f32::consts::PI,
-        sync::{Arc, RwLock},
-    };
+    use std::f32::consts::PI;
 
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
+        BlockID,
         block::Block,
         chunk::Chunk,
+        universe::Universe
     };
 
     #[test]
     fn empty_out_of_range() {
-        let chunk_map = ChunkMap {
+        let chunk_map = Universe {
             chunks: HashMap::new(),
         };
         assert_eq!(None, raycast(Vec3::ZERO, Vec3::X, 100.0, &chunk_map));
@@ -107,56 +106,38 @@ mod test {
         }
     }
 
-    fn single_block_map() -> ChunkMap {
-        let mut chunk_map = ChunkMap {
+    fn single_block_map() -> Universe {
+        let mut chunk_map = Universe {
             chunks: [(
                 IVec3::ZERO,
-                Chunk {
-                    grid: GridPtr(Arc::new(RwLock::new(Grid::empty()))),
-                    version: 0,
-                },
+                Chunk::empty(),
             )]
             .into_iter()
             .collect(),
         };
-        chunk_map.set_at(
+        chunk_map.set_chunk(
             &IVec3::ZERO,
-            Block {
-                id: 1,
-                flags: 16,
-                ..default()
-            },
+            BlockID::STONE,
         );
         assert_eq!(
-            Some(Block {
-                id: 1,
-                flags: 16,
-                ..default()
-            }),
-            chunk_map.get_at(&IVec3::ZERO)
+            Some(Block::new(BlockID::STONE)),
+            chunk_map.read_chunk(&IVec3::ZERO)
         );
         chunk_map
     }
 
-    fn single_chunk_map() -> ChunkMap {
-        let mut chunk_map = ChunkMap {
+    fn single_chunk_map() -> Universe {
+        let mut chunk_map = Universe {
             chunks: [(
                 IVec3::ZERO,
-                Chunk {
-                    grid: GridPtr(Arc::new(RwLock::new(Grid::filled()))),
-                    version: 0,
-                },
+                Chunk::filled(),
             )]
             .into_iter()
             .collect(),
         };
-        chunk_map.set_at(
+        chunk_map.set_chunk(
             &IVec3::ZERO,
-            Block {
-                id: 1,
-                flags: 16,
-                ..default()
-            },
+            BlockID::STONE,
         );
         chunk_map
     }
