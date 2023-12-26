@@ -21,14 +21,14 @@ impl Universe {
         (chunk_pos, inner_pos)
     }
 
-    pub fn get_at(&self, pos: &IVec3) -> Option<Block> {
+    pub fn read_chunk(&self, pos: &IVec3) -> Option<Block> {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         self.chunks
             .get(&chunk_pos)
             .map(|chunk| chunk.read_block(inner_pos))
     }
 
-    pub fn set_at(&mut self, pos: &IVec3, id: BlockID) {
+    pub fn set_chunk(&mut self, pos: &IVec3, id: BlockID) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, id);

@@ -97,19 +97,19 @@ fn voxel_break(
                         println!(
                             "pos:{}, {:?}, dist:{}",
                             hit.pos,
-                            chunk_map.get_at(&hit.grid_pos),
+                            chunk_map.read_chunk(&hit.grid_pos),
                             hit.distance
                         );
                     }
                     Act::RemoveBlock => {
-                        chunk_map.set_at(
+                        chunk_map.set_chunk(
                             &hit.grid_pos,
                             BlockID::AIR,
                         );
                     }
                     Act::PlaceBlock => {
                         let pos = hit.grid_pos + hit.normal;
-                        chunk_map.set_at(
+                        chunk_map.set_chunk(
                             &pos,
                             BlockID::LOG,
                         );

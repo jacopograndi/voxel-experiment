@@ -3794,6 +3794,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "dot_vox",
  "voxel_storage",
 ]
 
@@ -3803,7 +3804,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
- "dot_vox",
  "lazy_static",
 ]
 
