@@ -14,15 +14,15 @@ impl FlagBank {
         }
     }
 
-    pub fn set(&mut self, flag: u8) {
-        self._flags |= 0b1 << flag;
+    pub fn set<T>(&mut self, flag: T) where T: Into<u8> {
+        self._flags |= 0b1 << flag.into();
     }
 
-    pub fn unset(&mut self, flag: u8) {
-        self._flags &= !(0b1 << flag);
+    pub fn unset<T>(&mut self, flag: T) where T: Into<u8> {
+        self._flags &= !(0b1 << flag.into());
     }
 
-    pub fn check(&self, flag: u8) -> bool {
-        (self._flags >> flag) & 0b1 == 1
+    pub fn check<T>(&self, flag: T) -> bool where T: Into<u8> {
+        (self._flags >> flag.into()) & 0b1 == 1
     }
 }

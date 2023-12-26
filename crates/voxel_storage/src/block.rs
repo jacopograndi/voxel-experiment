@@ -22,7 +22,7 @@ impl Block {
         };
         if let Some(flags) = BLOCK_FLAGS.get(&id) {
             for flag in flags {
-                new_block.properties.set(*flag as u8);
+                new_block.properties.set(*flag);
             }
         }
         new_block

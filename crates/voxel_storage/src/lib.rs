@@ -26,6 +26,7 @@ pub enum BlockFlag {
     SOLID,
 
 }
+impl Into<u8> for BlockFlag {fn into(self) -> u8 { self as u8 }}
 
 // HashMap containing a description for all default flags by block ID --> Is there a cleaner initialization method than this??
 lazy_static! {
@@ -42,6 +43,7 @@ lazy_static! {
 pub enum ChunkFlag {
     UPDATED,
 }
+impl Into<u8> for ChunkFlag {fn into(self) -> u8 { self as u8 }}
 
 pub struct VoxelStoragePlugin;
 

@@ -5,13 +5,13 @@ use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
     flagbank::FlagBank,
     block::Block,
-    BlockFlag, BlockID,
-    ChunkFlag
+    BlockFlag, BlockID
 };
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
+    pub version: u32,
     pub properties: FlagBank,
 }
 
@@ -20,6 +20,7 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
+            version: 0,
             properties: FlagBank::empty()
         }
     }
@@ -28,6 +29,7 @@ impl Chunk {
         let block = Block::new(BlockID::STONE);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
+            version: 0,
             properties: FlagBank::empty()
         }
     }
@@ -153,7 +155,7 @@ impl VoxGrid {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].properties.set(BlockFlag::SOLID as u8); // set the collision flag
+            grid.voxels[index as usize].properties.set(BlockFlag::SOLID); // set the collision flag
         }
 
         Ok(grid)

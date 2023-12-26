@@ -32,7 +32,8 @@ impl Universe {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, id);
-            chunk.properties.set(ChunkFlag::UPDATED as u8);
+            chunk.properties.set(ChunkFlag::UPDATED);
+            chunk.version = chunk.version.wrapping_add(1);
         }
     }
 }
