@@ -10,10 +10,13 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use voxel_storage::universe::{GridPtr, Universe};
+use voxel_storage::{
+    chunk::GridPtr,
+    universe::Universe
+};
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
-pub const VIEW_DISTANCE: u32 = 220;
+pub const VIEW_DISTANCE: u32 = 55;
 
 pub struct VoxelWorldPlugin;
 
@@ -346,7 +349,7 @@ fn write_chunks(
         for (offset, grid_ptr) in render_chunk_map.to_be_written.iter() {
             let grid = grid_ptr.0.read().unwrap();
             let offset = *offset as u32 * chunk_volume as u32;
-            assert_eq!(grid.voxels.len() as u32, chunk_volume);
+            assert_eq!(grid.buffer.len() as u32, chunk_volume);
             linear_chunks.extend(grid.to_bytes());
             linear_chunks_offsets.extend(offset.to_le_bytes());
         }

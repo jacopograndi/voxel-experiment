@@ -27,8 +27,8 @@ use voxel_render::{
 use voxel_storage::{
     BlockID,
     block::Block,
-    grid::Grid,
-    universe::{Chunk, GridPtr, Universe},
+    chunk::{Chunk, GridPtr, BlockBuffer},
+    universe::Universe,
     VoxelStoragePlugin, CHUNK_SIDE,
 };
 
@@ -128,9 +128,9 @@ fn voxel_break(
 
 fn gen_chunk(pos: IVec3) -> GridPtr {
     let grid = if pos.y < 0 {
-        Grid::filled()
+        BlockBuffer::filled()
     } else {
-        Grid::empty()
+        BlockBuffer::empty()
     };
     GridPtr(Arc::new(RwLock::new(grid)))
 }

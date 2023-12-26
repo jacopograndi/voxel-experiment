@@ -9,7 +9,7 @@ mod test {
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
         chunk_map::{Chunk, ChunkMap, GridPtr},
-        grid::{Grid, Block},
+        chunk::{BlockBuffer, Block},
     };
 
     #[test]

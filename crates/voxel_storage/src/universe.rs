@@ -1,20 +1,10 @@
 use crate::{
     block::Block,
-    grid::Grid,
+    chunk::Chunk,
     CHUNK_SIDE,
 };
-use std::sync::{Arc, RwLock};
 
 use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
-
-#[derive(Debug, Clone)]
-pub struct GridPtr(pub Arc<RwLock<Grid>>);
-
-#[derive(Debug, Clone)]
-pub struct Chunk {
-    pub grid: GridPtr,
-    pub version: u32,
-}
 
 /// Game resource, it's mutations are propagated to `RenderUniverse`
 /// and written to the gpu buffer.

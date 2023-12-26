@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use std::sync::{Arc, RwLock};
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
@@ -8,18 +9,27 @@ use crate::{
 
 /// Cubic section of the voxel world with the cube side = CHUNK_SIDE
 #[derive(Debug, Clone)]
-pub struct Grid {
-    pub voxels: [Block; CHUNK_VOLUME],
+pub struct BlockBuffer {
+    pub buffer: [Block; CHUNK_VOLUME],
 }
 
-impl Grid {
+#[derive(Debug, Clone)]
+pub struct GridPtr(pub Arc<RwLock<BlockBuffer>>);
+
+#[derive(Debug, Clone)]
+pub struct Chunk {
+    pub grid: GridPtr,
+    pub version: u32,
+}
+
+impl BlockBuffer {
     pub fn to_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(&self.voxels)
+        bytemuck::cast_slice(&self.buffer)
     }
 
     pub fn empty() -> Self {
         Self {
-            voxels: [Block::default(); CHUNK_VOLUME],
+            buffer: [Block::default(); CHUNK_VOLUME],
         }
     }
 
@@ -36,33 +46,33 @@ impl Grid {
         }
     }
 
-    pub fn filled() -> Grid {
+    pub fn filled() -> BlockBuffer {
         let voxel = Block::new(BlockID::STONE);
         Self {
-            voxels: [voxel; CHUNK_VOLUME],
+            buffer: [voxel; CHUNK_VOLUME],
         }
     }
 
-    pub fn flatland() -> Grid {
-        let mut grid = Grid::empty();
+    pub fn flatland() -> BlockBuffer {
+        let mut grid = BlockBuffer::empty();
         for i in 0..CHUNK_VOLUME {
             let xyz = Self::index_to_xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                grid.voxels[i].id = 0;
+                grid.buffer[i].id = 0;
             } else {
-                grid.voxels[i].id = 1;
-                grid.voxels[i].set_flag(BlockFlag::SOLID);
+                grid.buffer[i].id = 1;
+                grid.buffer[i].set_flag(BlockFlag::SOLID);
             }
         }
         grid
     }
 
     pub fn get_at(&self, xyz: IVec3) -> Block {
-        self.voxels[Self::xyz_to_index(xyz)]
+        self.buffer[Self::xyz_to_index(xyz)]
     }
 
     pub fn set_at(&mut self, xyz: IVec3, voxel: Block) {
-        self.voxels[Self::xyz_to_index(xyz)] = voxel;
+        self.buffer[Self::xyz_to_index(xyz)] = voxel;
     }
 
     pub fn contains(xyz: &IVec3) -> bool {
@@ -163,7 +173,7 @@ impl VoxGrid {
 mod test {
     use bevy::math::IVec3;
 
-    use crate::grid::Grid;
+    use crate::chunk::Grid;
     #[test]
     fn xyz_to_index_to_xyz() {
         for x in 0..32 {

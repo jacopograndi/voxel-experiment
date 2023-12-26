@@ -19,7 +19,7 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
-use voxel_storage::grid::VoxGrid;
+use voxel_storage::chunk::VoxGrid;
 
 use crate::voxel_world::{VoxelUniforms, VIEW_DISTANCE};
 

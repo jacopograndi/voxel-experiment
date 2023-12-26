@@ -4,7 +4,7 @@ use universe::Universe;
 use lazy_static::lazy_static;
 
 pub mod block;
-pub mod grid;
+pub mod chunk;
 pub mod universe;
 
 pub const CHUNK_SIDE: usize = 32;
