@@ -4,7 +4,7 @@ use crate::{
 };
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
-use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 
 #[derive(Debug, Clone)]
 pub struct GridPtr(pub Arc<RwLock<Grid>>);
@@ -12,18 +12,21 @@ pub struct GridPtr(pub Arc<RwLock<Grid>>);
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub grid: GridPtr,
-    pub version: u32,
+    pub updated: bool,
 }
 
 impl Chunk {
     pub fn set_dirty(&mut self) {
-        self.version = self.version.wrapping_add(1);
+        self.updated = true;
+    }
+    pub fn reset_dirty(&mut self) {
+        self.updated = false;
     }
 }
 
 /// Game resource, it's mutations are propagated to `RenderUniverse`
 /// and written to the gpu buffer.
-#[derive(Resource, ExtractResource, Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
 

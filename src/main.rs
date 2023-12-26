@@ -454,7 +454,7 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
                             pos,
                             Chunk {
                                 grid: grid_ptr,
-                                version: 0,
+                                updated: false,
                             },
                         );
                         added.push(pos);
