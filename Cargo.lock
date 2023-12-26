@@ -3792,6 +3792,7 @@ name = "voxel_physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "voxel_flag_bank",
  "voxel_storage",
 ]
 
@@ -3802,6 +3803,7 @@ dependencies = [
  "bevy",
  "bytemuck",
  "dot_vox",
+ "voxel_flag_bank",
  "voxel_storage",
 ]
 

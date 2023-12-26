@@ -1,9 +1,7 @@
 use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
-use voxel_storage::{
-    BlockFlag,
-    universe::Universe
-};
+use voxel_storage::universe::Universe;
+use::voxel_flag_bank::BlockFlag;
 
 use crate::MARGIN_EPSILON;
 

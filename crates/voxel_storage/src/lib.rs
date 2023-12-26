@@ -3,6 +3,8 @@ use bevy::utils::HashMap;
 use universe::Universe;
 use lazy_static::lazy_static;
 
+use::voxel_flag_bank::BlockFlag;
+
 pub mod block;
 pub mod chunk;
 pub mod universe;
@@ -19,14 +21,6 @@ pub enum BlockID {
     LOG
 }
 
-// Enum containing the bit index of each block flag in human readable form
-#[derive(Copy, Clone)]
-pub enum BlockFlag {
-    SOLID,
-
-}
-impl Into<u8> for BlockFlag {fn into(self) -> u8 { self as u8 }}
-
 // HashMap containing a description for all default flags by block ID --> Is there a cleaner initialization method than this??
 lazy_static! {
     static ref BLOCK_FLAGS: HashMap<BlockID, Vec<BlockFlag>> = {
@@ -39,10 +33,6 @@ lazy_static! {
     };
 }
 
-pub enum ChunkFlag {
-    UPDATED,
-}
-impl Into<u8> for ChunkFlag {fn into(self) -> u8 { self as u8 }}
 
 pub struct VoxelStoragePlugin;
 

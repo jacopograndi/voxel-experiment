@@ -1,8 +1,10 @@
 use crate::{
     block::Block,
     chunk::Chunk,
-    CHUNK_SIDE, BlockID, ChunkFlag
+    CHUNK_SIDE, BlockID
 };
+
+use::voxel_flag_bank::ChunkFlag;
 
 use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
 

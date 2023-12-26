@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 
-use voxel_storage::{
-    BlockFlag,
-    block::Block
-};
+use voxel_storage::block::Block;
+use voxel_flag_bank::BlockFlag;
 
 #[derive(Debug, Clone, Deref, DerefMut)]
 pub struct Palette([Color; 256]);

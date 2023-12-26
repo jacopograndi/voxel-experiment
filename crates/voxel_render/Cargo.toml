@@ -9,3 +9,4 @@ bytemuck = "1.14.0"
 dot_vox = "5.1.1"
 
 voxel_storage = { path = "../voxel_storage" }
+voxel_flag_bank = { path = "../voxel_flag_bank" }
