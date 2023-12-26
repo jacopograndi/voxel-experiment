@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
+    flagbank::FlagBank,
     block::Block,
     BlockFlag, BlockID,
     ChunkFlag
@@ -11,32 +12,15 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Chunk {
     _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
-    _properties: u8,
+    pub properties: FlagBank,
 }
 
 impl Chunk {
 
-    pub fn clone_blocks(&self) -> [Block; CHUNK_VOLUME] {
-        self._blocks.read().unwrap().clone()
-    }
-
     pub fn empty() -> Self {
         Self {
             _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
-            _properties: 0
-        }
-    }
-
-    fn _xyz2idx(xyz: IVec3) -> usize {
-        xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
-    }
-
-    fn _idx2xyz(index: usize) -> IVec3 {
-        let layer = index / CHUNK_SIDE;
-        IVec3 {
-            x: (layer / CHUNK_SIDE) as i32,
-            y: (layer % CHUNK_SIDE) as i32,
-            z: (index % CHUNK_SIDE) as i32,
+            properties: FlagBank::empty()
         }
     }
 
@@ -44,7 +28,7 @@ impl Chunk {
         let block = Block::new(BlockID::STONE);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
-            _properties: 0
+            properties: FlagBank::empty()
         }
     }
 
@@ -61,6 +45,10 @@ impl Chunk {
         chunk
     }
 
+    pub fn clone_blocks(&self) -> [Block; CHUNK_VOLUME] {
+        self._blocks.read().unwrap().clone()
+    }
+
     pub fn set_block(&self, xyz: IVec3, id: BlockID) {
         self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = Block::new(id);
     }
@@ -69,18 +57,19 @@ impl Chunk {
         self._blocks.read().unwrap()[Self::_xyz2idx(xyz)]
     }
 
-    pub fn set_flag(&mut self, flag: ChunkFlag) {
-        self._properties |= 0b1 << flag as u8;
+    fn _xyz2idx(xyz: IVec3) -> usize {
+        xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
     }
 
-    pub fn check_flag(&self, flag: ChunkFlag) -> bool {
-        (self._properties >> flag as u8) & 0b1 == 1
+    fn _idx2xyz(index: usize) -> IVec3 {
+        let layer = index / CHUNK_SIDE;
+        IVec3 {
+            x: (layer / CHUNK_SIDE) as i32,
+            y: (layer % CHUNK_SIDE) as i32,
+            z: (index % CHUNK_SIDE) as i32,
+        }
     }
 
-    pub fn contains(xyz: &IVec3) -> bool {
-        let range = 0..CHUNK_SIDE as i32;
-        range.contains(&xyz.x) && range.contains(&xyz.y) && range.contains(&xyz.z)
-    }
 }
 
 #[derive(Debug, Clone, Deref, DerefMut)]
@@ -164,7 +153,7 @@ impl VoxGrid {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].set_flag(BlockFlag::SOLID); // set the collision flag
+            grid.voxels[index as usize].properties.set(BlockFlag::SOLID as u8); // set the collision flag
         }
 
         Ok(grid)

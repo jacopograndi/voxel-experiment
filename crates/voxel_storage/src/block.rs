@@ -1,4 +1,4 @@
-use crate::{BlockID, BlockFlag, BLOCK_FLAGS};
+use crate::{BlockID, BLOCK_FLAGS, flagbank::FlagBank};
 use bytemuck::{Pod, Zeroable};
 
 // Struct representing 1 cubic meter cube inside the game
@@ -7,7 +7,7 @@ use bytemuck::{Pod, Zeroable};
 pub struct Block {
     pub id: u8,
     pub light: u8,
-    _properties: u16,
+    pub properties: FlagBank,
 }
 
 // Generation and flag checking/setting utilities
@@ -18,26 +18,13 @@ impl Block {
         let mut new_block: Block = Self {
             id: id as u8,
             light: 0,
-            _properties: 0,
+            properties: FlagBank::empty(),
         };
         if let Some(flags) = BLOCK_FLAGS.get(&id) {
             for flag in flags {
-                new_block.set_flag(*flag);
+                new_block.properties.set(*flag as u8);
             }
         }
         new_block
     }
-
-    pub fn set_flag(&mut self, flag: BlockFlag) {
-        self._properties |= 0b1 << flag as u8;
-    }
-
-    pub fn unset_flag(&mut self, flag: BlockFlag) {
-        self._properties &= !(0b1 << flag as u8);
-    }
-
-    pub fn check_flag(&self, flag: BlockFlag) -> bool {
-        (self._properties >> flag as u8) & 0b1 == 1
-    }
-
 }

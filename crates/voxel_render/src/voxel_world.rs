@@ -288,7 +288,7 @@ fn prepare_chunks(
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.clone_blocks();
-        render_chunk_map.versions.insert(pos, chunk.check_flag(ChunkFlag::UPDATED));
+        render_chunk_map.versions.insert(pos, chunk.properties.check(ChunkFlag::UPDATED as u8));
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
         } else {
