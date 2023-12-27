@@ -1,6 +1,6 @@
 use crate::{
     grid::{Grid, Voxel},
-    CHUNK_AREA, CHUNK_SIDE,
+    CHUNK_SIDE,
 };
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 

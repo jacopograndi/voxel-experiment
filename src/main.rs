@@ -92,6 +92,7 @@ fn main() {
     let mut app = App::new();
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
+    app.insert_resource(Time::<Fixed>::from_seconds(0.01666));
 
     match network_mode {
         NetworkMode::HeadlessServer => {
@@ -106,14 +107,14 @@ fn main() {
             let (server, transport) = new_renet_server();
             app.insert_resource(server);
             app.insert_resource(transport);
-            app.add_systems(Update, voxel_break);
             app.add_systems(
-                Update,
+                FixedUpdate,
                 (
                     server_update_system,
                     server_sync_players,
                     server_sync_universe,
                     move_players_system,
+                    voxel_break,
                 )
                     .run_if(resource_exists::<RenetServer>()),
             );
@@ -121,13 +122,17 @@ fn main() {
         }
         NetworkMode::Server => {
             // todo: local player not supported yet
-            app.add_plugins((RenetServerPlugin, NetcodeServerPlugin));
+            app.add_plugins((
+                RenetServerPlugin,
+                RenetClientPlugin,
+                NetcodeClientPlugin,
+                NetcodeServerPlugin,
+            ));
             let (server, transport) = new_renet_server();
             app.insert_resource(server);
             app.insert_resource(transport);
-            app.add_systems(Update, voxel_break);
             app.add_systems(
-                Update,
+                FixedUpdate,
                 (
                     server_update_system,
                     server_sync_players,
@@ -136,7 +141,24 @@ fn main() {
                 )
                     .run_if(resource_exists::<RenetServer>()),
             );
+
             app_client(&mut app);
+
+            app.init_resource::<PlayerInput>();
+            let (client, transport) = new_renet_client();
+            app.insert_resource(client);
+            app.insert_resource(transport);
+            app.add_systems(Update, camera_controller_movement);
+            app.add_systems(
+                PreUpdate,
+                (
+                    player_input,
+                    client_send_input,
+                    client_sync_players,
+                    client_sync_universe,
+                )
+                    .run_if(client_connected()),
+            );
         }
         NetworkMode::Client => {
             app.add_plugins(RenetClientPlugin);
@@ -147,7 +169,7 @@ fn main() {
             app.insert_resource(transport);
             app.add_systems(Update, camera_controller_movement);
             app.add_systems(
-                PostUpdate,
+                PreUpdate,
                 (
                     player_input,
                     client_send_input,
@@ -212,9 +234,7 @@ pub struct Player {
 }
 
 #[derive(Debug, Component)]
-pub struct LocalPlayer {
-    id: ClientId,
-}
+pub struct LocalPlayer;
 
 #[derive(Debug, Default, Resource)]
 pub struct Lobby {
@@ -534,7 +554,7 @@ fn client_sync_players(
                         ));
                     });
                 } else {
-                    commands.entity(player_entity).insert(LocalPlayer { id });
+                    commands.entity(player_entity).insert(LocalPlayer);
                 }
 
                 lobby.players.insert(id, player_entity);
@@ -667,6 +687,7 @@ fn move_players_system(
             &mut CharacterController,
             &PlayerInput,
             &mut Transform,
+            Option<&LocalPlayer>,
         ),
         Without<CameraController>,
     >,
@@ -676,11 +697,15 @@ fn move_players_system(
     >,
 ) {
     for (_, parent, mut tr_camera) in query_camera.iter_mut() {
-        if let Ok((_, mut controller, input, mut tr)) = query_player.get_mut(parent.get()) {
+        if let Ok((_, mut controller, input, mut tr, localplayer)) =
+            query_player.get_mut(parent.get())
+        {
             controller.acceleration = input.acceleration;
             controller.jumping = input.jumping;
-            tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
-            tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
+            if localplayer.is_none() {
+                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
+                tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
+            }
         }
     }
 }
