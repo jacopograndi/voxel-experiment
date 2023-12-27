@@ -43,7 +43,7 @@ impl Universe {
     pub fn set_chunk_block(&mut self, pos: &IVec3, block: Block) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_entire_block(inner_pos, block);
+            chunk.set_block(inner_pos, block);
             chunk.properties.set(ChunkFlag::DIRTY);
         }
     }

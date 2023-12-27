@@ -44,9 +44,9 @@ impl Chunk {
         for i in 0..CHUNK_VOLUME {
             let xyz = Self::_idx2xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                chunk.set_block(xyz, BlockId::AIR);
+                chunk.set_block(xyz, Block::new(BlockId::AIR));
             } else {
-                chunk.set_block(xyz, BlockId::STONE);
+                chunk.set_block(xyz, Block::new(BlockId::STONE));
             }
         }
         chunk
@@ -56,11 +56,7 @@ impl Chunk {
         self._blocks.read().unwrap().clone()
     }
 
-    pub fn set_block(&self, xyz: IVec3, id: BlockId) {
-        self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = Block::new(id);
-    }
-
-    pub fn set_entire_block(&self, xyz: IVec3, block: Block) {
+    pub fn set_block(&self, xyz: IVec3, block: Block) {
         self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = block;
     }
 
