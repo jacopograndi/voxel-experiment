@@ -361,7 +361,6 @@ fn write_chunks(
             0,
             &linear_chunks_offsets,
         );
-        dbg!(render_chunk_map.to_be_written.len());
         render_chunk_map.to_be_written.clear();
     } else {
         // reset

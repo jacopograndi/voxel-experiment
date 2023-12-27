@@ -186,10 +186,12 @@ impl VoxGrid {
         let mut grid = VoxGrid::new(size);
 
         if vox.palette.len() > 255 {
-            panic!("The zeroeth color is used for transparency");
+            println!(
+                "The zeroeth color is used for transparency, the last color will be truncated"
+            );
         }
 
-        for i in 0..vox.palette.len() {
+        for i in 0..vox.palette.len().min(255) {
             let colour = vox.palette[i];
             let mut material = Vec4::new(
                 colour.r as f32 / 255.0,

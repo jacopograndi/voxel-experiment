@@ -175,7 +175,7 @@ fn extract_boxes(
     mut extracted_boxes: ResMut<ExtractedTexturedBoxes>,
 ) {
     extracted_boxes.boxes.clear();
-    for (entity, global_tr, texbox, view_visibility) in box_query.iter() {
+    for (entity, global_tr, ghost, view_visibility) in box_query.iter() {
         if !view_visibility.get() {
             continue;
         }
@@ -184,7 +184,7 @@ fn extract_boxes(
             ExtractedTexturedBox {
                 transform: *global_tr,
                 size: Vec3::ONE,
-                index: texbox.vox_texture_index.clone(),
+                index: ghost.vox_texture_index.clone(),
             },
         );
     }
@@ -234,7 +234,7 @@ fn write_boxes(
             PodTexturedBox {
                 world_to_box,
                 box_to_world,
-                index: texbox.index.0,
+                index: texbox.index.0 - 1,
                 _padding0: 0,
                 _padding1: 0,
                 _padding2: 0,
