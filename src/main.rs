@@ -64,12 +64,12 @@ fn main() {
     .insert_resource(ClearColor(Color::MIDNIGHT_BLUE))
     .add_systems(Startup, setup)
     .add_systems(Update, ui)
-    .add_systems(Update, load_and_gen_chunks);
-    // .add_systems(Update, control)
-    // .add_systems(Update, diagnostic_system)
-    // .add_systems(Update, spin);
+    .add_systems(Update, load_and_gen_chunks)
+    .add_systems(Update, control)
+    .add_systems(Update, diagnostic_system)
+    .add_systems(Update, spin);
 
-    // app.add_systems(Update, voxel_break);
+    app.add_systems(Update, voxel_break);
 
     app.run();
 }
