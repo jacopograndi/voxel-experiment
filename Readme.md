@@ -79,3 +79,17 @@ The game features will be implemented as standalone systems.
         - [ ] Spider
         - [ ] Creeper
         - [ ] Zombie
+         
+### Tentative Development Roadmap
+[INSPIRATION](https://minecraft-timeline.github.io/) 
+
+- 0.1.0 -> enhanced MC Pre-Classic feature match: basic physics, lighting, multiplayer, generation, ghosts, placing/removing blocks (dirt, grass, stone, cobblestone, wood), sapling to tree, respawn, save
+- 0.2.0 -> Full CREATIVE Mode (flight, inventory...)
+- 0.3.0 -> MC Classic 1.0 feature match SURVIVAL: mobs (CREEPERS, zombies, spiders) and survival, commands, health, water, lava, sand, gravel, glass, obsidian, TNT
+- 0.4.0 -> Crafting, tools, ores (coal, iron, gold, diamond), delay in breaking blocks, particles...
+- 0.5.0 -> Farming (wheat, melons, pumpkins) and Animals(sheep, pig, chicken), Armor, Dungeons
+- 0.6.0 -> MC Alpha feature matched: Nether, caves, Biomes
+- 0.7.0 -> Redstone!
+- 0.8.0 -> Pistons, Maps, Compass, Clock, Trapdoors, Rails, boat, fishing
+- 0.9.0 -> Feature match with MCbeta1.7.3 -> Weather, server, structures, BEDS
+- 1.0.0+ -> Modding support and/or carefully chosen optimizations and enhancements (raytracing lighting? Non-competitive enchanting? Big Trees? HUGE trees? More Structures, even in Ocean? Anvils? Horses? Elytra? VILLAGES!)
