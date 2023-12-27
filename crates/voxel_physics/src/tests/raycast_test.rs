@@ -15,6 +15,7 @@ mod test {
     fn empty_out_of_range() {
         let chunk_map = Universe {
             chunks: HashMap::new(),
+            heightfield: HashMap::new(),
         };
         assert_eq!(None, raycast(Vec3::ZERO, Vec3::X, 100.0, &chunk_map));
     }
@@ -114,6 +115,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
+            heightfield: HashMap::new(),
         };
         chunk_map.set_chunk(
             &IVec3::ZERO,
@@ -121,7 +123,7 @@ mod test {
         );
         assert_eq!(
             Some(Block::new(BlockId::STONE)),
-            chunk_map.read_chunk(&IVec3::ZERO)
+            chunk_map.read_chunk_block(&IVec3::ZERO)
         );
         chunk_map
     }
@@ -134,6 +136,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
+            heightfield: HashMap::new(),
         };
         chunk_map.set_chunk(
             &IVec3::ZERO,

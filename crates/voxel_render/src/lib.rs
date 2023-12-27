@@ -1,11 +1,11 @@
 use crate::{
     boxes_world::BoxesWorldPlugin,
-    voxel_world::VoxelWorldPlugin,
     pipeline::{
         compute::ComputeResourcesPlugin,
         stream::StreamNode,
         trace::{TraceNode, TracePlugin, TraceSettings},
     },
+    voxel_world::VoxelWorldPlugin,
 };
 
 use bevy::{

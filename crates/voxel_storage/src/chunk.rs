@@ -1,9 +1,9 @@
 use bevy::prelude::*;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use crate::{
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
-    block::Block,
+    block::{Block, LightType},
     BlockId
 };
 
@@ -17,6 +17,10 @@ pub struct Chunk {
 }
 
 impl Chunk {
+
+    pub fn get_w_ref(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
+        self._blocks.write().unwrap()
+    }
 
     pub fn empty() -> Self {
         Self {
@@ -56,15 +60,23 @@ impl Chunk {
         self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = Block::new(id);
     }
 
+    pub fn set_entire_block(&self, xyz: IVec3, block: Block) {
+        self._blocks.write().unwrap()[Self::_xyz2idx(xyz)] = block;
+    }
+
+    pub fn set_block_light(&self, xyz: IVec3, light_type: LightType, v: u8) {
+        self._blocks.write().unwrap()[Self::_xyz2idx(xyz)].set_light(light_type, v);
+    }
+
     pub fn read_block(&self, xyz: IVec3) -> Block {
         self._blocks.read().unwrap()[Self::_xyz2idx(xyz)]
     }
 
-    fn _xyz2idx(xyz: IVec3) -> usize {
+    pub fn _xyz2idx(xyz: IVec3) -> usize {
         xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
     }
 
-    fn _idx2xyz(index: usize) -> IVec3 {
+    pub fn _idx2xyz(index: usize) -> IVec3 {
         let layer = index / CHUNK_SIDE;
         IVec3 {
             x: (layer / CHUNK_SIDE) as i32,

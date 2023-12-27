@@ -3,7 +3,7 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default, PartialEq, Eq)]
 pub struct FlagBank {
-    _flags: u16
+    _flags: u8
 }
 
 impl FlagBank {

@@ -1,5 +1,6 @@
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::view::ExtractedView;
+use bevy::render::MainWorld;
 use bevy::utils::{HashMap, HashSet};
 use bevy::{
     prelude::*,
@@ -10,13 +11,14 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use voxel_flag_bank::ChunkFlag;
 use voxel_storage::{
     block::Block,
     universe::Universe
 };
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
-pub const VIEW_DISTANCE: u32 = 55;
+pub const VIEW_DISTANCE: u32 = 100;
 
 pub struct VoxelWorldPlugin;
 
@@ -115,10 +117,10 @@ impl Plugin for VoxelWorldPlugin {
         };
 
         app.insert_resource(voxel_uniforms)
-            .add_plugins(ExtractResourcePlugin::<Universe>::default())
             .add_plugins(ExtractResourcePlugin::<VoxelUniforms>::default());
 
         app.sub_app_mut(RenderApp)
+            .insert_resource(Universe::default())
             .insert_resource(VoxelData {
                 uniform_buffer,
                 chunks,
@@ -129,6 +131,7 @@ impl Plugin for VoxelWorldPlugin {
                 bind_group,
             })
             .insert_resource(render_chunk_map)
+            .add_systems(ExtractSchedule, extract_universe)
             .add_systems(
                 Render,
                 (
@@ -139,6 +142,15 @@ impl Plugin for VoxelWorldPlugin {
                 )
                     .in_set(RenderSet::Prepare),
             );
+    }
+}
+
+pub fn extract_universe(mut main_world: ResMut<MainWorld>, mut render_universe: ResMut<Universe>) {
+    if let Some(mut main_universe) = main_world.get_resource_mut::<Universe>() {
+        *render_universe = main_universe.clone();
+        for (_pos, chunk) in main_universe.chunks.iter_mut() {
+            (*chunk).properties.unset(ChunkFlag::DIRTY);
+        }
     }
 }
 
@@ -163,7 +175,6 @@ pub struct VoxelData {
 pub struct RenderChunkMap {
     pub to_be_written: Vec<(u32, [Block; CHUNK_VOLUME])>,
     pub buffer_alloc: ChunkAllocator,
-    pub versions: HashMap<IVec3, u32>,
 }
 
 #[derive(Clone, Default, Debug, Hash, PartialEq, Eq)]
@@ -257,7 +268,6 @@ fn prepare_chunks(
 
     for &pos in to_be_removed.iter() {
         render_chunk_map.buffer_alloc.deallocate(pos);
-        render_chunk_map.versions.remove(&pos);
     }
 
     let to_be_rendered: HashSet<IVec3> = universe
@@ -265,14 +275,10 @@ fn prepare_chunks(
         .iter()
         .filter_map(|(pos, chunk)| {
             if visible_chunks.contains(pos) {
-                if let Some(version) = render_chunk_map.versions.get(pos) {
-                    if version != &chunk.version {
-                        Some(*pos)
-                    } else {
-                        None
-                    }
+                if !render_chunk_map.buffer_alloc.is_allocated(pos) {
+                    Some(*pos)
                 } else {
-                    if !render_chunk_map.buffer_alloc.is_allocated(pos) {
+                    if chunk.properties.check(ChunkFlag::DIRTY) {
                         Some(*pos)
                     } else {
                         None
@@ -282,12 +288,12 @@ fn prepare_chunks(
                 None
             }
         })
-        .collect();
-
+        .collect(); 
+    
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.clone_blocks();
-        render_chunk_map.versions.insert(pos, chunk.version);
+        // render_chunk_map.versions.insert(pos, chunk.version);
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
         } else {
@@ -359,6 +365,7 @@ fn write_chunks(
             0,
             &linear_chunks_offsets,
         );
+        dbg!(render_chunk_map.to_be_written.len());
         render_chunk_map.to_be_written.clear();
     } else {
         // reset
