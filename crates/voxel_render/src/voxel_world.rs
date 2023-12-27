@@ -284,8 +284,8 @@ fn prepare_chunks(
                 None
             }
         })
-        .collect();
-
+        .collect(); 
+    
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.grid.clone();
