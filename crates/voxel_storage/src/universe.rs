@@ -1,7 +1,7 @@
 use std::sync::RwLockWriteGuard;
 
 use crate::{
-    block::Block,
+    block::{Block, LightType},
     chunk::Chunk,
     CHUNK_SIDE, BlockId, CHUNK_VOLUME
 };
@@ -55,6 +55,14 @@ impl Universe {
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_entire_block(inner_pos, block);
             chunk.properties.set(ChunkFlag::DIRTY);
+        }
+    }
+
+    pub fn set_block_light(&mut self, xyz: IVec3, v: u8, v1:u8) {
+        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(&xyz);
+        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.set_block_light(inner_pos, LightType::Sun, v);
+            chunk.set_block_light(inner_pos, LightType::Torch, v1);
         }
     }
 }
