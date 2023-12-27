@@ -1,7 +1,6 @@
 use bevy::math::{IVec3, Vec3, Vec3Swizzles};
 
 use voxel_storage::universe::Universe;
-use::voxel_flag_bank::BlockFlag;
 
 use crate::MARGIN_EPSILON;
 
@@ -141,9 +140,9 @@ pub fn raycast(
         if ray.distance() > max_distance {
             return None;
         }
-        if let Some(voxel) = universe.read_chunk_block(&ray.grid_pos) {
+        if let Some(voxel) = universe.get_at(&ray.grid_pos) {
             // hardcoded flag 16 to be collision detection
-            if voxel.properties.check(BlockFlag::SOLID) {
+            if voxel.is_collision() {
                 return Some(ray.raycast_hit());
             }
         }
@@ -194,8 +193,8 @@ pub fn sweep_aabb(
             for y in min.y..max.y + 1 {
                 for z in min.z..max.z + 1 {
                     let sample_pos = IVec3::new(x, y, z);
-                    if let Some(voxel) = universe.read_chunk_block(&sample_pos) {
-                        if voxel.properties.check(BlockFlag::SOLID) {
+                    if let Some(voxel) = universe.get_at(&sample_pos) {
+                        if voxel.is_collision() {
                             let hit = SweepHit {
                                 blocked: ray.mask,
                                 distance: ray.distance(),
