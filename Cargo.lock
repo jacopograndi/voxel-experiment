@@ -3771,6 +3771,7 @@ dependencies = [
  "egui_plot",
  "rand",
  "rand_chacha",
+ "voxel_flag_bank",
  "voxel_physics",
  "voxel_render",
  "voxel_storage",

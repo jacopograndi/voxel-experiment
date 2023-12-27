@@ -4,11 +4,11 @@ pub mod flagbank;
 #[derive(Copy, Clone)]
 pub enum BlockFlag {
     SOLID,
-
+    OPAQUE
 }
 impl Into<u8> for BlockFlag {fn into(self) -> u8 { self as u8 }}
 
 pub enum ChunkFlag {
-    UPDATED,
+    DIRTY,
 }
 impl Into<u8> for ChunkFlag {fn into(self) -> u8 { self as u8 }}

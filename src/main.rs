@@ -1,9 +1,14 @@
-use std::f32::consts::PI;
+use std::{
+    collections::VecDeque,
+    f32::consts::PI,
+    sync::{Arc, RwLock},
+};
 
 use bevy::{
     core_pipeline::fxaa::Fxaa,
     diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     prelude::*,
+    utils::HashSet,
     window::{PresentMode, WindowPlugin},
 };
 
@@ -22,11 +27,13 @@ use voxel_render::{
     VoxelCameraBundle, VoxelRenderPlugin,
 };
 use voxel_storage::{
-    BlockId,
+    block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
     universe::Universe,
-    VoxelStoragePlugin, CHUNK_SIDE,
+    VoxelStoragePlugin, CHUNK_SIDE, CHUNK_VOLUME, BlockId,
 };
+
+use voxel_flag_bank::{BlockFlag, ChunkFlag};
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =
     DiagnosticId::from_u128(288146834822086093791974408528866909484);
@@ -70,9 +77,14 @@ fn main() {
 // just for prototype
 fn voxel_break(
     camera_query: Query<(&CameraController, &GlobalTransform)>,
-    mut chunk_map: ResMut<Universe>,
+    mut universe: ResMut<Universe>,
     mouse: Res<Input<MouseButton>>,
+    keys: Res<Input<KeyCode>>,
 ) {
+    if keys.just_pressed(KeyCode::R) {
+        let chunks = universe.chunks.iter().map(|v| v.0.clone()).collect();
+        recalc_lights(&mut universe, chunks);
+    }
     if let Ok((_cam, tr)) = camera_query.get_single() {
         #[derive(PartialEq)]
         enum Act {
@@ -91,28 +103,122 @@ fn voxel_break(
             _ => None,
         };
         if let Some(act) = act {
-            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &chunk_map) {
+            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &universe) {
                 match act {
                     Act::Inspect => {
                         println!(
-                            "pos:{}, {:?}, dist:{}",
+                            "hit(pos:{}, block:{:?}, dist:{}), head(block:{:?})",
                             hit.pos,
-                            chunk_map.read_chunk(&hit.grid_pos),
-                            hit.distance
+                            universe.read_chunk_block(&hit.grid_pos),
+                            hit.distance,
+                            universe.read_chunk_block(&tr.translation().floor().as_ivec3()),
                         );
                     }
                     Act::RemoveBlock => {
-                        chunk_map.set_chunk(
-                            &hit.grid_pos,
+                        println!("removed block");
+
+                        let pos = hit.grid_pos;
+
+                        let mut light_suns = vec![];
+                        let mut light_torches = vec![];
+
+                        if let Some(voxel) = universe.read_chunk_block(&pos) {
+                            // todo: use BlockInfo.is_light_source
+                            if voxel.id == 3 {
+                                let new = propagate_darkness(&mut universe, pos, LightType::Torch);
+                                propagate_light(&mut universe, new, LightType::Torch)
+                            }
+                        }
+
+                        universe.set_chunk(
+                            &pos,
                             BlockId::AIR,
                         );
+
+                        let planar = IVec2::new(pos.x, pos.z);
+                        if let Some(height) = universe.heightfield.get(&planar) {
+                            if pos.y == *height {
+                                // recalculate the highest sunlit point
+                                let mut beam = pos.y - 100;
+                                for y in 0..=100 {
+                                    let h = pos.y - y;
+                                    let sample = IVec3::new(pos.x, h, pos.z);
+                                    if let Some(voxel) = universe.read_chunk_block(&sample) {
+                                        if voxel.properties.check(BlockFlag::OPAQUE) {
+                                            beam = h;
+                                            break;
+                                        } else {
+                                            light_suns.push(sample);
+
+                                            let mut lit = voxel.clone();
+                                            lit.set_light(LightType::Sun, 15);
+                                            universe.set_chunk_block(&sample, lit);
+                                        }
+                                    }
+                                }
+                                universe.heightfield.insert(planar, beam);
+                            }
+                        }
+
+                        for dir in DIRS.iter() {
+                            let sample = pos + *dir;
+                            if let Some(voxel) = universe.read_chunk_block(&sample) {
+                                if !voxel.properties.check(BlockFlag::OPAQUE) {
+                                    if voxel.get_light(LightType::Sun) > 1 {
+                                        light_suns.push(sample);
+                                    }
+                                    if voxel.get_light(LightType::Torch) > 1 {
+                                        light_torches.push(sample);
+                                    }
+                                }
+                            }
+                        }
+
+                        propagate_light(&mut universe, light_suns, LightType::Sun);
+                        propagate_light(&mut universe, light_torches, LightType::Torch);
                     }
                     Act::PlaceBlock => {
+                        println!("placed block");
+
                         let pos = hit.grid_pos + hit.normal;
-                        chunk_map.set_chunk(
-                            &pos,
-                            BlockId::LOG,
-                        );
+
+                        let mut dark_suns = vec![];
+
+                        if keys.pressed(KeyCode::Key3) {
+                            // todo: use BlockInfo
+                            universe.set_chunk(
+                                &pos,
+                                BlockId::LOG,
+                            );
+                            universe.read_chunk_block(&pos).unwrap().set_light(LightType::Torch, 14);
+                            propagate_light(&mut universe, vec![pos], LightType::Torch)
+                        } else {
+                            let new = propagate_darkness(&mut universe, pos, LightType::Torch);
+
+                            universe.set_chunk(
+                                &pos,
+                                BlockId::LOG,
+                            );
+
+                            propagate_light(&mut universe, new, LightType::Torch);
+                        }
+
+                        let planar = IVec2::new(pos.x, pos.z);
+                        if let Some(height) = universe.heightfield.get(&planar) {
+                            if pos.y > *height {
+                                // recalculate the highest sunlit point
+                                for y in (*height)..pos.y {
+                                    let sample = IVec3::new(pos.x, y, pos.z);
+                                    dark_suns.push(sample);
+                                }
+                                universe.heightfield.insert(planar, pos.y);
+                            }
+                        }
+
+                        for sun in dark_suns {
+                            let new = propagate_darkness(&mut universe, sun, LightType::Sun);
+                            propagate_light(&mut universe, new, LightType::Sun)
+                        }
                     }
                 };
             } else {
@@ -130,8 +236,182 @@ fn gen_chunk(pos: IVec3) -> Chunk {
     }
 }
 
+fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
+    println!("lighting {:?} chunks", chunks.len());
+
+    // calculate sunlight beams
+    let mut suns: Vec<IVec3> = vec![];
+    let mut planars = HashSet::<IVec2>::new();
+    let mut highest = i32::MIN;
+    for pos in chunks.iter() {
+        let chunk = universe.chunks.get_mut(pos).unwrap();
+        chunk.properties.set(ChunkFlag::DIRTY);
+        let mut grid = chunk.get_w_ref();
+        for x in 0..CHUNK_SIDE {
+            for z in 0..CHUNK_SIDE {
+                let mut sunlight = MAX_LIGHT;
+                for y in (0..CHUNK_SIDE).rev() {
+                    let xyz = IVec3::new(x as i32, y as i32, z as i32);
+                    if chunk.read_block(xyz).properties.check(BlockFlag::OPAQUE) {
+                        sunlight = 0;
+                    }
+                    if sunlight > 0 {
+                        suns.push(*pos + xyz);
+                    }
+                    chunk.set_block_light(xyz, LightType::Sun, sunlight);
+                    chunk.set_block_light(xyz, LightType::Torch, 0);
+                    highest = highest.max(pos.y + y as i32);
+                }
+                let planar = IVec2::new(x as i32 + pos.x, z as i32 + pos.z);
+                planars.insert(planar);
+            }
+        }
+    }
+
+    for planar in planars.iter() {
+        let mut beam = 0;
+        let mut block_found = false;
+        for y in 0..1000 {
+            let h = highest - y;
+            let sample = IVec3::new(planar.x, h, planar.y);
+
+            if let Some(voxel) = universe.read_chunk_block(&sample) {
+                block_found = true;
+                if voxel.properties.check(BlockFlag::OPAQUE) {
+                    beam = h;
+                    break;
+                }
+            } else {
+                if block_found {
+                    break;
+                }
+            }
+        }
+        if let Some(height) = universe.heightfield.get_mut(planar) {
+            *height = (*height).min(beam);
+        } else {
+            universe.heightfield.insert(*planar, beam);
+        }
+    }
+
+    // find new light sources
+    let mut torches: Vec<IVec3> = vec![];
+    for pos in chunks.iter() {
+        let chunk = universe.chunks.get(pos).unwrap();
+        let mut grid = chunk.get_w_ref();
+        for i in 0..CHUNK_VOLUME {
+            let xyz = Chunk::_idx2xyz(i);
+            // todo: fetch from BlockInfo when implemented
+            if chunk.read_block(xyz).id == 3 {
+                torches.push(*pos + xyz);
+                chunk.set_block_light(xyz, LightType::Torch, 15);
+            }
+        }
+    }
+
+    if !suns.is_empty() {
+        propagate_light(universe, suns, LightType::Sun);
+    }
+
+    if !torches.is_empty() {
+        propagate_light(universe, torches, LightType::Torch);
+    }
+}
+
+const DIRS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::Y,
+    IVec3::Z,
+    IVec3::NEG_X,
+    IVec3::NEG_Y,
+    IVec3::NEG_Z,
+];
+const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+
+fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
+    let voxel = universe.read_chunk_block(&source).unwrap();
+    let val = voxel.get_light(lt);
+    let mut dark = voxel.clone();
+    dark.set_light(lt, 0);
+    universe.set_chunk_block(&source, dark);
+
+    println!("1 source of {lt} darkness val:{val}");
+
+    let mut new_lights: Vec<IVec3> = vec![];
+    let mut frontier: VecDeque<IVec3> = [source].into();
+    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+        if let Some(pos) = frontier.pop_front() {
+            for dir in DIRS.iter() {
+                let target = pos + *dir;
+                let mut unlit: Option<Block> = None;
+                if let Some(neighbor) = universe.read_chunk_block(&target) {
+                    let target_light = neighbor.get_light(lt);
+                    if target_light != 0 && target_light < val {
+                        let mut l = neighbor;
+                        l.set_light(lt, 0);
+                        unlit = Some(l);
+                    } else if target_light >= val {
+                        new_lights.push(target);
+                    }
+                }
+                if let Some(voxel) = unlit {
+                    universe.set_chunk_block(&target, voxel);
+                    frontier.push_back(target);
+                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
+                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::DIRTY);
+                }
+            }
+        } else {
+            println!("{} iters for {lt} darkness", iter);
+            break;
+        }
+    }
+    new_lights
+}
+
+fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
+    const DIRS: [IVec3; 6] = [
+        IVec3::X,
+        IVec3::Y,
+        IVec3::Z,
+        IVec3::NEG_X,
+        IVec3::NEG_Y,
+        IVec3::NEG_Z,
+    ];
+    const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+
+    println!("{} sources of {lt} light", sources.len());
+    let mut frontier: VecDeque<IVec3> = sources.clone().into();
+    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+        if let Some(pos) = frontier.pop_front() {
+            let voxel = universe.read_chunk_block(&pos).unwrap();
+            let light = voxel.get_light(lt);
+            for dir in DIRS.iter() {
+                let target = pos + *dir;
+                let mut lit: Option<Block> = None;
+                if let Some(neighbor) = universe.read_chunk_block(&target) {
+                    if !neighbor.properties.check(BlockFlag::OPAQUE) && neighbor.get_light(lt) + 2 <= light {
+                        let mut l = neighbor;
+                        l.set_light(lt, light - 1);
+                        lit = Some(l);
+                    }
+                }
+                if let Some(voxel) = lit {
+                    universe.set_chunk_block(&target, voxel);
+                    frontier.push_back(target);
+                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
+                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::DIRTY);
+                }
+            }
+        } else {
+            println!("{} iters for {lt} light", iter);
+            break;
+        }
+    }
+}
+
 fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &Transform)>) {
-    let load_view_distance: u32 = VIEW_DISTANCE + CHUNK_SIDE as u32 * 2;
+    let load_view_distance: u32 = VIEW_DISTANCE;
 
     let camera_pos = if let Ok((_, tr)) = camera.get_single() {
         tr.translation
@@ -144,6 +424,8 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
     // hardcoded chunk size
     let load_view_distance_chunk = load_view_distance as i32 / CHUNK_SIDE as i32;
     let lvdc = load_view_distance_chunk;
+
+    let mut added = vec![];
 
     // sphere centered on the player
     for x in -lvdc..=lvdc {
@@ -158,25 +440,34 @@ fn load_and_gen_chunks(mut universe: ResMut<Universe>, camera: Query<(&Camera, &
                         let chunk: Chunk = gen_chunk(pos);
                         universe.chunks.insert(
                             pos,
-                            chunk
+                            chunk,
                         );
+                        added.push(pos);
                     }
                 }
             }
         }
+    }
+
+    if !added.is_empty() {
+        recalc_lights(&mut universe, added);
     }
 }
 
 fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
     queue
         .to_load
-        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(0)));
+        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(1)));
     queue
         .to_load
-        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(1)));
+        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(2)));
     queue
         .to_load
-        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(2)));
+        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(3)));
+    queue.to_load.push((
+        "assets/voxels/glowstone.vox".to_string(),
+        VoxTextureIndex(4),
+    ));
 
     // player character
     commands
