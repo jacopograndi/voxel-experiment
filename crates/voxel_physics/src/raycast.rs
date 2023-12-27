@@ -7,9 +7,9 @@ use crate::MARGIN_EPSILON;
 const RAYCAST_MAX_ITERATIONS: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RaycastHit {
+pub struct RaycastHit { 
     pub grid_pos: IVec3,
-    pub normal: IVec3,
+    pub normal: IVec3, 
     pub distance: f32,
     pub pos: Vec3,
 }
