@@ -9,4 +9,3 @@ edition = "2021"
 bevy = "0.12.0"
 
 voxel_storage = { path = "../voxel_storage" }
-voxel_flag_bank = { path = "../voxel_flag_bank" }

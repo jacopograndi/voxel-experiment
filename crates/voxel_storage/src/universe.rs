@@ -1,14 +1,28 @@
-use std::sync::RwLockWriteGuard;
-
 use crate::{
-    block::{Block, LightType},
-    chunk::Chunk,
-    CHUNK_SIDE, BlockId, CHUNK_VOLUME
+    grid::{Grid, Voxel},
+    CHUNK_AREA, CHUNK_SIDE,
 };
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
-use::voxel_flag_bank::ChunkFlag;
+use bevy::{prelude::*, utils::HashMap};
 
-use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
+#[derive(Debug, Clone)]
+pub struct GridPtr(pub Arc<RwLock<Grid>>);
+
+#[derive(Debug, Clone)]
+pub struct Chunk {
+    pub grid: GridPtr,
+    pub updated: bool,
+}
+
+impl Chunk {
+    pub fn set_dirty(&mut self) {
+        self.updated = true;
+    }
+    pub fn reset_dirty(&mut self) {
+        self.updated = false;
+    }
+}
 
 /// Game resource, it's mutations are propagated to `RenderUniverse`
 /// and written to the gpu buffer.
@@ -22,10 +36,10 @@ pub struct Universe {
 
 impl Universe {
     // maybe useful to lock everything when operating on all blocks
-    pub fn lock_write(&mut self) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<[Block; CHUNK_VOLUME]>)> {
+    pub fn lock_write(&mut self) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<Grid>)> {
         self.chunks
             .iter()
-            .map(|(pos, chunk)| (pos.clone(), chunk.get_w_ref()))
+            .map(|(pos, chunk)| (pos.clone(), chunk.grid.0.write().unwrap()))
     }
 
     pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
@@ -35,34 +49,18 @@ impl Universe {
         (chunk_pos, inner_pos)
     }
 
-    pub fn read_chunk_block(&self, pos: &IVec3) -> Option<Block> {
+    pub fn get_at(&self, pos: &IVec3) -> Option<Voxel> {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         self.chunks
             .get(&chunk_pos)
-            .map(|chunk| chunk.read_block(inner_pos))
+            .map(|chunk| chunk.grid.0.read().unwrap().get_at(inner_pos))
     }
 
-    pub fn set_chunk(&mut self, pos: &IVec3, id: BlockId) {
+    pub fn set_at(&mut self, pos: &IVec3, voxel: Voxel) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_block(inner_pos, id);
-            chunk.properties.set(ChunkFlag::DIRTY);
-        }
-    }
-
-    pub fn set_chunk_block(&mut self, pos: &IVec3, block: Block) {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
-        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_entire_block(inner_pos, block);
-            chunk.properties.set(ChunkFlag::DIRTY);
-        }
-    }
-
-    pub fn set_block_light(&mut self, xyz: IVec3, v: u8, v1:u8) {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(&xyz);
-        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_block_light(inner_pos, LightType::Sun, v);
-            chunk.set_block_light(inner_pos, LightType::Torch, v1);
+            chunk.grid.0.write().unwrap().set_at(inner_pos, voxel);
+            chunk.set_dirty();
         }
     }
 }

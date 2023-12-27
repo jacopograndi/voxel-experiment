@@ -1,21 +1,21 @@
 #[cfg(test)]
 mod test {
-    use std::f32::consts::PI;
+    use std::{
+        f32::consts::PI,
+        sync::{Arc, RwLock},
+    };
 
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
     use voxel_storage::{
-        BlockId,
-        block::Block,
-        chunk::Chunk,
-        universe::Universe
+        chunk_map::{Chunk, ChunkMap, GridPtr},
+        grid::{Grid, Voxel},
     };
 
     #[test]
     fn empty_out_of_range() {
-        let chunk_map = Universe {
+        let chunk_map = ChunkMap {
             chunks: HashMap::new(),
-            heightfield: HashMap::new(),
         };
         assert_eq!(None, raycast(Vec3::ZERO, Vec3::X, 100.0, &chunk_map));
     }
@@ -107,40 +107,56 @@ mod test {
         }
     }
 
-    fn single_block_map() -> Universe {
-        let mut chunk_map = Universe {
+    fn single_block_map() -> ChunkMap {
+        let mut chunk_map = ChunkMap {
             chunks: [(
                 IVec3::ZERO,
-                Chunk::empty(),
+                Chunk {
+                    grid: GridPtr(Arc::new(RwLock::new(Grid::empty()))),
+                    version: 0,
+                },
             )]
             .into_iter()
             .collect(),
-            heightfield: HashMap::new(),
         };
-        chunk_map.set_chunk(
+        chunk_map.set_at(
             &IVec3::ZERO,
-            BlockId::STONE,
+            Voxel {
+                id: 1,
+                flags: 16,
+                ..default()
+            },
         );
         assert_eq!(
-            Some(Block::new(BlockId::STONE)),
-            chunk_map.read_chunk_block(&IVec3::ZERO)
+            Some(Voxel {
+                id: 1,
+                flags: 16,
+                ..default()
+            }),
+            chunk_map.get_at(&IVec3::ZERO)
         );
         chunk_map
     }
 
-    fn single_chunk_map() -> Universe {
-        let mut chunk_map = Universe {
+    fn single_chunk_map() -> ChunkMap {
+        let mut chunk_map = ChunkMap {
             chunks: [(
                 IVec3::ZERO,
-                Chunk::filled(),
+                Chunk {
+                    grid: GridPtr(Arc::new(RwLock::new(Grid::filled()))),
+                    version: 0,
+                },
             )]
             .into_iter()
             .collect(),
-            heightfield: HashMap::new(),
         };
-        chunk_map.set_chunk(
+        chunk_map.set_at(
             &IVec3::ZERO,
-            BlockId::STONE,
+            Voxel {
+                id: 1,
+                flags: 16,
+                ..default()
+            },
         );
         chunk_map
     }
