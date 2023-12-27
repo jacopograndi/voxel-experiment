@@ -117,9 +117,9 @@ mod test {
             .collect(),
             heightfield: HashMap::new(),
         };
-        chunk_map.set_chunk(
+        chunk_map.set_chunk_block(
             &IVec3::ZERO,
-            BlockId::STONE,
+            Block::new(BlockId::STONE),
         );
         assert_eq!(
             Some(Block::new(BlockId::STONE)),
@@ -128,22 +128,22 @@ mod test {
         chunk_map
     }
 
-    fn single_chunk_map() -> Universe {
-        let mut chunk_map = Universe {
-            chunks: [(
-                IVec3::ZERO,
-                Chunk::filled(),
-            )]
-            .into_iter()
-            .collect(),
-            heightfield: HashMap::new(),
-        };
-        chunk_map.set_chunk(
-            &IVec3::ZERO,
-            BlockId::STONE,
-        );
-        chunk_map
-    }
+    // fn single_chunk_map() -> Universe {
+    //     let mut chunk_map = Universe {
+    //         chunks: [(
+    //             IVec3::ZERO,
+    //             Chunk::filled(),
+    //         )]
+    //         .into_iter()
+    //         .collect(),
+    //         heightfield: HashMap::new(),
+    //     };
+    //     chunk_map.set_chunk(
+    //         &IVec3::ZERO,
+    //         BlockId::STONE,
+    //     );
+    //     chunk_map
+    // }
 
     fn close_enough(a: f32, b: f32) -> bool {
         const EPS: f32 = 0.0001;

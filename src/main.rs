@@ -1,7 +1,6 @@
 use std::{
     collections::VecDeque,
     f32::consts::PI,
-    sync::{Arc, RwLock},
 };
 
 use bevy::{
@@ -130,9 +129,9 @@ fn voxel_break(
                             }
                         }
 
-                        universe.set_chunk(
+                        universe.set_chunk_block(
                             &pos,
-                            BlockId::AIR,
+                            Block::new(BlockId::AIR),
                         );
 
                         let planar = IVec2::new(pos.x, pos.z);
@@ -186,18 +185,18 @@ fn voxel_break(
 
                         if keys.pressed(KeyCode::Key3) {
                             // todo: use BlockInfo
-                            universe.set_chunk(
+                            universe.set_chunk_block(
                                 &pos,
-                                BlockId::LOG,
+                                Block::new(BlockId::LOG),
                             );
                             universe.read_chunk_block(&pos).unwrap().set_light(LightType::Torch, 14);
                             propagate_light(&mut universe, vec![pos], LightType::Torch)
                         } else {
                             let new = propagate_darkness(&mut universe, pos, LightType::Torch);
 
-                            universe.set_chunk(
+                            universe.set_chunk_block(
                                 &pos,
-                                BlockId::LOG,
+                                Block::new(BlockId::LOG),
                             );
 
                             propagate_light(&mut universe, new, LightType::Torch);

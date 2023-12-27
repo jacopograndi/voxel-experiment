@@ -1,23 +1,21 @@
 use std::sync::RwLockWriteGuard;
 
 use crate::{
-    block::{Block, LightType},
+    block::Block,
     chunk::Chunk,
-    CHUNK_SIDE, BlockId, CHUNK_VOLUME
+    CHUNK_SIDE, CHUNK_VOLUME
 };
 
 use::voxel_flag_bank::ChunkFlag;
 
-use bevy::{prelude::*, render::extract_resource::ExtractResource, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 
 /// Game resource, it's mutations are propagated to `RenderUniverse`
 /// and written to the gpu buffer.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
-
-    /// Stores the highest block which still receives sunlight
-    pub heightfield: HashMap<IVec2, i32>,
+    pub heightfield: HashMap<IVec2, i32>,     // Stores the highest block which still receives sunlight
 }
 
 impl Universe {
@@ -42,27 +40,11 @@ impl Universe {
             .map(|chunk| chunk.read_block(inner_pos))
     }
 
-    pub fn set_chunk(&mut self, pos: &IVec3, id: BlockId) {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
-        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_block(inner_pos, id);
-            chunk.properties.set(ChunkFlag::DIRTY);
-        }
-    }
-
     pub fn set_chunk_block(&mut self, pos: &IVec3, block: Block) {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_entire_block(inner_pos, block);
             chunk.properties.set(ChunkFlag::DIRTY);
-        }
-    }
-
-    pub fn set_block_light(&mut self, xyz: IVec3, v: u8, v1:u8) {
-        let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(&xyz);
-        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
-            chunk.set_block_light(inner_pos, LightType::Sun, v);
-            chunk.set_block_light(inner_pos, LightType::Torch, v1);
         }
     }
 }
