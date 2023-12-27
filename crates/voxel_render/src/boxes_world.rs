@@ -19,9 +19,11 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
-use voxel_storage::grid::VoxGrid;
 
-use crate::voxel_world::{VoxelUniforms, VIEW_DISTANCE};
+use crate::{
+    blocktexture::BlockTexture,
+    voxel_world::{VoxelUniforms, VIEW_DISTANCE}
+};
 
 const MAX_BOXES: usize = 10000;
 const MAX_VOX_TEXTURE_BYTES: usize = 100000000;
@@ -132,7 +134,7 @@ pub struct ExtractedTexturedBoxes {
 }
 
 #[derive(Debug, Clone)]
-pub struct VoxGridPtr(pub Arc<RwLock<VoxGrid>>);
+pub struct BlockTexturePtr(pub Arc<RwLock<BlockTexture>>);
 
 #[derive(Debug, Clone, Deref, DerefMut, Default, Hash, PartialEq, Eq)]
 pub struct VoxTextureIndex(pub u32);
@@ -140,7 +142,7 @@ pub struct VoxTextureIndex(pub u32);
 #[derive(Resource, Default, Clone, ExtractResource)]
 pub struct LoadedVoxTextures {
     pub indices: HashMap<String, VoxTextureIndex>,
-    pub textures: HashMap<VoxTextureIndex, VoxGridPtr>,
+    pub textures: HashMap<VoxTextureIndex, BlockTexturePtr>,
 }
 
 #[derive(Resource, Default)]
@@ -155,9 +157,9 @@ fn load_vox_textures(
     for (path, id) in queue.to_load.iter() {
         let result = fs::read(path);
         if let Ok(slice) = result {
-            let result = VoxGrid::from_vox(&slice);
+            let result = BlockTexture::from_vox(&slice);
             if let Ok(vox) = result {
-                let grid = VoxGridPtr(Arc::new(RwLock::new(vox)));
+                let grid = BlockTexturePtr(Arc::new(RwLock::new(vox)));
                 loaded.indices.insert(path.clone(), id.clone());
                 loaded.textures.insert(id.clone(), grid);
             } else {
@@ -268,7 +270,7 @@ fn write_vox_textures(
     let offsets = [0; (MAX_VOX_TEXTURE_STORAGE * 4) as usize];
     bytes.extend(offsets);
 
-    let mut textures: Vec<(VoxTextureIndex, VoxGridPtr)> = loaded
+    let mut textures: Vec<(VoxTextureIndex, BlockTexturePtr)> = loaded
         .textures
         .iter()
         .map(|p| (p.0.clone(), p.1.clone()))

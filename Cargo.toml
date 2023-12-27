@@ -14,6 +14,8 @@ rand_chacha = "0.3.1"
 voxel_render = { path = "crates/voxel_render" }
 voxel_storage = { path = "crates/voxel_storage" }
 voxel_physics = { path = "crates/voxel_physics" }
+voxel_flag_bank = { path = "crates/voxel_flag_bank" }
+
 
 [workspace]
 members = ["crates/*"]

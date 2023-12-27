@@ -3771,9 +3771,17 @@ dependencies = [
  "egui_plot",
  "rand",
  "rand_chacha",
+ "voxel_flag_bank",
  "voxel_physics",
  "voxel_render",
  "voxel_storage",
+]
+
+[[package]]
+name = "voxel_flag_bank"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
@@ -3785,6 +3793,7 @@ name = "voxel_physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "voxel_flag_bank",
  "voxel_storage",
 ]
 
@@ -3794,6 +3803,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "dot_vox",
+ "voxel_flag_bank",
  "voxel_storage",
 ]
 
@@ -3803,7 +3814,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
- "dot_vox",
+ "lazy_static",
+ "voxel_flag_bank",
 ]
 
 [[package]]
