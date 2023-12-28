@@ -3782,11 +3782,22 @@ name = "voxel_flag_bank"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "serde",
 ]
 
 [[package]]
 name = "voxel_gen"
 version = "0.1.0"
+
+[[package]]
+name = "voxel_info"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "ron",
+ "serde",
+ "voxel_flag_bank",
+]
 
 [[package]]
 name = "voxel_physics"
@@ -3816,6 +3827,7 @@ dependencies = [
  "bytemuck",
  "lazy_static",
  "voxel_flag_bank",
+ "voxel_info",
 ]
 
 [[package]]

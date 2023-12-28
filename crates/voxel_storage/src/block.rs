@@ -1,5 +1,5 @@
-use crate::{BlockId, BLOCK_FLAGS};
-use voxel_flag_bank::flagbank::FlagBank;
+use crate::{BlockId, BLOCK_INFO};
+use voxel_flag_bank::{flagbank::FlagBank, BlockFlag};
 use bytemuck::{Pod, Zeroable};
 use std::fmt::Display;
 
@@ -27,10 +27,10 @@ impl Block {
             light1: 0,
             properties: FlagBank::empty(),
         };
-        if let Some(flags) = BLOCK_FLAGS.get(&id) {
-            for flag in flags {
-                new_block.properties.set(*flag);
-            }
+        let blockinfo = BLOCK_INFO.get(&(id as u8)).unwrap();
+        let flags: &Vec<BlockFlag> = &blockinfo.flags; 
+        for flag in flags {
+            new_block.properties.set(*flag);
         }
         new_block
     }

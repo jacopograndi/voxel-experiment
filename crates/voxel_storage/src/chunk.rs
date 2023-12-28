@@ -31,7 +31,7 @@ impl Chunk {
     }
 
     pub fn filled() -> Self {
-        let block = Block::new(BlockId::STONE);
+        let block = Block::new(BlockId::Stone);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
             version: 0,
@@ -44,9 +44,9 @@ impl Chunk {
         for i in 0..CHUNK_VOLUME {
             let xyz = Self::_idx2xyz(i);
             if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                chunk.set_block(xyz, Block::new(BlockId::AIR));
+                chunk.set_block(xyz, Block::new(BlockId::Air));
             } else {
-                chunk.set_block(xyz, Block::new(BlockId::STONE));
+                chunk.set_block(xyz, Block::new(BlockId::Stone));
             }
         }
         chunk

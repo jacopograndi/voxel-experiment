@@ -143,7 +143,7 @@ pub fn raycast(
         }
         if let Some(voxel) = universe.read_chunk_block(&ray.grid_pos) {
             // hardcoded flag 16 to be collision detection
-            if voxel.properties.check(BlockFlag::SOLID) {
+            if voxel.properties.check(BlockFlag::Collidable) {
                 return Some(ray.raycast_hit());
             }
         }
@@ -195,7 +195,7 @@ pub fn sweep_aabb(
                 for z in min.z..max.z + 1 {
                     let sample_pos = IVec3::new(x, y, z);
                     if let Some(voxel) = universe.read_chunk_block(&sample_pos) {
-                        if voxel.properties.check(BlockFlag::SOLID) {
+                        if voxel.properties.check(BlockFlag::Collidable) {
                             let hit = SweepHit {
                                 blocked: ray.mask,
                                 distance: ray.distance(),

@@ -131,7 +131,7 @@ fn voxel_break(
 
                         universe.set_chunk_block(
                             &pos,
-                            Block::new(BlockId::AIR),
+                            Block::new(BlockId::Air),
                         );
 
                         let planar = IVec2::new(pos.x, pos.z);
@@ -143,7 +143,7 @@ fn voxel_break(
                                     let h = pos.y - y;
                                     let sample = IVec3::new(pos.x, h, pos.z);
                                     if let Some(voxel) = universe.read_chunk_block(&sample) {
-                                        if voxel.properties.check(BlockFlag::OPAQUE) {
+                                        if voxel.properties.check(BlockFlag::Opaque) {
                                             beam = h;
                                             break;
                                         } else {
@@ -162,7 +162,7 @@ fn voxel_break(
                         for dir in DIRS.iter() {
                             let sample = pos + *dir;
                             if let Some(voxel) = universe.read_chunk_block(&sample) {
-                                if !voxel.properties.check(BlockFlag::OPAQUE) {
+                                if !voxel.properties.check(BlockFlag::Opaque) {
                                     if voxel.get_light(LightType::Sun) > 1 {
                                         light_suns.push(sample);
                                     }
@@ -187,7 +187,7 @@ fn voxel_break(
                             // todo: use BlockInfo
                             universe.set_chunk_block(
                                 &pos,
-                                Block::new(BlockId::LOG),
+                                Block::new(BlockId::Wood),
                             );
                             universe.read_chunk_block(&pos).unwrap().set_light(LightType::Torch, 14);
                             propagate_light(&mut universe, vec![pos], LightType::Torch)
@@ -196,7 +196,7 @@ fn voxel_break(
 
                             universe.set_chunk_block(
                                 &pos,
-                                Block::new(BlockId::LOG),
+                                Block::new(BlockId::Wood),
                             );
 
                             propagate_light(&mut universe, new, LightType::Torch);
@@ -244,14 +244,14 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
     let mut highest = i32::MIN;
     for pos in chunks.iter() {
         let chunk = universe.chunks.get_mut(pos).unwrap();
-        chunk.properties.set(ChunkFlag::DIRTY);
+        chunk.properties.set(ChunkFlag::Dirty);
         // let mut grid = chunk.get_w_ref();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
                 let mut sunlight = MAX_LIGHT;
                 for y in (0..CHUNK_SIDE).rev() {
                     let xyz = IVec3::new(x as i32, y as i32, z as i32);
-                    if chunk.read_block(xyz).properties.check(BlockFlag::OPAQUE) {
+                    if chunk.read_block(xyz).properties.check(BlockFlag::Opaque) {
                         sunlight = 0;
                     }
                     if sunlight > 0 {
@@ -276,7 +276,7 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
 
             if let Some(voxel) = universe.read_chunk_block(&sample) {
                 block_found = true;
-                if voxel.properties.check(BlockFlag::OPAQUE) {
+                if voxel.properties.check(BlockFlag::Opaque) {
                     beam = h;
                     break;
                 }
@@ -356,7 +356,7 @@ fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::DIRTY);
+                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::Dirty);
                 }
             }
         } else {
@@ -388,7 +388,7 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
                 let target = pos + *dir;
                 let mut lit: Option<Block> = None;
                 if let Some(neighbor) = universe.read_chunk_block(&target) {
-                    if !neighbor.properties.check(BlockFlag::OPAQUE) && neighbor.get_light(lt) + 2 <= light {
+                    if !neighbor.properties.check(BlockFlag::Opaque) && neighbor.get_light(lt) + 2 <= light {
                         let mut l = neighbor;
                         l.set_light(lt, light - 1);
                         lit = Some(l);
@@ -398,7 +398,7 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::DIRTY);
+                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::Dirty);
                 }
             }
         } else {
