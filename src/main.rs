@@ -36,6 +36,8 @@ use net::{
 use terrain_editing::*;
 use terrain_generation::*;
 
+const SERVER_TICKS_PER_SECOND: u32 = 60;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -53,7 +55,9 @@ fn main() {
     let mut app = App::new();
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
-    app.insert_resource(Time::<Fixed>::from_seconds(0.01666));
+    app.insert_resource(Time::<Fixed>::from_seconds(
+        1. / (SERVER_TICKS_PER_SECOND as f64),
+    ));
     app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin));
 
     match network_mode {
