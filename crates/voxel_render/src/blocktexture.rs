@@ -48,9 +48,6 @@ impl BlockTexture {
         let size = UVec3::new(size.y, size.z, size.x).as_ivec3();
         let mut grid = BlockTexture::new(size);
 
-        println!("{:?}", vox.palette);
-
-
         for i in 0..vox.palette.len().min(255) {
             let colour = vox.palette[i];
             let mut material = Vec4::new(
