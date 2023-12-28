@@ -12,15 +12,16 @@ const PROTOCOL_ID: u64 = 7;
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub enum NetworkMode {
-    /// Functions as a server, no local player
-    HeadlessServer,
-    /// Functions as a server, has a local player
+    /// A server without a local player (headless hosting)
     Server,
+    /// A server with a local player (singleplayer and hosting)
+    ClientAndServer,
+    /// A player connected to a server.
     Client,
 }
 
 #[derive(Debug, Component)]
-pub struct Player {
+pub struct NetPlayer {
     pub id: ClientId,
 }
 

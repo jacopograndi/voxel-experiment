@@ -22,7 +22,7 @@ use voxel_storage::{universe::Universe, CHUNK_VOLUME};
 use crate::{
     get_chunks_in_sphere,
     input::PlayerInput,
-    net::{LocalPlayer, Player, ServerChannel, ServerMessages},
+    net::{LocalPlayer, NetPlayer, ServerChannel, ServerMessages},
 };
 
 use super::{
@@ -91,13 +91,13 @@ pub fn server_update_system(
                             air: Vec3::splat(0.99),
                             ground: Vec3::splat(0.78),
                         },
-                        Player { id: *client_id },
+                        NetPlayer { id: *client_id },
                         PlayerInput::default(),
                     ))
                     .with_children(|parent| {
                         let mut camera_pivot =
                             parent.spawn((Fxaa::default(), CameraController::default()));
-                        if is_local_player && matches!(*network_mode, NetworkMode::Server) {
+                        if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer) {
                             camera_pivot.insert(VoxelCameraBundle {
                                 transform: Transform::from_xyz(0.0, 0.5, 0.0),
                                 projection: Projection::Perspective(PerspectiveProjection {
@@ -114,7 +114,7 @@ pub fn server_update_system(
                         }
                     })
                     .id();
-                if is_local_player && matches!(*network_mode, NetworkMode::Server) {
+                if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer) {
                     commands.entity(player_entity).insert(LocalPlayer);
                 }
 
@@ -127,7 +127,7 @@ pub fn server_update_system(
                     server.send_message(*client_id, ServerChannel::ServerMessages, message);
                 }
 
-                if !(is_local_player && matches!(*network_mode, NetworkMode::Server)) {
+                if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
                     chunk_replication
                         .requested_chunks
                         .insert(*client_id, get_chunks_in_sphere(spawn_point));
@@ -170,7 +170,7 @@ pub fn server_update_system(
 pub fn server_sync_players(
     mut server: ResMut<RenetServer>,
     transforms: Query<&Transform>,
-    query: Query<(Entity, &Player, &Children)>,
+    query: Query<(Entity, &NetPlayer, &Children)>,
 ) {
     let mut players: HashMap<ClientId, PlayerState> = HashMap::new();
     for (entity, player, children) in query.iter() {

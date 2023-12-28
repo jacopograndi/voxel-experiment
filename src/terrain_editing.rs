@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use voxel_automata::lighting::*;
 use voxel_flag_bank::BlockFlag;
 use voxel_physics::{character::CameraController, raycast};
 use voxel_storage::{
@@ -7,14 +8,15 @@ use voxel_storage::{
     BlockType,
 };
 
-use crate::{lighting::*, PlayerInput};
+use crate::PlayerInput;
 
-pub fn voxel_break(
+pub fn player_edit_terrain(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     player_query: Query<&PlayerInput>,
     mut universe: ResMut<Universe>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
+        // only on the server
         let Ok(input) = player_query.get(parent.get()) else {
             continue;
         };
@@ -144,8 +146,6 @@ pub fn voxel_break(
                         }
                     }
                 };
-            } else {
-                //dbg!("no hit");
             }
         }
     }

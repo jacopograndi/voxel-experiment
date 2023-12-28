@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    connection_config, Lobby, NetworkMode, Player, PlayerState, ServerChannel, ServerMessages,
+    connection_config, Lobby, NetPlayer, NetworkMode, PlayerState, ServerChannel, ServerMessages,
     PROTOCOL_ID,
 };
 
@@ -50,7 +50,7 @@ pub fn client_sync_players(
     mut client: ResMut<RenetClient>,
     mut lobby: ResMut<Lobby>,
     transport: Res<NetcodeClientTransport>,
-    query: Query<(Entity, &Player, &Children)>,
+    query: Query<(Entity, &NetPlayer, &Children)>,
     mut query_transform: Query<&mut Transform>,
     network_mode: Res<NetworkMode>,
 ) {
@@ -61,7 +61,7 @@ pub fn client_sync_players(
                 println!("Player {} connected. This client is ", id,);
                 let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 let is_local_player = id == ClientId::from_raw(transport.client_id());
-                if !(is_local_player && matches!(*network_mode, NetworkMode::Server)) {
+                if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
                     let player_entity = commands
                         .spawn((
                             SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
@@ -82,7 +82,7 @@ pub fn client_sync_players(
                                 air: Vec3::splat(0.99),
                                 ground: Vec3::splat(0.78),
                             },
-                            Player { id },
+                            NetPlayer { id },
                         ))
                         .with_children(|parent| {
                             let mut camera_pivot =

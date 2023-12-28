@@ -60,7 +60,7 @@ pub fn player_input(
     } else {
         player_input.mining = false;
     }
-    if matches!(*network_mode, NetworkMode::Server) {
+    if matches!(*network_mode, NetworkMode::ClientAndServer) {
         if let Ok(mut controller) = query_player.get_single_mut() {
             controller.acceleration = player_input.acceleration;
             controller.jumping = player_input.jumping;

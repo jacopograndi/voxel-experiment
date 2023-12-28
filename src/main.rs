@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use bevy::{
     prelude::*,
     utils::HashSet,
@@ -12,9 +10,10 @@ use bevy_renet::{
     RenetClientPlugin, RenetServerPlugin,
 };
 use renet::{transport::NetcodeClientTransport, ClientId, RenetServer};
+use voxel_automata::lighting::recalc_lights;
 use voxel_physics::plugin::VoxelPhysicsPlugin;
 use voxel_render::{
-    boxes_world::{Ghost, VoxTextureIndex, VoxTextureLoadQueue},
+    boxes_world::{VoxTextureIndex, VoxTextureLoadQueue},
     voxel_world::VIEW_DISTANCE,
     VoxelRenderPlugin,
 };
@@ -23,14 +22,12 @@ use voxel_storage::{chunk::Chunk, universe::Universe, VoxelStoragePlugin, CHUNK_
 mod camera;
 mod diagnostics;
 mod input;
-mod lighting;
 mod net;
 mod terrain_editing;
 
 use camera::*;
 use diagnostics::*;
 use input::*;
-use lighting::*;
 use net::{
     client::{client_send_input, client_sync_players, client_sync_universe, new_renet_client},
     server::{
@@ -41,8 +38,65 @@ use net::{
 };
 use terrain_editing::*;
 
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    let network_mode = if args.len() > 1 {
+        match args[1].as_str() {
+            "client" => NetworkMode::Client,
+            "server" => NetworkMode::ClientAndServer,
+            "headless" => NetworkMode::Server,
+            _ => panic!("Invalid argument, must be \"client\", \"server\" or \"headless\"."),
+        }
+    } else {
+        NetworkMode::ClientAndServer
+    };
+
+    let mut app = App::new();
+    app.init_resource::<Lobby>();
+    app.insert_resource(network_mode.clone());
+    app.insert_resource(Time::<Fixed>::from_seconds(0.01666));
+    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin));
+
+    match network_mode {
+        NetworkMode::Server => {
+            app.add_plugins((MinimalPlugins, TransformPlugin));
+            app_server(&mut app);
+        }
+        NetworkMode::ClientAndServer => {
+            app_server(&mut app);
+            app_client(&mut app);
+        }
+        NetworkMode::Client => {
+            app_client(&mut app);
+        }
+    }
+
+    app.run();
+}
+
+fn app_server(app: &mut App) {
+    app.add_plugins((RenetServerPlugin, NetcodeServerPlugin));
+    let (server, transport) = new_renet_server();
+    app.insert_resource(server);
+    app.insert_resource(transport);
+    app.init_resource::<ChunkReplication>();
+    app.add_systems(
+        FixedUpdate,
+        (
+            server_update_system,
+            server_sync_players,
+            server_sync_universe,
+            move_players_system,
+            player_edit_terrain,
+        )
+            .run_if(resource_exists::<RenetServer>()),
+    );
+    app.add_systems(Update, load_and_gen_chunks);
+}
+
 fn app_client(app: &mut App) {
-    app.add_plugins(
+    app.add_plugins((
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
@@ -52,128 +106,28 @@ fn app_client(app: &mut App) {
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
-    );
-    app.add_plugins((
+        RenetClientPlugin,
+        NetcodeClientPlugin,
         VoxelRenderPlugin,
-        VoxelPhysicsPlugin,
-        VoxelStoragePlugin,
-        DebugDiagnosticPlugin,
     ));
+    app.init_resource::<PlayerInput>();
+    let (client, transport) = new_renet_client();
+    app.insert_resource(client);
+    app.insert_resource(transport);
+    app.add_systems(Update, camera_controller_movement);
+    app.add_systems(
+        PreUpdate,
+        (
+            player_input,
+            client_send_input,
+            client_sync_players,
+            client_sync_universe,
+        )
+            .run_if(client_connected()),
+    );
+    app.add_plugins(DebugDiagnosticPlugin);
     app.add_systems(Startup, setup)
-        .add_systems(Update, (spin, cursor_grab));
-}
-
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-
-    let network_mode = if args.len() > 1 {
-        match args[1].as_str() {
-            "client" => NetworkMode::Client,
-            "server" => NetworkMode::Server,
-            "headless" => NetworkMode::HeadlessServer,
-            _ => panic!("Invalid argument, must be \"client\", \"server\" or \"headless\"."),
-        }
-    } else {
-        NetworkMode::Server
-    };
-
-    let mut app = App::new();
-    app.init_resource::<Lobby>();
-    app.insert_resource(network_mode.clone());
-    app.insert_resource(Time::<Fixed>::from_seconds(0.01666));
-
-    match network_mode {
-        NetworkMode::HeadlessServer => {
-            app.add_plugins((
-                MinimalPlugins,
-                TransformPlugin,
-                RenetServerPlugin,
-                NetcodeServerPlugin,
-                VoxelPhysicsPlugin,
-                VoxelStoragePlugin,
-            ));
-            let (server, transport) = new_renet_server();
-            app.insert_resource(server);
-            app.insert_resource(transport);
-            app.init_resource::<ChunkReplication>();
-            app.add_systems(
-                FixedUpdate,
-                (
-                    server_update_system,
-                    server_sync_players,
-                    server_sync_universe,
-                    move_players_system,
-                    voxel_break,
-                )
-                    .run_if(resource_exists::<RenetServer>()),
-            );
-            app.add_systems(Update, load_and_gen_chunks);
-        }
-        NetworkMode::Server => {
-            app.add_plugins((
-                RenetServerPlugin,
-                RenetClientPlugin,
-                NetcodeClientPlugin,
-                NetcodeServerPlugin,
-            ));
-            let (server, transport) = new_renet_server();
-            app.insert_resource(server);
-            app.insert_resource(transport);
-            app.init_resource::<ChunkReplication>();
-            app.add_systems(
-                FixedUpdate,
-                (
-                    server_update_system,
-                    server_sync_players,
-                    server_sync_universe,
-                    move_players_system,
-                    voxel_break,
-                )
-                    .run_if(resource_exists::<RenetServer>()),
-            );
-            app.add_systems(Update, load_and_gen_chunks);
-
-            app_client(&mut app);
-
-            app.init_resource::<PlayerInput>();
-            let (client, transport) = new_renet_client();
-            app.insert_resource(client);
-            app.insert_resource(transport);
-            app.add_systems(Update, camera_controller_movement);
-            app.add_systems(
-                PreUpdate,
-                (
-                    player_input,
-                    client_send_input,
-                    client_sync_players,
-                    client_sync_universe,
-                )
-                    .run_if(client_connected()),
-            );
-        }
-        NetworkMode::Client => {
-            app.add_plugins(RenetClientPlugin);
-            app.add_plugins(NetcodeClientPlugin);
-            app.init_resource::<PlayerInput>();
-            let (client, transport) = new_renet_client();
-            app.insert_resource(client);
-            app.insert_resource(transport);
-            app.add_systems(Update, camera_controller_movement);
-            app.add_systems(
-                PreUpdate,
-                (
-                    player_input,
-                    client_send_input,
-                    client_sync_players,
-                    client_sync_universe,
-                )
-                    .run_if(client_connected()),
-            );
-            app_client(&mut app);
-        }
-    }
-
-    app.run();
+        .add_systems(Update, cursor_grab);
 }
 
 fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
@@ -194,7 +148,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
         .to_load
         .push(("assets/voxels/char.vox".to_string(), VoxTextureIndex(5)));
 
-    // center cursor
+    // ui center cursor
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -217,31 +171,7 @@ fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
                 ..default()
             });
         });
-
-    commands.spawn((
-        SpatialBundle::from_transform(Transform {
-            translation: Vec3::new(0.0, 13.0 / 16.0 * 0.5, 0.0),
-            ..default()
-        }),
-        Ghost {
-            vox_texture_index: VoxTextureIndex(1),
-        },
-    ));
-
-    commands.spawn((
-        SpatialBundle::from_transform(Transform {
-            translation: Vec3::new(3.0, 14.0 / 16.0 * 0.5, -2.0),
-            rotation: Quat::from_rotation_y(PI / 2.0),
-            ..default()
-        }),
-        Ghost {
-            vox_texture_index: VoxTextureIndex(2),
-        },
-        Party::default(),
-    ));
 }
-
-// just for prototype
 
 fn gen_chunk(pos: IVec3) -> Chunk {
     if pos.y < 0 {
@@ -276,7 +206,7 @@ fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
 
 fn load_and_gen_chunks(
     mut universe: ResMut<Universe>,
-    player_query: Query<(&Player, &Transform)>,
+    player_query: Query<(&NetPlayer, &Transform)>,
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
 ) {
@@ -311,20 +241,5 @@ fn load_and_gen_chunks(
 
     if !added.is_empty() {
         recalc_lights(&mut universe, added.into_iter().collect());
-    }
-}
-
-#[derive(Component, Clone, Default, Debug)]
-struct Party {
-    scale: Option<Vec3>,
-}
-
-fn spin(mut q: Query<(&mut Transform, &mut Party)>, time: Res<Time<Real>>) {
-    for (mut tr, mut party) in q.iter_mut() {
-        tr.rotate_y(0.1);
-        if let None = party.scale {
-            party.scale = Some(tr.scale)
-        }
-        tr.scale = party.scale.unwrap() * f32::cos(time.elapsed_seconds());
     }
 }

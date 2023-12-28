@@ -20,7 +20,6 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
         let chunk = universe.chunks.get_mut(pos).unwrap();
         chunk.dirty_render = true;
         chunk.dirty_replication = true;
-        // let mut grid = chunk.get_w_ref();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
                 let mut sunlight = MAX_LIGHT;
