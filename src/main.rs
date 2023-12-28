@@ -32,7 +32,7 @@ use voxel_storage::{
     VoxelStoragePlugin, CHUNK_SIDE, CHUNK_VOLUME, BlockType,
 };
 
-use voxel_flag_bank::{BlockFlag, ChunkFlag};
+use voxel_flag_bank::BlockFlag;
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =
     DiagnosticId::from_u128(288146834822086093791974408528866909484);
@@ -244,7 +244,7 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
     let mut highest = i32::MIN;
     for pos in chunks.iter() {
         let chunk = universe.chunks.get_mut(pos).unwrap();
-        chunk.properties.set(ChunkFlag::Dirty);
+        chunk.dirty = true;
         // let mut grid = chunk.get_w_ref();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
@@ -356,7 +356,7 @@ fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::Dirty);
+                    universe.chunks.get_mut(&c).unwrap().dirty = true;
                 }
             }
         } else {
@@ -398,7 +398,7 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().properties.set(ChunkFlag::Dirty);
+                    universe.chunks.get_mut(&c).unwrap().dirty = true;
                 }
             }
         } else {

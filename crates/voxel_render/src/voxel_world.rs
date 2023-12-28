@@ -11,7 +11,6 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use voxel_flag_bank::ChunkFlag;
 use voxel_storage::{
     block::Block,
     universe::Universe
@@ -149,7 +148,7 @@ pub fn extract_universe(mut main_world: ResMut<MainWorld>, mut render_universe: 
     if let Some(mut main_universe) = main_world.get_resource_mut::<Universe>() {
         *render_universe = main_universe.clone();
         for (_pos, chunk) in main_universe.chunks.iter_mut() {
-            (*chunk).properties.unset(ChunkFlag::Dirty);
+            (*chunk).dirty = false;
         }
     }
 }
@@ -278,7 +277,7 @@ fn prepare_chunks(
                 if !render_chunk_map.buffer_alloc.is_allocated(pos) {
                     Some(*pos)
                 } else {
-                    if chunk.properties.check(ChunkFlag::Dirty) {
+                    if chunk.dirty {
                         Some(*pos)
                     } else {
                         None

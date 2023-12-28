@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
+use crate::IsFlagBank;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default, PartialEq, Eq)]
 pub struct FlagBank {
@@ -14,15 +16,15 @@ impl FlagBank {
         }
     }
 
-    pub fn set<T>(&mut self, flag: T) where T: Into<u8> {
-        self._flags |= 0b1 << flag.into();
+    pub fn set<T>(&mut self, flag: T) where T: IsFlagBank {
+        self._flags |= 0b1 << flag.to_u8();
     }
 
-    pub fn unset<T>(&mut self, flag: T) where T: Into<u8> {
-        self._flags &= !(0b1 << flag.into());
+    pub fn unset<T>(&mut self, flag: T) where T: IsFlagBank {
+        self._flags &= !(0b1 << flag.to_u8());
     }
 
-    pub fn check<T>(&self, flag: T) -> bool where T: Into<u8> {
-        (self._flags >> flag.into()) & 0b1 == 1
+    pub fn check<T>(&self, flag: T) -> bool where T: IsFlagBank {
+        (self._flags >> flag.to_u8()) & 0b1 == 1
     }
 }
