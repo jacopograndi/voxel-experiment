@@ -1,10 +1,6 @@
 use std::sync::RwLockWriteGuard;
 
-use crate::{
-    block::Block,
-    chunk::Chunk,
-    CHUNK_SIDE, CHUNK_VOLUME
-};
+use crate::{block::Block, chunk::Chunk, CHUNK_SIDE, CHUNK_VOLUME};
 
 use bevy::{prelude::*, utils::HashMap};
 
@@ -13,12 +9,14 @@ use bevy::{prelude::*, utils::HashMap};
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
-    pub heightfield: HashMap<IVec2, i32>,     // Stores the highest block which still receives sunlight
+    pub heightfield: HashMap<IVec2, i32>, // Stores the highest block which still receives sunlight
 }
 
 impl Universe {
     // maybe useful to lock everything when operating on all blocks
-    pub fn lock_write(&mut self) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<[Block; CHUNK_VOLUME]>)> {
+    pub fn lock_write(
+        &mut self,
+    ) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<[Block; CHUNK_VOLUME]>)> {
         self.chunks
             .iter()
             .map(|(pos, chunk)| (pos.clone(), chunk.get_w_ref()))
@@ -42,7 +40,8 @@ impl Universe {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, block);
-            chunk.dirty = true;
+            chunk.dirty_render = true;
+            chunk.dirty_replication = true;
         }
     }
 }

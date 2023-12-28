@@ -2,19 +2,18 @@ use bevy::prelude::*;
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use crate::{
-    CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
     block::{Block, LightType},
-    BlockType
+    BlockType, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
 };
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
-    pub dirty: bool,
+    pub dirty_render: bool,
+    pub dirty_replication: bool,
 }
 
 impl Chunk {
-
     pub fn get_w_ref(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
         self._blocks.write().unwrap()
     }
@@ -22,7 +21,8 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
-            dirty: false
+            dirty_render: false,
+            dirty_replication: false,
         }
     }
 
@@ -30,7 +30,8 @@ impl Chunk {
         let block = Block::new(BlockType::Stone);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
-            dirty: false
+            dirty_render: false,
+            dirty_replication: false,
         }
     }
 
@@ -75,7 +76,6 @@ impl Chunk {
             z: (index % CHUNK_SIDE) as i32,
         }
     }
-
 }
 
 #[cfg(test)]

@@ -94,6 +94,12 @@ fn prepare_uniforms(
     view_uniforms: Res<ViewUniforms>,
     global_buffer: Res<GlobalsBuffer>,
 ) {
+    let Some(view_uniforms_binding) = view_uniforms.uniforms.binding() else {
+        return;
+    };
+    let Some(global_buffer_binding) = global_buffer.buffer.binding() else {
+        return;
+    };
     for (entity, settings) in query.iter() {
         let trace_uniforms = TraceUniforms {
             show_ray_steps: settings.show_ray_steps as u32,
@@ -111,8 +117,8 @@ fn prepare_uniforms(
             &trace_pipeline_data.trace_bind_group_layout,
             &BindGroupEntries::sequential((
                 trace_uniform_buffer.binding().unwrap(),
-                view_uniforms.uniforms.binding().unwrap(),
-                global_buffer.buffer.binding().unwrap(),
+                view_uniforms_binding.clone(),
+                global_buffer_binding.clone(),
             )),
         );
 

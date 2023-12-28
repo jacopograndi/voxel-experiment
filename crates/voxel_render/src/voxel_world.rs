@@ -11,10 +11,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use voxel_storage::{
-    block::Block,
-    universe::Universe
-};
+use voxel_storage::{block::Block, universe::Universe};
 use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
 pub const VIEW_DISTANCE: u32 = 100;
@@ -148,7 +145,7 @@ pub fn extract_universe(mut main_world: ResMut<MainWorld>, mut render_universe: 
     if let Some(mut main_universe) = main_world.get_resource_mut::<Universe>() {
         *render_universe = main_universe.clone();
         for (_pos, chunk) in main_universe.chunks.iter_mut() {
-            (*chunk).dirty = false;
+            (*chunk).dirty_render = false;
         }
     }
 }
@@ -277,7 +274,7 @@ fn prepare_chunks(
                 if !render_chunk_map.buffer_alloc.is_allocated(pos) {
                     Some(*pos)
                 } else {
-                    if chunk.dirty {
+                    if chunk.dirty_render {
                         Some(*pos)
                     } else {
                         None
@@ -287,8 +284,8 @@ fn prepare_chunks(
                 None
             }
         })
-        .collect(); 
-    
+        .collect();
+
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.clone_blocks();
@@ -364,7 +361,6 @@ fn write_chunks(
             0,
             &linear_chunks_offsets,
         );
-        dbg!(render_chunk_map.to_be_written.len());
         render_chunk_map.to_be_written.clear();
     } else {
         // reset
