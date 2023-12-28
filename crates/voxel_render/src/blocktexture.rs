@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use voxel_storage::block::Block;
 use voxel_flag_bank::BlockFlag;
+use voxel_storage::block::Block;
 
 #[derive(Debug, Clone, Deref, DerefMut)]
 pub struct Palette([Color; 256]);
@@ -50,11 +50,8 @@ impl BlockTexture {
 
         println!("{:?}", vox.palette);
 
-        if vox.palette.len() > 255 {
-            panic!("The zeroeth color is used for transparency");
-        }
 
-        for i in 0..vox.palette.len() {
+        for i in 0..vox.palette.len().min(255) {
             let colour = vox.palette[i];
             let mut material = Vec4::new(
                 colour.r as f32 / 255.0,
@@ -84,7 +81,9 @@ impl BlockTexture {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].set_id(voxel.i + 1); // TODO: UNSAFE changing an id outside of BlockInfo
-            grid.voxels[index as usize].properties.set(BlockFlag::Collidable); // set the collision flag
+            grid.voxels[index as usize]
+                .properties
+                .set(BlockFlag::Collidable); // set the collision flag
         }
 
         Ok(grid)

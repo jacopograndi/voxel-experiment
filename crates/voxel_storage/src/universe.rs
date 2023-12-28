@@ -19,7 +19,7 @@ impl Universe {
     ) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<[Block; CHUNK_VOLUME]>)> {
         self.chunks
             .iter()
-            .map(|(pos, chunk)| (pos.clone(), chunk.get_w_ref()))
+            .map(|(pos, chunk)| (pos.clone(), chunk.get_mut()))
     }
 
     pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {

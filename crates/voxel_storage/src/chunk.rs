@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use std::sync::{Arc, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
     block::{Block, LightType},
@@ -14,7 +14,11 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn get_w_ref(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
+    pub fn get_ref(&self) -> RwLockReadGuard<[Block; CHUNK_VOLUME]> {
+        self._blocks.read().unwrap()
+    }
+
+    pub fn get_mut(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
         self._blocks.write().unwrap()
     }
 
@@ -46,10 +50,6 @@ impl Chunk {
             }
         }
         chunk
-    }
-
-    pub fn clone_blocks(&self) -> [Block; CHUNK_VOLUME] {
-        self._blocks.read().unwrap().clone()
     }
 
     pub fn set_block(&self, xyz: IVec3, block: Block) {

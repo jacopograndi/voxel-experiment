@@ -1,9 +1,4 @@
-use std::{
-    collections::VecDeque,
-    f32::consts::PI,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
+use std::{collections::VecDeque, f32::consts::PI, time::Duration};
 
 use bevy::{
     core_pipeline::fxaa::Fxaa,
@@ -499,8 +494,8 @@ fn server_sync_universe(
 ) {
     let mut changed_chunks = HashSet::<IVec3>::new();
     for (pos, chunk) in universe.chunks.iter_mut() {
-        if chunk.to_replicate {
-            chunk.reset_to_replicate();
+        if chunk.dirty_replication {
+            chunk.dirty_replication = false;
             changed_chunks.insert(*pos);
         }
     }
@@ -523,9 +518,10 @@ fn server_sync_universe(
             if let Some(chunk) = universe.chunks.get(chunk_pos) {
                 if available_bytes > chunk_size {
                     available_bytes -= chunk_size;
-                    let grid = chunk.grid.0.read().unwrap();
-                    let data = grid.to_bytes().iter().cloned().collect();
-                    sync.chunks.push((*chunk_pos, data));
+                    let read = chunk.get_ref();
+                    let slice = bytemuck::cast_slice(read.as_ref());
+                    sync.chunks
+                        .push((*chunk_pos, slice.iter().cloned().collect()));
                     sent_chunks.insert(*chunk_pos);
                 }
             }
@@ -656,36 +652,18 @@ fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Un
         println!("{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
             if let Some(chunk) = universe.chunks.get_mut(pos) {
-                chunk.to_render = true;
-                let mut grid = chunk.grid.0.write().unwrap();
-                for i in 0..chunk_bytes.len() / 4 {
-                    let voxel = Voxel {
-                        id: chunk_bytes[i * 4],
-                        flags: chunk_bytes[i * 4 + 1],
-                        light0: chunk_bytes[i * 4 + 2],
-                        light1: chunk_bytes[i * 4 + 3],
-                    };
-                    grid.set_at(Grid::index_to_xyz(i), voxel);
-                }
+                chunk.dirty_render = true;
+                let mut write = chunk.get_mut();
+                let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
+                bytes.copy_from_slice(chunk_bytes.as_slice());
             } else {
-                let mut grid = Grid::empty();
-                for i in 0..chunk_bytes.len() / 4 {
-                    let voxel = Voxel {
-                        id: chunk_bytes[i * 4],
-                        flags: chunk_bytes[i * 4 + 1],
-                        light0: chunk_bytes[i * 4 + 2],
-                        light1: chunk_bytes[i * 4 + 3],
-                    };
-                    grid.set_at(Grid::index_to_xyz(i), voxel);
+                let chunk = Chunk::empty();
+                {
+                    let mut write = chunk.get_mut();
+                    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
+                    bytes.copy_from_slice(chunk_bytes.as_slice());
                 }
-                universe.chunks.insert(
-                    *pos,
-                    Chunk {
-                        grid: GridPtr(Arc::new(RwLock::new(grid))),
-                        to_render: true,
-                        to_replicate: false,
-                    },
-                );
+                universe.chunks.insert(*pos, chunk);
             }
         }
     }
@@ -1006,7 +984,8 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
     let mut highest = i32::MIN;
     for pos in chunks.iter() {
         let chunk = universe.chunks.get_mut(pos).unwrap();
-        chunk.dirty = true;
+        chunk.dirty_render = true;
+        chunk.dirty_replication = true;
         // let mut grid = chunk.get_w_ref();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
@@ -1118,7 +1097,8 @@ fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().dirty = true;
+                    universe.chunks.get_mut(&c).unwrap().dirty_render = true;
+                    universe.chunks.get_mut(&c).unwrap().dirty_replication = true;
                 }
             }
         } else {
@@ -1162,7 +1142,8 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
                     let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().dirty = true;
+                    universe.chunks.get_mut(&c).unwrap().dirty_render = true;
+                    universe.chunks.get_mut(&c).unwrap().dirty_replication = true;
                 }
             }
         } else {
@@ -1223,15 +1204,8 @@ fn load_and_gen_chunks(
         let chunks = get_chunks_in_sphere(*player_pos);
         for chunk_pos in chunks.iter() {
             if let None = universe.chunks.get(chunk_pos) {
-                let grid_ptr = gen_chunk(*chunk_pos);
-                universe.chunks.insert(
-                    *chunk_pos,
-                    Chunk {
-                        grid: grid_ptr,
-                        to_render: true,
-                        to_replicate: true,
-                    },
-                );
+                let chunk = gen_chunk(*chunk_pos);
+                universe.chunks.insert(*chunk_pos, chunk);
                 added.insert(*chunk_pos);
             }
         }
