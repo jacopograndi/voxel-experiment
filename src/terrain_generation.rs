@@ -14,7 +14,7 @@ fn gen_chunk(pos: IVec3) -> Chunk {
     }
 }
 
-fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
+pub fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
     let load_view_distance: u32 = VIEW_DISTANCE;
 
     let camera_chunk_pos = (pos / CHUNK_SIDE as f32).as_ivec3() * CHUNK_SIDE as i32;

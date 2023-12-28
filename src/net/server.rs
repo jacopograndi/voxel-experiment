@@ -20,9 +20,8 @@ use renet::{
 };
 
 use crate::{
-    get_chunks_in_sphere,
     input::PlayerInput,
-    net::{LocalPlayer, NetPlayer, ServerChannel, ServerMessages},
+    net::{LocalPlayer, NetPlayer, ServerChannel, ServerMessages}, terrain_generation::get_chunks_in_sphere,
 };
 
 use super::{
