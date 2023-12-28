@@ -119,10 +119,10 @@ mod test {
         };
         chunk_map.set_chunk_block(
             &IVec3::ZERO,
-            Block::new(BlockId::STONE),
+            Block::new(BlockId::Stone),
         );
         assert_eq!(
-            Some(Block::new(BlockId::STONE)),
+            Some(Block::new(BlockId::Stone)),
             chunk_map.read_chunk_block(&IVec3::ZERO)
         );
         chunk_map
@@ -140,7 +140,7 @@ mod test {
     //     };
     //     chunk_map.set_chunk(
     //         &IVec3::ZERO,
-    //         BlockId::STONE,
+    //         BlockId::Stone,
     //     );
     //     chunk_map
     // }

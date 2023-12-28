@@ -3,7 +3,7 @@ use bevy::utils::HashMap;
 use universe::Universe;
 use lazy_static::lazy_static;
 
-use::voxel_flag_bank::BlockFlag;
+use voxel_info::{BlockInfo, get_block_info};
 
 pub mod block;
 pub mod chunk;
@@ -16,28 +16,22 @@ pub const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIDE;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BlockId {
-    AIR,
-    STONE,
-    GRASS,
-    LOG
+    Air,
+    Stone,
+    Path,
+    Dirt,
+    Cobblestone,
+    Wood
 }
 
 impl Default for BlockId {
-    fn default() -> Self { BlockId::AIR }
+    fn default() -> Self { BlockId::Air }
 }
 
-// HashMap containing a description for all default flags by block ID --> Is there a cleaner initialization method than this??
 lazy_static! {
-    static ref BLOCK_FLAGS: HashMap<BlockId, Vec<BlockFlag>> = {
-        let mut map = HashMap::new();
-        map.insert(BlockId::AIR, vec![]);
-        map.insert(BlockId::STONE, vec![BlockFlag::SOLID, BlockFlag::OPAQUE]);
-        map.insert(BlockId::GRASS, vec![]);
-        map.insert(BlockId::LOG, vec![BlockFlag::SOLID, BlockFlag::OPAQUE]);
-        map
-    };
+    #[derive(Debug)]
+    static ref BLOCK_INFO: HashMap<u8, BlockInfo> = get_block_info();
 }
-
 
 pub struct VoxelStoragePlugin;
 

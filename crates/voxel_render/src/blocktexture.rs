@@ -84,7 +84,7 @@ impl BlockTexture {
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
             grid.voxels[index as usize].id = voxel.i + 1;
-            grid.voxels[index as usize].properties.set(BlockFlag::SOLID); // set the collision flag
+            grid.voxels[index as usize].properties.set(BlockFlag::Collidable); // set the collision flag
         }
 
         Ok(grid)
