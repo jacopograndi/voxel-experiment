@@ -62,17 +62,7 @@ fn app_client(app: &mut App) {
     )
     .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
     .add_systems(Startup, setup)
-    .add_systems(
-        Update,
-        (
-            ui,
-            load_and_gen_chunks,
-            diagnostic_system,
-            spin,
-            voxel_break,
-            cursor_grab,
-        ),
-    );
+    .add_systems(Update, (ui, diagnostic_system, spin, cursor_grab));
 }
 
 fn main() {
@@ -107,6 +97,7 @@ fn main() {
             let (server, transport) = new_renet_server();
             app.insert_resource(server);
             app.insert_resource(transport);
+            app.init_resource::<ChunkReplication>();
             app.add_systems(
                 FixedUpdate,
                 (
@@ -121,7 +112,6 @@ fn main() {
             app.add_systems(Update, load_and_gen_chunks);
         }
         NetworkMode::Server => {
-            // todo: local player not supported yet
             app.add_plugins((
                 RenetServerPlugin,
                 RenetClientPlugin,
@@ -131,6 +121,7 @@ fn main() {
             let (server, transport) = new_renet_server();
             app.insert_resource(server);
             app.insert_resource(transport);
+            app.init_resource::<ChunkReplication>();
             app.add_systems(
                 FixedUpdate,
                 (
@@ -138,9 +129,11 @@ fn main() {
                     server_sync_players,
                     server_sync_universe,
                     move_players_system,
+                    voxel_break,
                 )
                     .run_if(resource_exists::<RenetServer>()),
             );
+            app.add_systems(Update, load_and_gen_chunks);
 
             app_client(&mut app);
 
@@ -239,6 +232,11 @@ pub struct LocalPlayer;
 #[derive(Debug, Default, Resource)]
 pub struct Lobby {
     players: HashMap<ClientId, Entity>,
+}
+
+#[derive(Debug, Default, Resource)]
+pub struct ChunkReplication {
+    requested_chunks: HashMap<ClientId, HashSet<IVec3>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Component)]
@@ -342,18 +340,30 @@ fn server_update_system(
     mut commands: Commands,
     mut lobby: ResMut<Lobby>,
     mut server: ResMut<RenetServer>,
+    network_mode: Res<NetworkMode>,
+    transport: Option<Res<NetcodeClientTransport>>,
+    mut chunk_replication: ResMut<ChunkReplication>,
 ) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
                 println!("Player {} connected.", client_id);
+                let is_local_player = if let Some(local_id) = transport
+                    .as_ref()
+                    .map(|t| ClientId::from_raw(t.client_id()))
+                {
+                    local_id == *client_id
+                } else {
+                    true
+                };
+                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 // player character
                 let player_entity = commands
                     .spawn((
-                        SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0)),
+                        SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
                         Character {
                             id: CharacterId(0),
-                            size: Vec3::new(0.5, 2.0, 0.5),
+                            size: Vec3::new(0.5, 1.99, 0.5),
                             air_speed: 0.001,
                             ground_speed: 0.03,
                             jump_strenght: 0.17,
@@ -372,16 +382,28 @@ fn server_update_system(
                         PlayerInput::default(),
                     ))
                     .with_children(|parent| {
-                        parent.spawn((
-                            Fxaa::default(),
-                            CameraController::default(),
-                            SpatialBundle {
+                        let mut camera_pivot =
+                            parent.spawn((Fxaa::default(), CameraController::default()));
+                        if is_local_player && matches!(*network_mode, NetworkMode::Server) {
+                            camera_pivot.insert(VoxelCameraBundle {
+                                transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                                projection: Projection::Perspective(PerspectiveProjection {
+                                    fov: 1.57,
+                                    ..default()
+                                }),
+                                ..default()
+                            });
+                        } else {
+                            camera_pivot.insert(SpatialBundle {
                                 transform: Transform::from_xyz(0.0, 0.5, 0.0),
                                 ..default()
-                            },
-                        ));
+                            });
+                        }
                     })
                     .id();
+                if is_local_player && matches!(*network_mode, NetworkMode::Server) {
+                    commands.entity(player_entity).insert(LocalPlayer);
+                }
 
                 // We could send an InitState with all the players id and positions for the client
                 // but this is easier to do.
@@ -390,6 +412,12 @@ fn server_update_system(
                         bincode::serialize(&ServerMessages::PlayerConnected { id: player_id })
                             .unwrap();
                     server.send_message(*client_id, ServerChannel::ServerMessages, message);
+                }
+
+                if !(is_local_player && matches!(*network_mode, NetworkMode::Server)) {
+                    chunk_replication
+                        .requested_chunks
+                        .insert(*client_id, get_chunks_in_sphere(spawn_point));
                 }
 
                 lobby.players.insert(*client_id, player_entity);
@@ -402,8 +430,10 @@ fn server_update_system(
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 println!("Player {} disconnected: {}", client_id, reason);
                 if let Some(player_entity) = lobby.players.remove(client_id) {
-                    commands.entity(player_entity).despawn();
+                    commands.entity(player_entity).despawn_recursive();
                 }
+
+                chunk_replication.requested_chunks.remove(client_id);
 
                 let message =
                     bincode::serialize(&ServerMessages::PlayerDisconnected { id: *client_id })
@@ -459,29 +489,51 @@ struct SyncUniverse {
     heightfield: Vec<(IVec2, i32)>,
 }
 
-fn server_sync_universe(mut server: ResMut<RenetServer>, mut universe: ResMut<Universe>) {
-    let mut sync = SyncUniverse::default();
-    let mut channel_size = (100 * CHUNK_VOLUME * 4) as i32;
-    let chunk_size = (CHUNK_VOLUME * 4 + 12) as i32;
-
-    let mut dirty = false;
-    // todo: use can-send-message or it panics
-
+fn server_sync_universe(
+    mut server: ResMut<RenetServer>,
+    mut universe: ResMut<Universe>,
+    mut chunk_replication: ResMut<ChunkReplication>,
+) {
+    let mut changed_chunks = HashSet::<IVec3>::new();
     for (pos, chunk) in universe.chunks.iter_mut() {
-        if chunk.updated && channel_size > chunk_size {
-            chunk.reset_dirty();
-            let grid = chunk.grid.0.read().unwrap();
-            let data = grid.to_bytes().iter().cloned().collect();
-            sync.chunks.push((*pos, data));
-            dirty = true;
+        if chunk.to_replicate {
+            chunk.reset_to_replicate();
+            changed_chunks.insert(*pos);
         }
-        channel_size -= chunk_size;
     }
 
-    if dirty {
-        let sync_message = bincode::serialize(&sync).unwrap();
-        println!("sending dirty universe: {}", sync_message.len());
-        server.broadcast_message(ServerChannel::NetworkedUniverse, sync_message);
+    for (_, chunks) in chunk_replication.requested_chunks.iter_mut() {
+        chunks.extend(changed_chunks.clone());
+    }
+
+    for (client_id, chunks) in chunk_replication.requested_chunks.iter_mut() {
+        let channel_size =
+            server.channel_available_memory(*client_id, ServerChannel::NetworkedUniverse) as i32;
+        let mut available_bytes = channel_size;
+
+        let mut sync = SyncUniverse::default();
+        let chunk_size = (CHUNK_VOLUME * 4 + 12) as i32;
+
+        let mut sent_chunks = HashSet::<IVec3>::new();
+
+        for chunk_pos in chunks.iter() {
+            if let Some(chunk) = universe.chunks.get(chunk_pos) {
+                if available_bytes > chunk_size {
+                    available_bytes -= chunk_size;
+                    let grid = chunk.grid.0.read().unwrap();
+                    let data = grid.to_bytes().iter().cloned().collect();
+                    sync.chunks.push((*chunk_pos, data));
+                    sent_chunks.insert(*chunk_pos);
+                }
+            }
+        }
+
+        if !sent_chunks.is_empty() {
+            let sync_message = bincode::serialize(&sync).unwrap();
+            println!("sending dirty universe: {}", sync_message.len());
+            server.send_message(*client_id, ServerChannel::NetworkedUniverse, sync_message);
+            *chunks = chunks.difference(&sent_chunks).cloned().collect();
+        }
     }
 }
 
@@ -492,72 +544,76 @@ fn client_sync_players(
     transport: Res<NetcodeClientTransport>,
     query: Query<(Entity, &Player, &Children)>,
     mut query_transform: Query<&mut Transform>,
+    network_mode: Res<NetworkMode>,
 ) {
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();
         match server_message {
             ServerMessages::PlayerConnected { id } => {
                 println!("Player {} connected. This client is ", id,);
+                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 let is_local_player = id == ClientId::from_raw(transport.client_id());
-                let player_entity = commands
-                    .spawn((
-                        SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0)),
-                        Character {
-                            id: CharacterId(0),
-                            size: Vec3::new(0.5, 2.0, 0.5),
-                            air_speed: 0.001,
-                            ground_speed: 0.03,
-                            jump_strenght: 0.17,
-                        },
-                        CharacterController {
-                            acceleration: Vec3::splat(0.0),
-                            jumping: false,
-                            ..default()
-                        },
-                        Velocity::default(),
-                        Friction {
-                            air: Vec3::splat(0.99),
-                            ground: Vec3::splat(0.78),
-                        },
-                        Player { id },
-                    ))
-                    .with_children(|parent| {
-                        let mut camera_pivot =
-                            parent.spawn((Fxaa::default(), CameraController::default()));
-                        if is_local_player {
-                            camera_pivot.insert(VoxelCameraBundle {
-                                transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                projection: Projection::Perspective(PerspectiveProjection {
-                                    fov: 1.57,
+                if !(is_local_player && matches!(*network_mode, NetworkMode::Server)) {
+                    let player_entity = commands
+                        .spawn((
+                            SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
+                            Character {
+                                id: CharacterId(0),
+                                size: Vec3::new(0.5, 1.99, 0.5),
+                                air_speed: 0.001,
+                                ground_speed: 0.03,
+                                jump_strenght: 0.17,
+                            },
+                            CharacterController {
+                                acceleration: Vec3::splat(0.0),
+                                jumping: false,
+                                ..default()
+                            },
+                            Velocity::default(),
+                            Friction {
+                                air: Vec3::splat(0.99),
+                                ground: Vec3::splat(0.78),
+                            },
+                            Player { id },
+                        ))
+                        .with_children(|parent| {
+                            let mut camera_pivot =
+                                parent.spawn((Fxaa::default(), CameraController::default()));
+                            if is_local_player {
+                                camera_pivot.insert(VoxelCameraBundle {
+                                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                                    projection: Projection::Perspective(PerspectiveProjection {
+                                        fov: 1.57,
+                                        ..default()
+                                    }),
+                                    ..default()
+                                });
+                            } else {
+                                camera_pivot.insert(SpatialBundle {
+                                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                                    ..default()
+                                });
+                            }
+                        })
+                        .id();
+                    if !is_local_player {
+                        commands.entity(player_entity).with_children(|parent| {
+                            parent.spawn((
+                                SpatialBundle::from_transform(Transform {
+                                    scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
                                     ..default()
                                 }),
-                                ..default()
-                            });
-                        } else {
-                            camera_pivot.insert(SpatialBundle {
-                                transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                ..default()
-                            });
-                        }
-                    })
-                    .id();
-                if !is_local_player {
-                    commands.entity(player_entity).with_children(|parent| {
-                        parent.spawn((
-                            SpatialBundle::from_transform(Transform {
-                                scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
-                                ..default()
-                            }),
-                            Ghost {
-                                vox_texture_index: VoxTextureIndex(5),
-                            },
-                        ));
-                    });
-                } else {
-                    commands.entity(player_entity).insert(LocalPlayer);
-                }
+                                Ghost {
+                                    vox_texture_index: VoxTextureIndex(5),
+                                },
+                            ));
+                        });
+                    } else {
+                        commands.entity(player_entity).insert(LocalPlayer);
+                    }
 
-                lobby.players.insert(id, player_entity);
+                    lobby.players.insert(id, player_entity);
+                }
             }
             ServerMessages::PlayerDisconnected { id } => {
                 println!("Player {} disconnected.", id);
@@ -582,7 +638,7 @@ fn client_sync_players(
                         let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
                         tr_camera.rotation =
                             Quat::from_axis_angle(Vec3::X, playerstate.rotation_camera);
-                    } else {
+                    } else if matches!(*network_mode, NetworkMode::Client) {
                         tr.translation = playerstate.position;
                     }
                 }
@@ -594,9 +650,10 @@ fn client_sync_players(
 fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
     while let Some(message) = client.receive_message(ServerChannel::NetworkedUniverse) {
         let server_message: SyncUniverse = bincode::deserialize(&message).unwrap();
+        println!("{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
             if let Some(chunk) = universe.chunks.get_mut(pos) {
-                chunk.set_dirty();
+                chunk.to_render = true;
                 let mut grid = chunk.grid.0.write().unwrap();
                 for i in 0..chunk_bytes.len() / 4 {
                     let voxel = Voxel {
@@ -622,7 +679,8 @@ fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Un
                     *pos,
                     Chunk {
                         grid: GridPtr(Arc::new(RwLock::new(grid))),
-                        updated: true,
+                        to_render: true,
+                        to_replicate: false,
                     },
                 );
             }
@@ -636,6 +694,8 @@ fn player_input(
     query_transform: Query<&Transform>,
     query_camera: Query<(Entity, &Camera, &Parent)>,
     mouse: Res<Input<MouseButton>>,
+    mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
+    network_mode: Res<NetworkMode>,
 ) {
     if let Ok((entity, _, parent)) = query_camera.get_single() {
         let tr_camera = query_transform.get(entity).unwrap();
@@ -673,6 +733,12 @@ fn player_input(
     } else {
         player_input.mining = false;
     }
+    if matches!(*network_mode, NetworkMode::Server) {
+        if let Ok(mut controller) = query_player.get_single_mut() {
+            controller.acceleration = player_input.acceleration;
+            controller.jumping = player_input.jumping;
+        }
+    }
 }
 
 fn client_send_input(player_input: Res<PlayerInput>, mut client: ResMut<RenetClient>) {
@@ -700,9 +766,9 @@ fn move_players_system(
         if let Ok((_, mut controller, input, mut tr, localplayer)) =
             query_player.get_mut(parent.get())
         {
-            controller.acceleration = input.acceleration;
-            controller.jumping = input.jumping;
             if localplayer.is_none() {
+                controller.acceleration = input.acceleration;
+                controller.jumping = input.jumping;
                 tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
                 tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
             }
@@ -1123,14 +1189,35 @@ fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) 
     }
 }
 
+fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
+    let load_view_distance: u32 = VIEW_DISTANCE;
+
+    let camera_chunk_pos = (pos / CHUNK_SIDE as f32).as_ivec3() * CHUNK_SIDE as i32;
+    let load_view_distance_chunk = load_view_distance as i32 / CHUNK_SIDE as i32;
+    let lvdc = load_view_distance_chunk;
+
+    // sphere centered on pos
+    let mut chunks = HashSet::<IVec3>::new();
+    for x in -lvdc..=lvdc {
+        for y in -lvdc..=lvdc {
+            for z in -lvdc..=lvdc {
+                let rel = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
+                if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
+                    let pos = camera_chunk_pos + rel;
+                    chunks.insert(pos);
+                }
+            }
+        }
+    }
+    chunks
+}
+
 fn load_and_gen_chunks(
     mut universe: ResMut<Universe>,
     player_query: Query<(&Player, &Transform)>,
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
 ) {
-    let load_view_distance: u32 = VIEW_DISTANCE;
-
     let client_id = if let Some(transport) = transport {
         Some(ClientId::from_raw(transport.client_id()))
     } else {
@@ -1148,42 +1235,27 @@ fn load_and_gen_chunks(
             .collect::<Vec<Vec3>>(),
     };
 
-    let mut added = vec![];
+    let mut added = HashSet::<IVec3>::new();
     for player_pos in players_pos.iter() {
-        let camera_chunk_pos = (*player_pos / CHUNK_SIDE as f32).as_ivec3() * CHUNK_SIDE as i32;
-
-        // hardcoded chunk size
-        let load_view_distance_chunk = load_view_distance as i32 / CHUNK_SIDE as i32;
-        let lvdc = load_view_distance_chunk;
-
-        // sphere centered on the player
-        for x in -lvdc..=lvdc {
-            for y in -lvdc..=lvdc {
-                for z in -lvdc..=lvdc {
-                    let rel = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
-                    if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
-                        let pos = camera_chunk_pos + rel;
-                        if let None = universe.chunks.get(&pos) {
-                            // gen chunk
-                            //println!("gen {:?}", pos);
-                            let grid_ptr = gen_chunk(pos);
-                            universe.chunks.insert(
-                                pos,
-                                Chunk {
-                                    grid: grid_ptr,
-                                    updated: true,
-                                },
-                            );
-                            added.push(pos);
-                        }
-                    }
-                }
+        let chunks = get_chunks_in_sphere(*player_pos);
+        for chunk_pos in chunks.iter() {
+            if let None = universe.chunks.get(chunk_pos) {
+                let grid_ptr = gen_chunk(*chunk_pos);
+                universe.chunks.insert(
+                    *chunk_pos,
+                    Chunk {
+                        grid: grid_ptr,
+                        to_render: true,
+                        to_replicate: true,
+                    },
+                );
+                added.insert(*chunk_pos);
             }
         }
     }
 
     if !added.is_empty() {
-        recalc_lights(&mut universe, added);
+        recalc_lights(&mut universe, added.into_iter().collect());
     }
 }
 

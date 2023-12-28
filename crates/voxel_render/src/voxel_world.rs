@@ -145,7 +145,7 @@ pub fn extract_universe(mut main_world: ResMut<MainWorld>, mut render_universe: 
     if let Some(mut main_universe) = main_world.get_resource_mut::<Universe>() {
         *render_universe = main_universe.clone();
         for (_pos, chunk) in main_universe.chunks.iter_mut() {
-            (*chunk).reset_dirty();
+            chunk.reset_to_render();
         }
     }
 }
@@ -274,7 +274,7 @@ fn prepare_chunks(
                 if !render_chunk_map.buffer_alloc.is_allocated(pos) {
                     Some(*pos)
                 } else {
-                    if chunk.updated {
+                    if chunk.to_render {
                         Some(*pos)
                     } else {
                         None

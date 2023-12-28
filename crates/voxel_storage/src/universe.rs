@@ -12,15 +12,20 @@ pub struct GridPtr(pub Arc<RwLock<Grid>>);
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub grid: GridPtr,
-    pub updated: bool,
+    pub to_render: bool,
+    pub to_replicate: bool,
 }
 
 impl Chunk {
     pub fn set_dirty(&mut self) {
-        self.updated = true;
+        self.to_render = true;
+        self.to_replicate = true;
     }
-    pub fn reset_dirty(&mut self) {
-        self.updated = false;
+    pub fn reset_to_render(&mut self) {
+        self.to_render = false;
+    }
+    pub fn reset_to_replicate(&mut self) {
+        self.to_replicate = false;
     }
 }
 
