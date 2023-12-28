@@ -26,7 +26,7 @@ impl Block {
             _id: 0,
             light0: 0,
             light1: 0,
-            properties: FlagBank::empty(),
+            properties: FlagBank::default(),
         };
         new_block._id = blockinfo.id;
         let flags: &Vec<BlockFlag> = &blockinfo.flags; 

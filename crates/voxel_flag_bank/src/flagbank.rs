@@ -3,18 +3,12 @@ use bytemuck::{Pod, Zeroable};
 use crate::IsFlagBank;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable, Default, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 pub struct FlagBank {
     _flags: u8
 }
 
 impl FlagBank {
-
-    pub fn empty() -> Self {
-        Self {
-            _flags: 0
-        }
-    }
 
     pub fn set<T>(&mut self, flag: T) where T: IsFlagBank {
         self._flags |= 0b1 << flag.to_u8();
