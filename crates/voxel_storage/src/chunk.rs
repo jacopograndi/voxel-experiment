@@ -12,7 +12,6 @@ use voxel_flag_bank::flagbank::FlagBank;
 #[derive(Debug, Clone)]
 pub struct Chunk {
     _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
-    // pub version: u32,
     pub properties: FlagBank,
 }
 
@@ -25,7 +24,6 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
-            // version: 0,
             properties: FlagBank::empty()
         }
     }
@@ -34,7 +32,6 @@ impl Chunk {
         let block = Block::new(BlockType::Stone);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
-            // version: 0,
             properties: FlagBank::empty()
         }
     }
