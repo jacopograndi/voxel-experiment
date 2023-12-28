@@ -83,13 +83,51 @@ The game features will be implemented as standalone systems.
 ### Tentative Development Roadmap
 [INSPIRATION](https://minecraft-timeline.github.io/) 
 
-- 0.1.0 -> enhanced MC Pre-Classic feature match: basic physics, lighting, multiplayer, generation, ghosts, placing/removing blocks (dirt, grass, stone, cobblestone, wood), sapling to tree, respawn, save
-- 0.2.0 -> Full CREATIVE Mode (flight, inventory...)
-- 0.3.0 -> MC Classic 1.0 feature match SURVIVAL: mobs (CREEPERS, zombies, spiders) and survival, commands, health, water, lava, sand, gravel, glass, obsidian, TNT
-- 0.4.0 -> Crafting, tools, ores (coal, iron, gold, diamond), delay in breaking blocks, particles...
-- 0.5.0 -> Farming (wheat, melons, pumpkins) and Animals(sheep, pig, chicken), Armor, Dungeons
-- 0.6.0 -> MC Alpha feature matched: Nether, caves, Biomes
-- 0.7.0 -> Redstone!
-- 0.8.0 -> Pistons, Maps, Compass, Clock, Trapdoors, Rails, boat, fishing
-- 0.9.0 -> Feature match with MCbeta1.7.3 -> Weather, server, structures, BEDS
-- 1.0.0+ -> Modding support and/or carefully chosen optimizations and enhancements (raytracing lighting? Non-competitive enchanting? Big Trees? HUGE trees? More Structures, even in Ocean? Anvils? Horses? Elytra? VILLAGES!)
+- 0.1.0 -> MC Pre-Classic feature match with enhancements:
+    - Basic Blocks&Textures: Air, Stone, Grass, Dirt, Cobblestone, Wood 
+        - Removing with Left Click -> No Animations!
+        - Placing with Right Click 
+    - Basic physics/player movement + lighting
+    - Basic multiplayer
+    - Basic generation (flatland and at most hills)
+    - Basic ghosts (granular block placement/rotation)
+    - Respawn at origin
+    - Save Universe
+- 0.2.0 -> Full CREATIVE Mode
+    - New Blocks: Bedrock, Sand, Gravel  
+    - Add Water and Lava+Obsidian
+    - Generation of lakes
+    - Basic flight mechanics
+    - Inventory with all blocks + Dock
+- 0.3.0 -> MC Classic 1.0 feature match SURVIVAL
+    - Mobs (CREEPERS, zombies, spiders, skeletons)
+    - Basic commands
+    - Health Bar
+    - Basic Crafting (Saplings>Log>Planks, Sand>Glass)
+    - Chests
+- 0.4.0 -> MINING!
+    - Ores (coal, iron, gold, diamond)
+    - Smelting
+    - Tools (sword, pickaxe, axe, hoe, bow)
+    - Armor
+    - Delay in breaking blocks, animations/particles...
+- 0.5.0 -> FARMING!
+    - Wheat, melons, pumpkins
+    - Sheep, pig, chicken
+- 0.6.0 -> REDSTONE!
+    - Ore, dust, repeater, torch, switches, pistons
+- 0.7.0 -> MC Alpha feature matched
+    - Nether/portals + Netherrack/Glowstone...
+    - Caves/Dungeons
+    - Basic Biomes (Woods, Plains, Beach, Ocean, Mountains)
+- 0.8.0 -> EXPLORATION!
+    - Maps, Compass, Clock,
+    - Doors, Trapdoors
+    - Minecart, Rails
+    - Boat, fishing
+    - BEDS for resetting respawn!
+- 0.9.0 -> Feature match with MCbeta1.7.3
+    - Weather and Day/Nighy
+    - Villages and NPCs
+    - NO HUNGER
+- 1.0.0+ -> Modding support and/or carefully chosen optimizations and enhancements (raytracing lighting? Non-competitive enchanting? Non-Competitive End? Big Trees? HUGE trees? More Structures, even in Ocean? Anvils? Horses? Elytra? Compilation of client-only for WebAssembly)
