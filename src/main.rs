@@ -29,7 +29,7 @@ use voxel_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
     universe::Universe,
-    VoxelStoragePlugin, CHUNK_SIDE, CHUNK_VOLUME, BlockId,
+    VoxelStoragePlugin, CHUNK_SIDE, CHUNK_VOLUME, BlockType,
 };
 
 use voxel_flag_bank::{BlockFlag, ChunkFlag};
@@ -123,7 +123,7 @@ fn voxel_break(
 
                         if let Some(voxel) = universe.read_chunk_block(&pos) {
                             // todo: use BlockInfo.is_light_source
-                            if voxel.id == 3 {
+                            if voxel.is(BlockType::Dirt) {
                                 let new = propagate_darkness(&mut universe, pos, LightType::Torch);
                                 propagate_light(&mut universe, new, LightType::Torch)
                             }
@@ -131,7 +131,7 @@ fn voxel_break(
 
                         universe.set_chunk_block(
                             &pos,
-                            Block::new(BlockId::Air),
+                            Block::new(BlockType::Air),
                         );
 
                         let planar = IVec2::new(pos.x, pos.z);
@@ -187,7 +187,7 @@ fn voxel_break(
                             // todo: use BlockInfo
                             universe.set_chunk_block(
                                 &pos,
-                                Block::new(BlockId::Wood),
+                                Block::new(BlockType::Wood),
                             );
                             universe.read_chunk_block(&pos).unwrap().set_light(LightType::Torch, 14);
                             propagate_light(&mut universe, vec![pos], LightType::Torch)
@@ -196,7 +196,7 @@ fn voxel_break(
 
                             universe.set_chunk_block(
                                 &pos,
-                                Block::new(BlockId::Wood),
+                                Block::new(BlockType::Wood),
                             );
 
                             propagate_light(&mut universe, new, LightType::Torch);
@@ -300,7 +300,7 @@ fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
         for i in 0..CHUNK_VOLUME {
             let xyz = Chunk::_idx2xyz(i);
             // todo: fetch from BlockInfo when implemented
-            if chunk.read_block(xyz).id == 3 {
+            if chunk.read_block(xyz).is(BlockType::Dirt) {
                 torches.push(*pos + xyz);
                 chunk.set_block_light(xyz, LightType::Torch, 15);
             }

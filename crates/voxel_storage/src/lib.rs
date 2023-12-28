@@ -15,7 +15,7 @@ pub const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIDE;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum BlockId {
+pub enum BlockType {
     Air,
     Stone,
     Path,
@@ -24,8 +24,8 @@ pub enum BlockId {
     Wood
 }
 
-impl Default for BlockId {
-    fn default() -> Self { BlockId::Air }
+impl Default for BlockType {
+    fn default() -> Self { BlockType::Air }
 }
 
 lazy_static! {

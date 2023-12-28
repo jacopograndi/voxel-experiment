@@ -83,7 +83,7 @@ impl BlockTexture {
                 voxel.x as i32,
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
-            grid.voxels[index as usize].id = voxel.i + 1;
+            grid.voxels[index as usize].set_id(voxel.i + 1); // TODO: UNSAFE changing an id outside of BlockInfo
             grid.voxels[index as usize].properties.set(BlockFlag::Collidable); // set the collision flag
         }
 
