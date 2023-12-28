@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow},
 };
-use voxel_physics::character::{CameraController, Character, CharacterController};
+use mcrs_physics::character::{CameraController, Character, CharacterController};
 
 use crate::LocalPlayer;
 

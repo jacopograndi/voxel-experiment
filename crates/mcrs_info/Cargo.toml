@@ -1,0 +1,12 @@
+[package]
+name = "mcrs_info"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.12.0"
+ron = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+mcrs_flag_bank = { path = "../mcrs_flag_bank" }
+

@@ -1,9 +1,9 @@
 use bevy::app::{App, Plugin};
 use bevy::utils::HashMap;
-use universe::Universe;
 use lazy_static::lazy_static;
+use universe::Universe;
 
-use voxel_info::{BlockInfo, get_block_info};
+use mcrs_info::{get_block_info, BlockInfo};
 
 pub mod block;
 pub mod chunk;
@@ -21,11 +21,13 @@ pub enum BlockType {
     Path,
     Dirt,
     Cobblestone,
-    Wood
+    Wood,
 }
 
 impl Default for BlockType {
-    fn default() -> Self { BlockType::Air }
+    fn default() -> Self {
+        BlockType::Air
+    }
 }
 
 lazy_static! {

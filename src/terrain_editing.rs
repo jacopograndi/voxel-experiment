@@ -1,8 +1,8 @@
 use bevy::prelude::*;
-use voxel_automata::lighting::*;
-use voxel_flag_bank::BlockFlag;
-use voxel_physics::{character::CameraController, raycast};
-use voxel_storage::{
+use mcrs_automata::lighting::*;
+use mcrs_flag_bank::BlockFlag;
+use mcrs_physics::{character::CameraController, raycast};
+use mcrs_storage::{
     block::{Block, LightType},
     universe::Universe,
     BlockType,

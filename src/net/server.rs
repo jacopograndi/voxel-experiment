@@ -9,15 +9,15 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     DefaultChannel, RenetServer, ServerEvent,
 };
+use mcrs_physics::character::{
+    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
+};
+use mcrs_render::VoxelCameraBundle;
+use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},
     ClientId,
 };
-use voxel_physics::character::{
-    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
-};
-use voxel_render::VoxelCameraBundle;
-use voxel_storage::{universe::Universe, CHUNK_VOLUME};
 
 use crate::{
     get_chunks_in_sphere,
@@ -97,7 +97,8 @@ pub fn server_update_system(
                     .with_children(|parent| {
                         let mut camera_pivot =
                             parent.spawn((Fxaa::default(), CameraController::default()));
-                        if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer) {
+                        if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)
+                        {
                             camera_pivot.insert(VoxelCameraBundle {
                                 transform: Transform::from_xyz(0.0, 0.5, 0.0),
                                 projection: Projection::Perspective(PerspectiveProjection {

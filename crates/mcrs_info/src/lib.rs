@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use std::fs::read_to_string;
 use bevy::utils::HashMap;
 use ron::from_str;
+use serde::{Deserialize, Serialize};
+use std::fs::read_to_string;
 
-use voxel_flag_bank::BlockFlag;
+use mcrs_flag_bank::BlockFlag;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockInfo {
@@ -24,3 +24,4 @@ pub fn get_block_info() -> HashMap<u8, BlockInfo> {
     }
     blockinfo_map
 }
+

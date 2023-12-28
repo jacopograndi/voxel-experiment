@@ -2,18 +2,18 @@ use renet::DefaultChannel;
 use std::{net::UdpSocket, time::SystemTime};
 
 use bevy::{core_pipeline::fxaa::Fxaa, prelude::*, utils::HashMap};
+use mcrs_physics::character::{
+    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
+};
+use mcrs_render::{
+    boxes_world::{Ghost, VoxTextureIndex},
+    VoxelCameraBundle,
+};
+use mcrs_storage::{chunk::Chunk, universe::Universe};
 use renet::{
     transport::{ClientAuthentication, NetcodeClientTransport},
     ClientId, RenetClient,
 };
-use voxel_physics::character::{
-    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
-};
-use voxel_render::{
-    boxes_world::{Ghost, VoxTextureIndex},
-    VoxelCameraBundle,
-};
-use voxel_storage::{chunk::Chunk, universe::Universe};
 
 use crate::{
     input::PlayerInput,

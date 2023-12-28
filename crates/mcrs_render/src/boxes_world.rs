@@ -22,7 +22,7 @@ use bevy::{
 
 use crate::{
     blocktexture::BlockTexture,
-    voxel_world::{VoxelUniforms, VIEW_DISTANCE}
+    voxel_world::{VoxelUniforms, VIEW_DISTANCE},
 };
 
 const MAX_BOXES: usize = 10000;

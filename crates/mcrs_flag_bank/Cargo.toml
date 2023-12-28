@@ -1,8 +1,9 @@
 [package]
-name = "voxel_flag_bank"
+name = "mcrs_flag_bank"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bytemuck = "1.14.0"
 serde = { version = "1", features = ["derive"] }
+

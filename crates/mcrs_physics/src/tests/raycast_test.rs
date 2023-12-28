@@ -4,12 +4,7 @@ mod test {
 
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
-    use voxel_storage::{
-        BlockType,
-        block::Block,
-        chunk::Chunk,
-        universe::Universe
-    };
+    use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe, BlockType};
 
     #[test]
     fn empty_out_of_range() {
@@ -109,18 +104,10 @@ mod test {
 
     fn single_block_map() -> Universe {
         let mut chunk_map = Universe {
-            chunks: [(
-                IVec3::ZERO,
-                Chunk::empty(),
-            )]
-            .into_iter()
-            .collect(),
+            chunks: [(IVec3::ZERO, Chunk::empty())].into_iter().collect(),
             heightfield: HashMap::new(),
         };
-        chunk_map.set_chunk_block(
-            &IVec3::ZERO,
-            Block::new(BlockType::Stone),
-        );
+        chunk_map.set_chunk_block(&IVec3::ZERO, Block::new(BlockType::Stone));
         assert_eq!(
             Some(Block::new(BlockType::Stone)),
             chunk_map.read_chunk_block(&IVec3::ZERO)

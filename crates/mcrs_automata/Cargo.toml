@@ -1,5 +1,5 @@
 [package]
-name = "voxel_automata"
+name = "mcrs_automata"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.0"
 
-voxel_storage = { path = "../voxel_storage" }
-voxel_flag_bank = { path = "../voxel_flag_bank" }
+mcrs_storage = { path = "../mcrs_storage" }
+mcrs_flag_bank = { path = "../mcrs_flag_bank" }

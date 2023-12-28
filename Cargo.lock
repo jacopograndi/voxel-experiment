@@ -2505,6 +2505,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcrs_automata"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "mcrs_flag_bank",
+ "mcrs_storage",
+]
+
+[[package]]
+name = "mcrs_flag_bank"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "serde",
+]
+
+[[package]]
+name = "mcrs_info"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "mcrs_flag_bank",
+ "ron",
+ "serde",
+]
+
+[[package]]
+name = "mcrs_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "mcrs_flag_bank",
+ "mcrs_storage",
+]
+
+[[package]]
+name = "mcrs_render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bytemuck",
+ "dot_vox",
+ "mcrs_flag_bank",
+ "mcrs_storage",
+]
+
+[[package]]
+name = "mcrs_storage"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bytemuck",
+ "lazy_static",
+ "mcrs_flag_bank",
+ "mcrs_info",
+]
+
+[[package]]
 name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3790,77 +3848,15 @@ dependencies = [
  "bincode",
  "bytemuck",
  "egui_plot",
+ "mcrs_automata",
+ "mcrs_flag_bank",
+ "mcrs_physics",
+ "mcrs_render",
+ "mcrs_storage",
  "rand",
  "rand_chacha",
  "renet",
  "serde",
- "voxel_automata",
- "voxel_flag_bank",
- "voxel_physics",
- "voxel_render",
- "voxel_storage",
-]
-
-[[package]]
-name = "voxel_automata"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "voxel_flag_bank",
- "voxel_storage",
-]
-
-[[package]]
-name = "voxel_flag_bank"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "serde",
-]
-
-[[package]]
-name = "voxel_gen"
-version = "0.1.0"
-
-[[package]]
-name = "voxel_info"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "ron",
- "serde",
- "voxel_flag_bank",
-]
-
-[[package]]
-name = "voxel_physics"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "voxel_flag_bank",
- "voxel_storage",
-]
-
-[[package]]
-name = "voxel_render"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bytemuck",
- "dot_vox",
- "voxel_flag_bank",
- "voxel_storage",
-]
-
-[[package]]
-name = "voxel_storage"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bytemuck",
- "lazy_static",
- "voxel_flag_bank",
- "voxel_info",
 ]
 
 [[package]]

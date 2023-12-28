@@ -9,15 +9,15 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
-use renet::{transport::NetcodeClientTransport, ClientId, RenetServer};
-use voxel_automata::lighting::recalc_lights;
-use voxel_physics::plugin::VoxelPhysicsPlugin;
-use voxel_render::{
+use mcrs_automata::lighting::recalc_lights;
+use mcrs_physics::plugin::VoxelPhysicsPlugin;
+use mcrs_render::{
     boxes_world::{VoxTextureIndex, VoxTextureLoadQueue},
     voxel_world::VIEW_DISTANCE,
     VoxelRenderPlugin,
 };
-use voxel_storage::{chunk::Chunk, universe::Universe, VoxelStoragePlugin, CHUNK_SIDE};
+use mcrs_storage::{chunk::Chunk, universe::Universe, VoxelStoragePlugin, CHUNK_SIDE};
+use renet::{transport::NetcodeClientTransport, ClientId, RenetServer};
 
 mod camera;
 mod diagnostics;

@@ -14,11 +14,11 @@ pub struct DebugDiagnosticPlugin;
 impl Plugin for DebugDiagnosticPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_plugins(EguiPlugin)
-        .register_diagnostic(
-            Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
-        )
-        .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
-        .add_systems(Update, (debug_diagnostic_system, debug_diagnostic_ui));
+            .register_diagnostic(
+                Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
+            )
+            .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
+            .add_systems(Update, (debug_diagnostic_system, debug_diagnostic_ui));
     }
 }
 

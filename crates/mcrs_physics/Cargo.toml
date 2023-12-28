@@ -1,0 +1,10 @@
+[package]
+name = "mcrs_physics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.12.0"
+
+mcrs_storage = { path = "../mcrs_storage" }
+mcrs_flag_bank = { path = "../mcrs_flag_bank" }

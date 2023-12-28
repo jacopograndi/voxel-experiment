@@ -1,7 +1,7 @@
 use crate::{BlockType, BLOCK_INFO};
 use bytemuck::{Pod, Zeroable};
+use mcrs_flag_bank::{flagbank::FlagBank, BlockFlag};
 use std::fmt::Display;
-use voxel_flag_bank::{flagbank::FlagBank, BlockFlag};
 
 // Struct representing 1 cubic meter cube inside the game
 #[repr(C)]
@@ -78,4 +78,3 @@ impl Display for LightType {
         )
     }
 }
-

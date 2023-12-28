@@ -11,9 +11,9 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use voxel_storage::chunk::Chunk;
-use voxel_storage::universe::Universe;
-use voxel_storage::{CHUNK_SIDE, CHUNK_VOLUME};
+use mcrs_storage::chunk::Chunk;
+use mcrs_storage::universe::Universe;
+use mcrs_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
 pub const VIEW_DISTANCE: u32 = 100;
 

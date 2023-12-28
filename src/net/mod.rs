@@ -4,9 +4,9 @@ pub mod server;
 use std::{collections::HashMap, time::Duration};
 
 use bevy::{prelude::*, utils::HashSet};
+use mcrs_storage::CHUNK_VOLUME;
 use renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
 use serde::{Deserialize, Serialize};
-use voxel_storage::CHUNK_VOLUME;
 
 const PROTOCOL_ID: u64 = 7;
 

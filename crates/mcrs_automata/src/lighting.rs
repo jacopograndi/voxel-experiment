@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashSet};
-use voxel_flag_bank::BlockFlag;
-use voxel_storage::{
+use mcrs_flag_bank::BlockFlag;
+use mcrs_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
     universe::Universe,

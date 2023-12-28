@@ -1,6 +1,6 @@
 use bevy::prelude::*;
+use mcrs_physics::character::CharacterController;
 use serde::{Deserialize, Serialize};
-use voxel_physics::character::CharacterController;
 
 use crate::net::{LocalPlayer, NetworkMode};
 
