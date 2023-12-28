@@ -40,7 +40,7 @@ impl Block {
         self._id == id as u8
     }
 
-    pub fn set_id(&mut self, id: u8) {
+    pub fn set_id(&mut self, id: u8) { // TODO remove once Voxel is different from Block. This should never be done.
         self._id = id;
     }
 
