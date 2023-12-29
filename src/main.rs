@@ -1,3 +1,4 @@
+use clap::Parser;
 use bevy::{
     prelude::*,
     window::{PresentMode, WindowPlugin},
@@ -39,19 +40,12 @@ use terrain_generation::*;
 
 const SERVER_TICKS_PER_SECOND: u32 = 60;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args { netmode: Option<String> }
 
-    let network_mode = if args.len() > 1 {
-        match args[1].as_str() {
-            "client" => NetworkMode::Client,
-            "server" => NetworkMode::ClientAndServer,
-            "headless" => NetworkMode::Server,
-            _ => panic!("Invalid argument, must be \"client\", \"server\" or \"headless\"."),
-        }
-    } else {
-        NetworkMode::ClientAndServer
-    };
+fn main() {
+    let network_mode = NetworkMode::from(Args::parse().netmode.as_deref());
 
     let mut app = App::new();
     app.init_resource::<Lobby>();

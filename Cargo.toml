@@ -22,6 +22,7 @@ mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_flag_bank = { path = "crates/mcrs_flag_bank" }
 mcrs_automata = { path = "crates/mcrs_automata" }
+clap = { version = "4.4.12", features = ["derive"] }
 
 [workspace]
 members = ["crates/*"]
