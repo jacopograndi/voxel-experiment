@@ -23,6 +23,7 @@ mod input;
 mod net;
 mod terrain_editing;
 mod terrain_generation;
+mod ui;
 
 use camera::*;
 use diagnostics::*;
@@ -35,6 +36,7 @@ use net::{
     },
     *,
 };
+use ui::client_ui;
 use terrain_editing::*;
 use terrain_generation::*;
 
@@ -119,32 +121,6 @@ fn app_client(app: &mut App) {
             .run_if(client_connected()),
     );
     app.add_plugins(DebugDiagnosticPlugin);
-    app.add_systems(Startup, setup)
+    app.add_systems(Startup, client_ui)
         .add_systems(Update, cursor_grab);
-}
-
-fn setup(mut commands: Commands) {
-    // ui center cursor
-    commands
-        .spawn(NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            ..default()
-        })
-        .with_children(|parent| {
-            parent.spawn(NodeBundle {
-                style: Style {
-                    width: Val::Px(5.0),
-                    height: Val::Px(5.0),
-                    ..default()
-                },
-                background_color: Color::rgba(0.1, 0.1, 0.1, 0.3).into(),
-                ..default()
-            });
-        });
 }
