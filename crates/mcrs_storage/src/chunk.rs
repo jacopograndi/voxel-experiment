@@ -1,9 +1,10 @@
 use bevy::prelude::*;
+use mcrs_info::BlockInfo;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
     block::{Block, LightType},
-    BlockType, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
+    CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
 };
 
 #[derive(Debug, Clone)]
@@ -30,26 +31,13 @@ impl Chunk {
         }
     }
 
-    pub fn filled() -> Self {
-        let block = Block::new(BlockType::Stone);
+    pub fn filled(block_info: &BlockInfo) -> Self {
+        let block = Block::new(block_info);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
             dirty_render: false,
             dirty_replication: false,
         }
-    }
-
-    pub fn flatland() -> Self {
-        let chunk = Self::empty();
-        for i in 0..CHUNK_VOLUME {
-            let xyz = Self::_idx2xyz(i);
-            if xyz.y > (CHUNK_SIDE / 2) as i32 {
-                chunk.set_block(xyz, Block::new(BlockType::Air));
-            } else {
-                chunk.set_block(xyz, Block::new(BlockType::Stone));
-            }
-        }
-        chunk
     }
 
     pub fn set_block(&self, xyz: IVec3, block: Block) {

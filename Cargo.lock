@@ -2510,6 +2510,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "mcrs_flag_bank",
+ "mcrs_info",
  "mcrs_storage",
 ]
 
@@ -2526,6 +2527,7 @@ name = "mcrs_info"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bytemuck",
  "mcrs_flag_bank",
  "ron",
  "serde",
@@ -2548,6 +2550,7 @@ dependencies = [
  "bytemuck",
  "dot_vox",
  "mcrs_flag_bank",
+ "mcrs_info",
  "mcrs_storage",
 ]
 
@@ -2557,16 +2560,15 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
- "lazy_static",
  "mcrs_flag_bank",
  "mcrs_info",
 ]
 
 [[package]]
 name = "memchr"
-version = "2.6.4"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
 
 [[package]]
 name = "memoffset"
@@ -3850,6 +3852,7 @@ dependencies = [
  "egui_plot",
  "mcrs_automata",
  "mcrs_flag_bank",
+ "mcrs_info",
  "mcrs_physics",
  "mcrs_render",
  "mcrs_storage",

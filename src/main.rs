@@ -7,6 +7,7 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
+use mcrs_info::InfoPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
 use mcrs_render::{
     boxes_world::{VoxTextureIndex, VoxTextureLoadQueue},
@@ -58,7 +59,7 @@ fn main() {
     app.insert_resource(Time::<Fixed>::from_seconds(
         1. / (SERVER_TICKS_PER_SECOND as f64),
     ));
-    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin));
+    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, InfoPlugin));
 
     match network_mode {
         NetworkMode::Server => {
@@ -132,24 +133,7 @@ fn app_client(app: &mut App) {
         .add_systems(Update, cursor_grab);
 }
 
-fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
-    queue
-        .to_load
-        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(1)));
-    queue
-        .to_load
-        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(2)));
-    queue
-        .to_load
-        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(3)));
-    queue.to_load.push((
-        "assets/voxels/glowstone.vox".to_string(),
-        VoxTextureIndex(4),
-    ));
-    queue
-        .to_load
-        .push(("assets/voxels/char.vox".to_string(), VoxTextureIndex(5)));
-
+fn setup(mut commands: Commands) {
     // ui center cursor
     commands
         .spawn(NodeBundle {

@@ -9,5 +9,5 @@ bytemuck = "1.14.0"
 dot_vox = "5.1.1"
 
 mcrs_storage = { path = "../mcrs_storage" }
+mcrs_info = { path = "../mcrs_info" }
 mcrs_flag_bank = { path = "../mcrs_flag_bank" }
-

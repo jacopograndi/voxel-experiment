@@ -1,14 +1,15 @@
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_automata::lighting::recalc_lights;
+use mcrs_info::Info;
 use mcrs_render::voxel_world::VIEW_DISTANCE;
 use mcrs_storage::{chunk::Chunk, universe::Universe, CHUNK_SIDE};
 use renet::{transport::NetcodeClientTransport, ClientId};
 
 use crate::net::{NetPlayer, NetworkMode};
 
-fn gen_chunk(pos: IVec3) -> Chunk {
+fn gen_chunk(pos: IVec3, info: &Info) -> Chunk {
     if pos.y < 0 {
-        Chunk::filled()
+        Chunk::filled(info.blocks.from_name("Dirt"))
     } else {
         Chunk::empty()
     }
@@ -42,6 +43,7 @@ pub fn load_and_gen_chunks(
     player_query: Query<(&NetPlayer, &Transform)>,
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
+    info: Res<Info>,
 ) {
     let client_id = if let Some(transport) = transport {
         Some(ClientId::from_raw(transport.client_id()))
@@ -65,7 +67,7 @@ pub fn load_and_gen_chunks(
         let chunks = get_chunks_in_sphere(*player_pos);
         for chunk_pos in chunks.iter() {
             if let None = universe.chunks.get(chunk_pos) {
-                let chunk = gen_chunk(*chunk_pos);
+                let chunk = gen_chunk(*chunk_pos, &*info);
                 universe.chunks.insert(*chunk_pos, chunk);
                 added.insert(*chunk_pos);
             }
@@ -73,6 +75,6 @@ pub fn load_and_gen_chunks(
     }
 
     if !added.is_empty() {
-        recalc_lights(&mut universe, added.into_iter().collect());
+        recalc_lights(&mut universe, added.into_iter().collect(), &*info);
     }
 }

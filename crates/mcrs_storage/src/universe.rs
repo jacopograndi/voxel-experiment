@@ -9,7 +9,8 @@ use bevy::{prelude::*, utils::HashMap};
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
-    pub heightfield: HashMap<IVec2, i32>, // Stores the highest block which still receives sunlight
+    /// Stores the highest block which still receives sunlight
+    pub heightfield: HashMap<IVec2, i32>,
 }
 
 impl Universe {
