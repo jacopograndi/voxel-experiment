@@ -31,14 +31,12 @@ use net::{
     client::{client_send_input, client_sync_players, client_sync_universe, new_renet_client},
     server::{
         move_players_system, new_renet_server, server_sync_players, server_sync_universe,
-        server_update_system,
+        server_update_system, server_refresh_time,
     },
     *,
 };
 use terrain_editing::*;
 use terrain_generation::*;
-
-const SERVER_TICKS_PER_SECOND: u32 = 60;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -50,9 +48,7 @@ fn main() {
     let mut app = App::new();
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
-    app.insert_resource(Time::<Fixed>::from_seconds(
-        1. / (SERVER_TICKS_PER_SECOND as f64),
-    ));
+    app.insert_resource(server_refresh_time());
     app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, InfoPlugin));
 
     match network_mode {
