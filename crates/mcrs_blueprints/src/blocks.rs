@@ -9,34 +9,32 @@ use mcrs_flag_bank::BlockFlag;
 use bevy::prelude::*;
 
 #[derive(Debug, Default)]
-pub struct BlocksInfo {
-    blocks: HashMap<BlockId, BlockInfo>,
+pub struct BlockBlueprints {
+    blocks: HashMap<BlockId, BlockBlueprint>,
     name_to_block: HashMap<String, BlockId>,
 }
 
-const BLOCK_INFO_PATH: &str = "assets/block_info.ron";
-
-impl BlocksInfo {
-    pub fn from_file() -> Self {
-        let string = read_to_string(BLOCK_INFO_PATH).unwrap();
-        let block_info_vec: Vec<BlockInfo> = from_str(&string).unwrap();
-        let mut info = Self::default();
-        for block_info in block_info_vec {
-            let id = block_info.id.clone();
-            info.blocks.insert(id.clone(), block_info.clone());
-            info.name_to_block.insert(block_info.name, id);
+impl BlockBlueprints {
+    pub fn from_file(path: &str) -> Self {
+        let string = read_to_string(path).unwrap();
+        let block_blueprints_vec: Vec<BlockBlueprint> = from_str(&string).unwrap();
+        let mut blueprints = Self::default();
+        for block_blueprints in block_blueprints_vec {
+            let id = block_blueprints.id.clone();
+            blueprints.blocks.insert(id.clone(), block_blueprints.clone());
+            blueprints.name_to_block.insert(block_blueprints.name, id);
         }
-        info
+        blueprints
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &BlockInfo> {
+    pub fn iter(&self) -> impl Iterator<Item = &BlockBlueprint> {
         self.blocks.iter().map(|(_, b)| b)
     }
 
-    pub fn get(&self, id: &BlockId) -> &BlockInfo {
+    pub fn get(&self, id: &BlockId) -> &BlockBlueprint {
         self.blocks.get(id).unwrap()
     }
-    pub fn get_checked(&self, id: &BlockId) -> Option<&BlockInfo> {
+    pub fn get_checked(&self, id: &BlockId) -> Option<&BlockBlueprint> {
         self.blocks.get(id)
     }
 
@@ -47,16 +45,16 @@ impl BlocksInfo {
         self.name_to_block.get(name)
     }
 
-    pub fn from_name(&self, name: &str) -> &BlockInfo {
+    pub fn from_name(&self, name: &str) -> &BlockBlueprint {
         self.blocks.get(&self.id_from_name(name)).unwrap()
     }
-    pub fn from_name_checked(&self, name: &str) -> Option<&BlockInfo> {
+    pub fn from_name_checked(&self, name: &str) -> Option<&BlockBlueprint> {
         self.blocks.get(self.id_from_name_checked(name)?)
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct BlockInfo {
+pub struct BlockBlueprint {
     pub name: String,
     pub id: BlockId,
     pub flags: Vec<BlockFlag>,
@@ -65,7 +63,7 @@ pub struct BlockInfo {
     pub drop_item_id: BlockId,
 }
 
-impl BlockInfo {
+impl BlockBlueprint {
     pub fn is_light_source(&self) -> bool {
         self.light_level > 0
     }

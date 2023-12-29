@@ -19,7 +19,7 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
-use mcrs_info::{BlockId, GhostId, Info};
+use mcrs_blueprints::{BlockId, GhostId, Blueprints};
 
 use crate::{
     block_texture::BlockTexture,
@@ -110,7 +110,7 @@ impl Plugin for BoxesWorldPlugin {
 fn read_info_textures(
     mut queue: ResMut<VoxTextureLoadQueue>,
     mut loaded: ResMut<LoadedVoxTextures>,
-    info: Res<Info>,
+    info: Res<Blueprints>,
 ) {
     let mut max_id = 0;
     for block_info in info.blocks.iter() {

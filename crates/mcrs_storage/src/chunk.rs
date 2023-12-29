@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use mcrs_info::BlockInfo;
+use mcrs_blueprints::BlockBlueprint;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
@@ -31,7 +31,7 @@ impl Chunk {
         }
     }
 
-    pub fn filled(block_info: &BlockInfo) -> Self {
+    pub fn filled(block_info: &BlockBlueprint) -> Self {
         let block = Block::new(block_info);
         Self {
             _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),

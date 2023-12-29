@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_flag_bank::BlockFlag;
-use mcrs_info::Info;
+use mcrs_blueprints::Blueprints;
 use mcrs_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
@@ -10,7 +10,7 @@ use mcrs_storage::{
     CHUNK_SIDE, CHUNK_VOLUME,
 };
 
-pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Info) {
+pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Blueprints) {
     println!("lighting {:?} chunks", chunks.len());
 
     // calculate sunlight beams

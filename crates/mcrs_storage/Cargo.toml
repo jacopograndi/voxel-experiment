@@ -8,4 +8,4 @@ bevy = "0.12.0"
 bytemuck = "1.14.0"
 
 mcrs_flag_bank = { path = "../mcrs_flag_bank" }
-mcrs_info = { path = "../mcrs_info" }
+mcrs_blueprints = { path = "../mcrs_blueprints" }

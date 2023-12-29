@@ -2609,9 +2609,20 @@ name = "mcrs_automata"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "mcrs_blueprints",
  "mcrs_flag_bank",
- "mcrs_info",
  "mcrs_storage",
+]
+
+[[package]]
+name = "mcrs_blueprints"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bytemuck",
+ "mcrs_flag_bank",
+ "ron",
+ "serde",
 ]
 
 [[package]]
@@ -2619,17 +2630,6 @@ name = "mcrs_flag_bank"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "serde",
-]
-
-[[package]]
-name = "mcrs_info"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bytemuck",
- "mcrs_flag_bank",
- "ron",
  "serde",
 ]
 
@@ -2649,8 +2649,8 @@ dependencies = [
  "bevy",
  "bytemuck",
  "dot_vox",
+ "mcrs_blueprints",
  "mcrs_flag_bank",
- "mcrs_info",
  "mcrs_storage",
 ]
 
@@ -2660,8 +2660,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "mcrs_blueprints",
  "mcrs_flag_bank",
- "mcrs_info",
 ]
 
 [[package]]
@@ -3964,8 +3964,8 @@ dependencies = [
  "clap",
  "egui_plot",
  "mcrs_automata",
+ "mcrs_blueprints",
  "mcrs_flag_bank",
- "mcrs_info",
  "mcrs_physics",
  "mcrs_render",
  "mcrs_storage",

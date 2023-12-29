@@ -8,7 +8,7 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
-use mcrs_info::InfoPlugin;
+use mcrs_blueprints::BlueprintsPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
 use mcrs_render::plugin::VoxelRenderPlugin;
 use mcrs_storage::VoxelStoragePlugin;
@@ -48,7 +48,7 @@ fn main() {
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
     app.insert_resource(server_refresh_time());
-    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, InfoPlugin));
+    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, BlueprintsPlugin));
 
     match network_mode {
         NetworkMode::Server => {

@@ -16,11 +16,11 @@ use bevy::{
 
 use crate::{settings::RenderGraphSettings, pipeline::{compute::ComputeResourcesPlugin, trace::{TracePlugin, TraceNode}, stream::StreamNode}, boxes_world::BoxesWorldPlugin, voxel_world::VoxelWorldPlugin, graph, VOXEL};
 
-pub struct RenderPlugin;
 pub struct VoxelRenderPlugin;
 
-impl Plugin for RenderPlugin {
+impl Plugin for VoxelRenderPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(Msaa::Off);
         app.insert_resource(RenderGraphSettings::default())
             .add_plugins(ExtractResourcePlugin::<RenderGraphSettings>::default())
             .add_plugins(VoxelWorldPlugin)
@@ -56,10 +56,5 @@ impl Plugin for RenderPlugin {
             graph_voxel.add_node_edge(FXAA, draw_ui_graph::node::UI_PASS);
             graph_voxel.add_node_edge(draw_ui_graph::node::UI_PASS, UPSCALING);
         }
-    }
-}
-impl Plugin for VoxelRenderPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(Msaa::Off).add_plugins(RenderPlugin);
     }
 }

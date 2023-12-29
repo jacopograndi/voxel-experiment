@@ -1,13 +1,13 @@
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_automata::lighting::recalc_lights;
-use mcrs_info::Info;
+use mcrs_blueprints::Blueprints;
 use mcrs_render::voxel_world::VIEW_DISTANCE;
 use mcrs_storage::{chunk::Chunk, universe::Universe, CHUNK_SIDE};
 use renet::{transport::NetcodeClientTransport, ClientId};
 
 use crate::net::{NetPlayer, NetworkMode};
 
-fn gen_chunk(pos: IVec3, info: &Info) -> Chunk {
+fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
     if pos.y < 0 {
         Chunk::filled(info.blocks.from_name("Dirt"))
     } else {
@@ -43,7 +43,7 @@ pub fn load_and_gen_chunks(
     player_query: Query<(&NetPlayer, &Transform)>,
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
-    info: Res<Info>,
+    info: Res<Blueprints>,
 ) {
     let client_id = if let Some(transport) = transport {
         Some(ClientId::from_raw(transport.client_id()))

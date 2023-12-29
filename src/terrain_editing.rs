@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use mcrs_automata::lighting::*;
 use mcrs_flag_bank::BlockFlag;
-use mcrs_info::Info;
+use mcrs_blueprints::Blueprints;
 use mcrs_physics::{character::CameraController, raycast};
 use mcrs_storage::{
     block::{Block, LightType},
@@ -14,7 +14,7 @@ pub fn player_edit_terrain(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     player_query: Query<&PlayerInput>,
     mut universe: ResMut<Universe>,
-    info: Res<Info>,
+    info: Res<Blueprints>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
         // only on the server
@@ -54,7 +54,7 @@ pub fn player_edit_terrain(
                         let mut light_torches = vec![];
 
                         if let Some(block) = universe.read_chunk_block(&pos) {
-                            // todo: use BlockInfo.is_light_source
+                            // todo: use BlockBlueprint.is_light_source
                             if info.blocks.get(&block.id).is_light_source() {
                                 let new = propagate_darkness(&mut universe, pos, LightType::Torch);
                                 propagate_light(&mut universe, new, LightType::Torch)

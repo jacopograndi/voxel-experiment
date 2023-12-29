@@ -1,4 +1,4 @@
-use mcrs_info::Info;
+use mcrs_blueprints::Blueprints;
 use renet::DefaultChannel;
 use std::{net::UdpSocket, time::SystemTime};
 
@@ -55,7 +55,7 @@ pub fn client_sync_players(
     mut query_transform: Query<&mut Transform>,
     network_mode: Res<NetworkMode>,
     loaded_textures: Res<LoadedVoxTextures>,
-    info: Res<Info>,
+    info: Res<Blueprints>,
 ) {
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();

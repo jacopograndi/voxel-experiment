@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use mcrs_flag_bank::{flagbank::FlagBank, BlockFlag};
-use mcrs_info::{BlockId, BlockInfo};
+use mcrs_blueprints::{BlockId, BlockBlueprint};
 use std::fmt::Display;
 
 // Struct representing 1 cubic meter cube inside the game
@@ -18,7 +18,7 @@ pub struct Block {
 
 // Generation and flag checking/setting utilities
 impl Block {
-    pub fn new(block_info: &BlockInfo) -> Self {
+    pub fn new(block_info: &BlockBlueprint) -> Self {
         let mut new_block: Block = Self {
             id: block_info.id,
             light0: 0,

@@ -7,34 +7,32 @@ use std::fs::read_to_string;
 use bevy::prelude::*;
 
 #[derive(Debug, Default)]
-pub struct GhostsInfo {
-    ghosts: HashMap<GhostId, GhostInfo>,
+pub struct GhostBlueprints {
+    ghosts: HashMap<GhostId, GhostBlueprint>,
     name_to_ghost: HashMap<String, GhostId>,
 }
 
-const GHOST_INFO_PATH: &str = "assets/ghost_info.ron";
-
-impl GhostsInfo {
-    pub fn from_file() -> Self {
-        let string = read_to_string(GHOST_INFO_PATH).unwrap();
-        let block_info_vec: Vec<GhostInfo> = from_str(&string).unwrap();
-        let mut info = Self::default();
-        for block_info in block_info_vec {
-            let id = block_info.id.clone();
-            info.ghosts.insert(id.clone(), block_info.clone());
-            info.name_to_ghost.insert(block_info.name, id);
+impl GhostBlueprints {
+    pub fn from_file(path: &str) -> Self {
+        let string = read_to_string(path).unwrap();
+        let block_blueprints_vec: Vec<GhostBlueprint> = from_str(&string).unwrap();
+        let mut blueprints = Self::default();
+        for block_blueprints in block_blueprints_vec {
+            let id = block_blueprints.id.clone();
+            blueprints.ghosts.insert(id.clone(), block_blueprints.clone());
+            blueprints.name_to_ghost.insert(block_blueprints.name, id);
         }
-        info
+        blueprints
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &GhostInfo> {
+    pub fn iter(&self) -> impl Iterator<Item = &GhostBlueprint> {
         self.ghosts.iter().map(|(_, b)| b)
     }
 
-    pub fn get(&self, id: &GhostId) -> &GhostInfo {
+    pub fn get(&self, id: &GhostId) -> &GhostBlueprint {
         self.ghosts.get(id).unwrap()
     }
-    pub fn get_checked(&self, id: &GhostId) -> Option<&GhostInfo> {
+    pub fn get_checked(&self, id: &GhostId) -> Option<&GhostBlueprint> {
         self.ghosts.get(id)
     }
 
@@ -45,16 +43,16 @@ impl GhostsInfo {
         self.name_to_ghost.get(name)
     }
 
-    pub fn from_name(&self, name: &str) -> &GhostInfo {
+    pub fn from_name(&self, name: &str) -> &GhostBlueprint {
         self.ghosts.get(&self.id_from_name(name)).unwrap()
     }
-    pub fn from_name_checked(&self, name: &str) -> Option<&GhostInfo> {
+    pub fn from_name_checked(&self, name: &str) -> Option<&GhostBlueprint> {
         self.ghosts.get(self.id_from_name_checked(name)?)
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GhostInfo {
+pub struct GhostBlueprint {
     pub name: String,
     pub id: GhostId,
     pub voxel_texture_path: String,
