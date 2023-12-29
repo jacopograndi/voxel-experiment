@@ -12,7 +12,7 @@ use bevy_renet::renet::{
 use mcrs_physics::character::{
     CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
 };
-use mcrs_render::VoxelCameraBundle;
+use mcrs_render::camera::VoxelCameraBundle;
 use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},

@@ -1,4 +1,4 @@
-use crate::{boxes_world::BoxesData, voxel_world::VoxelData, RenderGraphSettings};
+use crate::{boxes_world::BoxesData, voxel_world::VoxelData, settings::RenderGraphSettings};
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,

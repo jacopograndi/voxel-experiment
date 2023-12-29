@@ -7,8 +7,8 @@ use mcrs_physics::character::{
     CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
 };
 use mcrs_render::{
-    boxes_world::{Ghost, LoadedVoxTextures, VoxTextureIndex},
-    VoxelCameraBundle,
+    boxes_world::{Ghost, LoadedVoxTextures},
+    camera::VoxelCameraBundle,
 };
 use mcrs_storage::{chunk::Chunk, universe::Universe};
 use renet::{

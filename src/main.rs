@@ -10,10 +10,7 @@ use bevy_renet::{
 };
 use mcrs_info::InfoPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
-use mcrs_render::{
-    boxes_world::{VoxTextureIndex, VoxTextureLoadQueue},
-    VoxelRenderPlugin,
-};
+use mcrs_render::plugin::VoxelRenderPlugin;
 use mcrs_storage::VoxelStoragePlugin;
 use renet::RenetServer;
 
