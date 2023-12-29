@@ -1,27 +1,25 @@
-use bevy::utils::HashMap;
-use ron::from_str;
-use serde::{Deserialize, Serialize};
-use std::fs::read_to_string;
+use bevy::prelude::*;
 
-use mcrs_flag_bank::BlockFlag;
+pub mod blocks;
+pub mod ghosts;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct BlockInfo {
-    pub name: String,
-    pub id: u8,
-    pub flags: Vec<BlockFlag>,
-    pub light_level: u8,
-    pub voxel_texture_path: String,
-    pub drop_item_id: u8,
-}
+pub use blocks::*;
+pub use ghosts::*;
 
-pub fn get_block_info() -> HashMap<u8, BlockInfo> {
-    let blockinfo_data = read_to_string("./assets/blockinfo.ron").unwrap();
-    let blockinfo_array: Vec<BlockInfo> = from_str(&blockinfo_data).unwrap();
-    let mut blockinfo_map: HashMap<u8, BlockInfo> = HashMap::new();
-    for blockinfo in blockinfo_array {
-        blockinfo_map.insert(blockinfo.id, blockinfo);
+pub struct InfoPlugin;
+
+impl Plugin for InfoPlugin {
+    fn build(&self, app: &mut App) {
+        let info = Info {
+            blocks: BlocksInfo::from_file(),
+            ghosts: GhostsInfo::from_file(),
+        };
+        app.insert_resource(info);
     }
-    blockinfo_map
 }
 
+#[derive(Resource, Debug, Default)]
+pub struct Info {
+    pub blocks: BlocksInfo,
+    pub ghosts: GhostsInfo,
+}

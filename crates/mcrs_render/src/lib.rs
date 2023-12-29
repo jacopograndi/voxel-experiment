@@ -26,7 +26,7 @@ use bevy::{
     ui::{draw_ui_graph, UiPassNode},
 };
 
-pub mod blocktexture;
+pub mod block_texture;
 pub mod boxes_world;
 pub mod pipeline;
 pub mod voxel_world;

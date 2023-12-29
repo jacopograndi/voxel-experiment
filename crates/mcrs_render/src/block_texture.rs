@@ -1,15 +1,13 @@
 use bevy::prelude::*;
 
-use mcrs_flag_bank::BlockFlag;
-use mcrs_storage::block::Block;
-
 #[derive(Debug, Clone, Deref, DerefMut)]
 pub struct Palette([Color; 256]);
 
 /// Voxel model with variable size
 #[derive(Debug, Clone)]
 pub struct BlockTexture {
-    pub voxels: Vec<Block>,
+    // todo: make it a Vec<u8>, needs to unpack in shader
+    pub voxels: Vec<u32>,
     pub size: IVec3,
     pub palette: Palette,
 }
@@ -18,7 +16,7 @@ impl BlockTexture {
     pub fn new(size: IVec3) -> BlockTexture {
         let volume = size.x * size.y * size.z;
         Self {
-            voxels: vec![Block::default(); volume as usize],
+            voxels: vec![0; volume as usize],
             size,
             palette: Palette([Color::WHITE; 256]),
         }
@@ -59,12 +57,14 @@ impl BlockTexture {
             material = material.powf(2.2);
             if let Some(vox_material) = vox.materials.get(i) {
                 let vox_material = vox_material.properties.clone();
-                if vox_material["_type"] == "_emit" {
-                    material *= 1.0 + vox_material["_emit"].parse::<f32>().unwrap();
-                    if vox_material.contains_key("_flux") {
-                        material = material.powf(vox_material["_flux"].parse::<f32>().unwrap());
+                if let Some(material_type) = vox_material.get("_type") {
+                    if material_type == "_emit" {
+                        material *= 1.0 + vox_material["_emit"].parse::<f32>().unwrap();
+                        if vox_material.contains_key("_flux") {
+                            material = material.powf(vox_material["_flux"].parse::<f32>().unwrap());
+                        }
+                        material.w = 1.0;
                     }
-                    material.w = 1.0;
                 }
             }
             grid.palette[i + 1] = material.into();
@@ -77,10 +77,7 @@ impl BlockTexture {
                 voxel.x as i32,
             );
             let index = pos.x * grid.size.y * grid.size.z + pos.y * grid.size.z + pos.z;
-            grid.voxels[index as usize].set_id(voxel.i + 1); // TODO: UNSAFE changing an id outside of BlockInfo
-            grid.voxels[index as usize]
-                .properties
-                .set(BlockFlag::Collidable); // set the collision flag
+            grid.voxels[index as usize] = voxel.i as u32 + 1;
         }
 
         Ok(grid)

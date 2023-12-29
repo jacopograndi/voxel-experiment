@@ -14,13 +14,16 @@ renet = { version = "0.0.14", features = ["serde"] }
 bevy_renet = { version = "0.0.10", features = ["serde"] }
 serde = "1.0.193"
 bincode = "1.3.3"
+bytemuck = "1.14.0"
 
 mcrs_render = { path = "crates/mcrs_render" }
+mcrs_info = { path = "crates/mcrs_info" }
 mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_flag_bank = { path = "crates/mcrs_flag_bank" }
 mcrs_automata = { path = "crates/mcrs_automata" }
-bytemuck = "1.14.0"
+clap = { version = "4.4.12", features = ["derive"] }
 
 [workspace]
 members = ["crates/*"]
+exclude = ["tools/image_to_voxel_cube"]

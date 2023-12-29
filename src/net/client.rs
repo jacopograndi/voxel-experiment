@@ -1,3 +1,4 @@
+use mcrs_info::Info;
 use renet::DefaultChannel;
 use std::{net::UdpSocket, time::SystemTime};
 
@@ -6,7 +7,7 @@ use mcrs_physics::character::{
     CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
 };
 use mcrs_render::{
-    boxes_world::{Ghost, VoxTextureIndex},
+    boxes_world::{Ghost, LoadedVoxTextures, VoxTextureIndex},
     VoxelCameraBundle,
 };
 use mcrs_storage::{chunk::Chunk, universe::Universe};
@@ -53,6 +54,8 @@ pub fn client_sync_players(
     query: Query<(Entity, &NetPlayer, &Children)>,
     mut query_transform: Query<&mut Transform>,
     network_mode: Res<NetworkMode>,
+    loaded_textures: Res<LoadedVoxTextures>,
+    info: Res<Info>,
 ) {
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();
@@ -112,7 +115,11 @@ pub fn client_sync_players(
                                     ..default()
                                 }),
                                 Ghost {
-                                    vox_texture_index: VoxTextureIndex(5),
+                                    vox_texture_index: loaded_textures
+                                        .ghosts_id
+                                        .get(&info.ghosts.from_name("Steve").id)
+                                        .unwrap()
+                                        .clone(),
                                 },
                             ));
                         });

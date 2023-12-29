@@ -2,14 +2,15 @@ use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_flag_bank::BlockFlag;
+use mcrs_info::Info;
 use mcrs_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
     universe::Universe,
-    BlockType, CHUNK_SIDE, CHUNK_VOLUME,
+    CHUNK_SIDE, CHUNK_VOLUME,
 };
 
-pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
+pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Info) {
     println!("lighting {:?} chunks", chunks.len());
 
     // calculate sunlight beams
@@ -73,8 +74,8 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>) {
         let chunk = universe.chunks.get(pos).unwrap();
         for i in 0..CHUNK_VOLUME {
             let xyz = Chunk::_idx2xyz(i);
-            // todo: fetch from BlockInfo when implemented
-            if chunk.read_block(xyz).is(BlockType::Dirt) {
+            let id = chunk.read_block(xyz).id;
+            if info.blocks.get(&id).is_light_source() {
                 torches.push(*pos + xyz);
                 chunk.set_block_light(xyz, LightType::Torch, 15);
             }

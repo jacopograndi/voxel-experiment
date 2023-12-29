@@ -7,6 +7,6 @@ edition = "2021"
 bevy = "0.12.0"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
+bytemuck = "1.14.0"
 
 mcrs_flag_bank = { path = "../mcrs_flag_bank" }
-

@@ -19,9 +19,10 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
+use mcrs_info::{BlockId, GhostId, Info};
 
 use crate::{
-    blocktexture::BlockTexture,
+    block_texture::BlockTexture,
     voxel_world::{VoxelUniforms, VIEW_DISTANCE},
 };
 
@@ -87,6 +88,7 @@ impl Plugin for BoxesWorldPlugin {
         app.insert_resource(LoadedVoxTextures::default())
             .insert_resource(VoxTextureLoadQueue::default())
             .add_plugins(ExtractResourcePlugin::<LoadedVoxTextures>::default())
+            .add_systems(Startup, read_info_textures)
             .add_systems(Update, load_vox_textures);
 
         app.sub_app_mut(RenderApp)
@@ -102,6 +104,35 @@ impl Plugin for BoxesWorldPlugin {
                 Render,
                 (write_boxes, write_vox_textures, bind_boxes_data).in_set(RenderSet::Prepare),
             );
+    }
+}
+
+fn read_info_textures(
+    mut queue: ResMut<VoxTextureLoadQueue>,
+    mut loaded: ResMut<LoadedVoxTextures>,
+    info: Res<Info>,
+) {
+    let mut max_id = 0;
+    for block_info in info.blocks.iter() {
+        let vox_texture_index = VoxTextureIndex(*block_info.id as u32);
+        queue.to_load.push((
+            block_info.voxel_texture_path.clone(),
+            vox_texture_index.clone(),
+        ));
+        println!("{:?}, {:?}", block_info, vox_texture_index);
+        loaded.blocks_id.insert(block_info.id, vox_texture_index);
+        max_id = max_id.max(*block_info.id as u32);
+    }
+    let mut serial_id = max_id + 1;
+    for ghost_info in info.ghosts.iter() {
+        let vox_texture_index = VoxTextureIndex(serial_id);
+        queue.to_load.push((
+            ghost_info.voxel_texture_path.clone(),
+            vox_texture_index.clone(),
+        ));
+        println!("{:?}, {:?}", ghost_info, vox_texture_index);
+        loaded.ghosts_id.insert(ghost_info.id, vox_texture_index);
+        serial_id += 1;
     }
 }
 
@@ -143,6 +174,8 @@ pub struct VoxTextureIndex(pub u32);
 pub struct LoadedVoxTextures {
     pub indices: HashMap<String, VoxTextureIndex>,
     pub textures: HashMap<VoxTextureIndex, BlockTexturePtr>,
+    pub blocks_id: HashMap<BlockId, VoxTextureIndex>,
+    pub ghosts_id: HashMap<GhostId, VoxTextureIndex>,
 }
 
 #[derive(Resource, Default)]
@@ -157,16 +190,17 @@ fn load_vox_textures(
     for (path, id) in queue.to_load.iter() {
         let result = fs::read(path);
         if let Ok(slice) = result {
+            println!("{path}");
             let result = BlockTexture::from_vox(&slice);
             if let Ok(vox) = result {
                 let grid = BlockTexturePtr(Arc::new(RwLock::new(vox)));
                 loaded.indices.insert(path.clone(), id.clone());
                 loaded.textures.insert(id.clone(), grid);
             } else {
-                println!("{:?}", result);
+                println!("{path} {:?}", result);
             }
         } else {
-            println!("{:?}", result);
+            println!("{path} {:?}", result);
         }
     }
     queue.to_load.clear()
@@ -236,7 +270,7 @@ fn write_boxes(
             PodTexturedBox {
                 world_to_box,
                 box_to_world,
-                index: texbox.index.0 - 1,
+                index: texbox.index.0,
                 _padding0: 0,
                 _padding1: 0,
                 _padding2: 0,

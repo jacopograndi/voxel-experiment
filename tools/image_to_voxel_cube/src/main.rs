@@ -9,6 +9,10 @@ const PATH_OUT: &str = "voxels/";
 fn main() {
     let blocks = vec![
         Block {
+            name: "cobblestone",
+            method: Method::Single(Uv(0, 1)),
+        },
+        Block {
             name: "stone",
             method: Method::Single(Uv(1, 0)),
         },

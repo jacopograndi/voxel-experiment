@@ -1,3 +1,4 @@
+use clap::Parser;
 use bevy::{
     prelude::*,
     window::{PresentMode, WindowPlugin},
@@ -7,6 +8,7 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
+use mcrs_info::InfoPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
 use mcrs_render::{
     boxes_world::{VoxTextureIndex, VoxTextureLoadQueue},
@@ -29,36 +31,25 @@ use net::{
     client::{client_send_input, client_sync_players, client_sync_universe, new_renet_client},
     server::{
         move_players_system, new_renet_server, server_sync_players, server_sync_universe,
-        server_update_system,
+        server_update_system, server_refresh_time,
     },
     *,
 };
 use terrain_editing::*;
 use terrain_generation::*;
 
-const SERVER_TICKS_PER_SECOND: u32 = 60;
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args { netmode: Option<String> }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-
-    let network_mode = if args.len() > 1 {
-        match args[1].as_str() {
-            "client" => NetworkMode::Client,
-            "server" => NetworkMode::ClientAndServer,
-            "headless" => NetworkMode::Server,
-            _ => panic!("Invalid argument, must be \"client\", \"server\" or \"headless\"."),
-        }
-    } else {
-        NetworkMode::ClientAndServer
-    };
+    let network_mode = NetworkMode::from(Args::parse().netmode.as_deref());
 
     let mut app = App::new();
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
-    app.insert_resource(Time::<Fixed>::from_seconds(
-        1. / (SERVER_TICKS_PER_SECOND as f64),
-    ));
-    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin));
+    app.insert_resource(server_refresh_time());
+    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, InfoPlugin));
 
     match network_mode {
         NetworkMode::Server => {
@@ -132,24 +123,7 @@ fn app_client(app: &mut App) {
         .add_systems(Update, cursor_grab);
 }
 
-fn setup(mut commands: Commands, mut queue: ResMut<VoxTextureLoadQueue>) {
-    queue
-        .to_load
-        .push(("assets/voxels/stone.vox".to_string(), VoxTextureIndex(1)));
-    queue
-        .to_load
-        .push(("assets/voxels/dirt.vox".to_string(), VoxTextureIndex(2)));
-    queue
-        .to_load
-        .push(("assets/voxels/wood-oak.vox".to_string(), VoxTextureIndex(3)));
-    queue.to_load.push((
-        "assets/voxels/glowstone.vox".to_string(),
-        VoxTextureIndex(4),
-    ));
-    queue
-        .to_load
-        .push(("assets/voxels/char.vox".to_string(), VoxTextureIndex(5)));
-
+fn setup(mut commands: Commands) {
     // ui center cursor
     commands
         .spawn(NodeBundle {

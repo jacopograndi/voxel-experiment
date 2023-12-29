@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use mcrs_automata::lighting::*;
 use mcrs_flag_bank::BlockFlag;
+use mcrs_info::Info;
 use mcrs_physics::{character::CameraController, raycast};
 use mcrs_storage::{
     block::{Block, LightType},
     universe::Universe,
-    BlockType,
 };
 
 use crate::PlayerInput;
@@ -14,6 +14,7 @@ pub fn player_edit_terrain(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     player_query: Query<&PlayerInput>,
     mut universe: ResMut<Universe>,
+    info: Res<Info>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
         // only on the server
@@ -52,15 +53,15 @@ pub fn player_edit_terrain(
                         let mut light_suns = vec![];
                         let mut light_torches = vec![];
 
-                        if let Some(voxel) = universe.read_chunk_block(&pos) {
+                        if let Some(block) = universe.read_chunk_block(&pos) {
                             // todo: use BlockInfo.is_light_source
-                            if voxel.is(BlockType::Dirt) {
+                            if info.blocks.get(&block.id).is_light_source() {
                                 let new = propagate_darkness(&mut universe, pos, LightType::Torch);
                                 propagate_light(&mut universe, new, LightType::Torch)
                             }
                         }
 
-                        universe.set_chunk_block(&pos, Block::new(BlockType::Air));
+                        universe.set_chunk_block(&pos, Block::new(info.blocks.from_name("Air")));
 
                         let planar = IVec2::new(pos.x, pos.z);
                         if let Some(height) = universe.heightfield.get(&planar) {
@@ -112,9 +113,12 @@ pub fn player_edit_terrain(
                         let mut dark_suns = vec![];
 
                         //if keys.pressed(KeyCode::Key3) {
+                        // todo: implement hotbar
                         if false {
-                            // todo: use BlockInfo
-                            universe.set_chunk_block(&pos, Block::new(BlockType::Wood));
+                            universe.set_chunk_block(
+                                &pos,
+                                Block::new(info.blocks.from_name("Glowstone")),
+                            );
                             universe
                                 .read_chunk_block(&pos)
                                 .unwrap()
@@ -123,7 +127,8 @@ pub fn player_edit_terrain(
                         } else {
                             let new = propagate_darkness(&mut universe, pos, LightType::Torch);
 
-                            universe.set_chunk_block(&pos, Block::new(BlockType::Wood));
+                            universe
+                                .set_chunk_block(&pos, Block::new(info.blocks.from_name("Wood")));
 
                             propagate_light(&mut universe, new, LightType::Torch);
                         }

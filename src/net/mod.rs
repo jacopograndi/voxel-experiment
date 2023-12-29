@@ -20,6 +20,17 @@ pub enum NetworkMode {
     Client,
 }
 
+impl From<Option<&str>> for NetworkMode {
+    fn from(netmode: Option<&str>) -> NetworkMode {
+        match netmode {
+            Some("client") => NetworkMode::Client,
+            Some("server") => NetworkMode::Server,
+            None => NetworkMode::ClientAndServer,
+            Some(_) => panic!("Use \"client\" for client-only mode, \"server\" for server-only mode, leave blank for standard (client+server) mode."),
+        }
+    }
+}
+
 #[derive(Debug, Component)]
 pub struct NetPlayer {
     pub id: ClientId,
