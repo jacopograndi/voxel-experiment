@@ -1,7 +1,7 @@
-# Voxel Experiment
+# mcrs - A Voxel Experiment
 
-Recreation of Minecraft using rust and bevy.
-Features a voxel raycaster, cubic chunks and an infinite (i32::MAX) map.
+This project aims at recreating Minecraft using modern software tools (Rust and Bevy) and techniques (a voxel raycaster, cubic chunks and an infinite (i32::MAX) map).
+Although different and modern under the hood, we aim at recreating almost 1:1 the magic, nostalgic and non-competitive atmosphere that elevated Minecraft `beta-1.7.3` in the hardcore Minecraft-nostalgia community.
          
 ### Tentative Development Roadmap
 [INSPIRATION](https://minecraft-timeline.github.io/) 
