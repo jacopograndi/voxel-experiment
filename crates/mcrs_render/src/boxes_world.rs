@@ -19,7 +19,7 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
-use mcrs_blueprints::{BlockId, GhostId, Blueprints};
+use mcrs_blueprints::{blocks::BlockId, ghosts::GhostId, Blueprints};
 
 use crate::{
     block_texture::BlockTexture,

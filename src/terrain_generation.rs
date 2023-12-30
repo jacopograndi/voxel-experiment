@@ -9,7 +9,7 @@ use crate::net::{NetPlayer, NetworkMode};
 
 fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
     if pos.y < 0 {
-        Chunk::filled(info.blocks.from_name("Dirt"))
+        Chunk::filled(info.blocks.get_named("Dirt"))
     } else {
         Chunk::empty()
     }

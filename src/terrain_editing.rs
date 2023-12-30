@@ -61,7 +61,7 @@ pub fn player_edit_terrain(
                             }
                         }
 
-                        universe.set_chunk_block(&pos, Block::new(info.blocks.from_name("Air")));
+                        universe.set_chunk_block(&pos, Block::new(info.blocks.get_named("Air")));
 
                         let planar = IVec2::new(pos.x, pos.z);
                         if let Some(height) = universe.heightfield.get(&planar) {
@@ -117,7 +117,7 @@ pub fn player_edit_terrain(
                         if false {
                             universe.set_chunk_block(
                                 &pos,
-                                Block::new(info.blocks.from_name("Glowstone")),
+                                Block::new(info.blocks.get_named("Glowstone")),
                             );
                             universe
                                 .read_chunk_block(&pos)
@@ -128,7 +128,7 @@ pub fn player_edit_terrain(
                             let new = propagate_darkness(&mut universe, pos, LightType::Torch);
 
                             universe
-                                .set_chunk_block(&pos, Block::new(info.blocks.from_name("Wood")));
+                                .set_chunk_block(&pos, Block::new(info.blocks.get_named("Wood")));
 
                             propagate_light(&mut universe, new, LightType::Torch);
                         }

@@ -117,7 +117,7 @@ pub fn client_sync_players(
                                 Ghost {
                                     vox_texture_index: loaded_textures
                                         .ghosts_id
-                                        .get(&info.ghosts.from_name("Steve").id)
+                                        .get(&info.ghosts.get_named("Steve").id)
                                         .unwrap()
                                         .clone(),
                                 },

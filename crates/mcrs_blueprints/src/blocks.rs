@@ -45,10 +45,10 @@ impl BlockBlueprints {
         self.name_to_block.get(name)
     }
 
-    pub fn from_name(&self, name: &str) -> &BlockBlueprint {
+    pub fn get_named(&self, name: &str) -> &BlockBlueprint {
         self.blocks.get(&self.id_from_name(name)).unwrap()
     }
-    pub fn from_name_checked(&self, name: &str) -> Option<&BlockBlueprint> {
+    pub fn get_named_checked(&self, name: &str) -> Option<&BlockBlueprint> {
         self.blocks.get(self.id_from_name_checked(name)?)
     }
 }

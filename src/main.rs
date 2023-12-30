@@ -8,7 +8,7 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
-use mcrs_blueprints::BlueprintsPlugin;
+use mcrs_blueprints::plugin::BlueprintsPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
 use mcrs_render::plugin::VoxelRenderPlugin;
 use mcrs_storage::VoxelStoragePlugin;

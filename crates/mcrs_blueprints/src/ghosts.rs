@@ -1,10 +1,8 @@
-use bevy::utils::HashMap;
+use bevy::{utils::HashMap, prelude::{Deref, DerefMut}};
 use bytemuck::{Pod, Zeroable};
 use ron::from_str;
 use serde::{Deserialize, Serialize};
 use std::fs::read_to_string;
-
-use bevy::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct GhostBlueprints {
@@ -43,10 +41,10 @@ impl GhostBlueprints {
         self.name_to_ghost.get(name)
     }
 
-    pub fn from_name(&self, name: &str) -> &GhostBlueprint {
+    pub fn get_named(&self, name: &str) -> &GhostBlueprint {
         self.ghosts.get(&self.id_from_name(name)).unwrap()
     }
-    pub fn from_name_checked(&self, name: &str) -> Option<&GhostBlueprint> {
+    pub fn get_named_checked(&self, name: &str) -> Option<&GhostBlueprint> {
         self.ghosts.get(self.id_from_name_checked(name)?)
     }
 }
@@ -64,18 +62,12 @@ pub struct GhostId(u32);
 
 // tell serde to serialize only the number and not the type
 impl Serialize for GhostId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
         self.0.serialize(serializer)
     }
 }
 impl<'de> Deserialize<'de> for GhostId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de>{
         Deserialize::deserialize(deserializer).map(|id| GhostId(id))
     }
 }

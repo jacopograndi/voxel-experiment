@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use mcrs_blueprints::BlockBlueprint;
+use mcrs_blueprints::blocks::BlockBlueprint;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
