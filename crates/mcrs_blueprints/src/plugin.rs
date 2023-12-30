@@ -1,6 +1,6 @@
 use bevy::app::{Plugin, App};
 
-use crate::{Blueprints, blocks::BlockBlueprints, ghosts::GhostBlueprints, BLOCK_BLUEPRINTS_PATH, GHOST_BLUEPRINTS_PATH};
+use crate::{Blueprints, BLOCK_BLUEPRINTS_PATH, GHOST_BLUEPRINTS_PATH, BlueprintList};
 
 pub struct BlueprintsPlugin;
 
@@ -8,8 +8,8 @@ impl Plugin for BlueprintsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(
             Blueprints {
-                blocks: BlockBlueprints::from_file(BLOCK_BLUEPRINTS_PATH),
-                ghosts: GhostBlueprints::from_file(GHOST_BLUEPRINTS_PATH),
+                blocks: BlueprintList::from_file(BLOCK_BLUEPRINTS_PATH),
+                ghosts: BlueprintList::from_file(GHOST_BLUEPRINTS_PATH),
             }
         );
     }

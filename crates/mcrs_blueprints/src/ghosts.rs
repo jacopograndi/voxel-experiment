@@ -1,59 +1,20 @@
-use bevy::{utils::HashMap, prelude::{Deref, DerefMut}};
+use bevy::prelude::{Deref, DerefMut};
 use bytemuck::{Pod, Zeroable};
-use ron::from_str;
 use serde::{Deserialize, Serialize};
-use std::fs::read_to_string;
 
-#[derive(Debug, Default)]
-pub struct GhostBlueprints {
-    ghosts: HashMap<GhostId, GhostBlueprint>,
-    name_to_ghost: HashMap<String, GhostId>,
-}
+use crate::HasNameId;
 
-impl GhostBlueprints {
-    pub fn from_file(path: &str) -> Self {
-        let string = read_to_string(path).unwrap();
-        let block_blueprints_vec: Vec<GhostBlueprint> = from_str(&string).unwrap();
-        let mut blueprints = Self::default();
-        for block_blueprints in block_blueprints_vec {
-            let id = block_blueprints.id.clone();
-            blueprints.ghosts.insert(id.clone(), block_blueprints.clone());
-            blueprints.name_to_ghost.insert(block_blueprints.name, id);
-        }
-        blueprints
-    }
 
-    pub fn iter(&self) -> impl Iterator<Item = &GhostBlueprint> {
-        self.ghosts.iter().map(|(_, b)| b)
-    }
-
-    pub fn get(&self, id: &GhostId) -> &GhostBlueprint {
-        self.ghosts.get(id).unwrap()
-    }
-    pub fn get_checked(&self, id: &GhostId) -> Option<&GhostBlueprint> {
-        self.ghosts.get(id)
-    }
-
-    pub fn id_from_name(&self, name: &str) -> GhostId {
-        *self.name_to_ghost.get(name).unwrap()
-    }
-    pub fn id_from_name_checked(&self, name: &str) -> Option<&GhostId> {
-        self.name_to_ghost.get(name)
-    }
-
-    pub fn get_named(&self, name: &str) -> &GhostBlueprint {
-        self.ghosts.get(&self.id_from_name(name)).unwrap()
-    }
-    pub fn get_named_checked(&self, name: &str) -> Option<&GhostBlueprint> {
-        self.ghosts.get(self.id_from_name_checked(name)?)
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct GhostBlueprint {
     pub name: String,
     pub id: GhostId,
     pub voxel_texture_path: String,
+}
+
+impl HasNameId<GhostId> for GhostBlueprint {
+    fn id(&self) -> GhostId { self.id }
+    fn name(&self) -> String { self.name.clone() }
 }
 
 #[repr(C)]
