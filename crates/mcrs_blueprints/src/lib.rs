@@ -36,15 +36,19 @@ impl<
         BL: HasNameId<ID> + Clone + Default + for<'de> Deserialize<'de>,
     > BlueprintList<ID, BL>
 {
-    fn from_file(path: &str) -> Self {
-        let string = read_to_string(path).unwrap();
-        let blueprints_vec: Vec<BL> = from_str(&string).unwrap();
+    pub fn from_list(list: Vec<BL>) -> Self {
         let mut blueprints = Self::default();
-        for blueprint in blueprints_vec {
+        for blueprint in list {
             blueprints.list.insert(blueprint.id(), blueprint.clone());
             blueprints.name2id.insert(blueprint.name(), blueprint.id());
         }
         blueprints
+    }
+
+    pub fn from_file(path: &str) -> Self {
+        let string = read_to_string(path).unwrap();
+        let blueprints_vec: Vec<BL> = from_str(&string).unwrap();
+        Self::from_list(blueprints_vec)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &BL> {

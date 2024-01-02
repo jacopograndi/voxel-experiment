@@ -4,7 +4,9 @@ mod test {
 
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
-    use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe, BlockType};
+    use mcrs_blueprints::blocks::{BlockBlueprint, BlockId};
+    use mcrs_flag_bank::BlockFlag;
+    use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
 
     #[test]
     fn empty_out_of_range() {
@@ -107,30 +109,17 @@ mod test {
             chunks: [(IVec3::ZERO, Chunk::empty())].into_iter().collect(),
             heightfield: HashMap::new(),
         };
-        chunk_map.set_chunk_block(&IVec3::ZERO, Block::new(BlockType::Stone));
-        assert_eq!(
-            Some(Block::new(BlockType::Stone)),
-            chunk_map.read_chunk_block(&IVec3::ZERO)
-        );
+        let stone = Block::new(&BlockBlueprint {
+            name: "Stone".to_string(),
+            id: BlockId::from_u8(1),
+            flags: vec![BlockFlag::Collidable],
+            light_level: 0,
+            ..default()
+        });
+        chunk_map.set_chunk_block(&IVec3::ZERO, stone);
+        assert_eq!(Some(stone), chunk_map.read_chunk_block(&IVec3::ZERO));
         chunk_map
     }
-
-    // fn single_chunk_map() -> Universe {
-    //     let mut chunk_map = Universe {
-    //         chunks: [(
-    //             IVec3::ZERO,
-    //             Chunk::filled(),
-    //         )]
-    //         .into_iter()
-    //         .collect(),
-    //         heightfield: HashMap::new(),
-    //     };
-    //     chunk_map.set_chunk(
-    //         &IVec3::ZERO,
-    //         BlockType::Stone,
-    //     );
-    //     chunk_map
-    // }
 
     fn close_enough(a: f32, b: f32) -> bool {
         const EPS: f32 = 0.0001;

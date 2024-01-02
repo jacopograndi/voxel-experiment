@@ -36,6 +36,12 @@ impl BlockBlueprint {
 #[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Copy, Deref, DerefMut, Pod, Zeroable)]
 pub struct BlockId(u8);
 
+impl BlockId {
+    pub fn from_u8(v: u8) -> Self {
+        BlockId(v)
+    }
+}
+
 // tell serde to serialize only the number and not the type
 impl Serialize for BlockId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

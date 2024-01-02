@@ -2638,6 +2638,7 @@ name = "mcrs_physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "mcrs_blueprints",
  "mcrs_flag_bank",
  "mcrs_storage",
 ]

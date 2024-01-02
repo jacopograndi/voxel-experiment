@@ -8,3 +8,4 @@ bevy = "0.12.0"
 
 mcrs_storage = { path = "../mcrs_storage" }
 mcrs_flag_bank = { path = "../mcrs_flag_bank" }
+mcrs_blueprints = { path = "../mcrs_blueprints" }
