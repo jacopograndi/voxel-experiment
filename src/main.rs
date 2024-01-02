@@ -1,4 +1,3 @@
-use clap::Parser;
 use bevy::{
     prelude::*,
     window::{PresentMode, WindowPlugin},
@@ -8,6 +7,7 @@ use bevy_renet::{
     transport::{NetcodeClientPlugin, NetcodeServerPlugin},
     RenetClientPlugin, RenetServerPlugin,
 };
+use clap::Parser;
 use mcrs_blueprints::plugin::BlueprintsPlugin;
 use mcrs_physics::plugin::VoxelPhysicsPlugin;
 use mcrs_render::plugin::VoxelRenderPlugin;
@@ -28,18 +28,20 @@ use input::*;
 use net::{
     client::{client_send_input, client_sync_players, client_sync_universe, new_renet_client},
     server::{
-        move_players_system, new_renet_server, server_sync_players, server_sync_universe,
-        server_update_system, server_refresh_time,
+        move_players_system, new_renet_server, server_refresh_time, server_sync_players,
+        server_sync_universe, server_update_system,
     },
     *,
 };
-use ui::client_ui;
 use terrain_editing::*;
 use terrain_generation::*;
+use ui::client_ui;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args { netmode: Option<String> }
+struct Args {
+    netmode: Option<String>,
+}
 
 fn main() {
     let network_mode = NetworkMode::from(Args::parse().netmode.as_deref());

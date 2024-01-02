@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
+use mcrs_blueprints::blocks::{BlockBlueprint, BlockId};
 use mcrs_flag_bank::{flagbank::FlagBank, BlockFlag};
-use mcrs_blueprints::blocks::{BlockId, BlockBlueprint};
 use std::fmt::Display;
 
 // Struct representing 1 cubic meter cube inside the game

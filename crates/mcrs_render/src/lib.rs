@@ -1,10 +1,10 @@
 pub mod block_texture;
 pub mod boxes_world;
-pub mod pipeline;
-pub mod voxel_world;
 pub mod camera;
+pub mod pipeline;
 pub mod plugin;
 pub mod settings;
+pub mod voxel_world;
 pub mod graph {
     pub const NAME: &'static str = "voxel";
     pub mod node {
@@ -16,5 +16,3 @@ pub mod graph {
     }
 }
 pub const VOXEL: &str = graph::NAME;
-
-

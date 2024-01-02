@@ -32,9 +32,7 @@ use super::{
 const SERVER_TICKS_PER_SECOND: u32 = 60;
 
 pub fn server_refresh_time() -> bevy::prelude::Time<bevy::prelude::Fixed> {
-    Time::<Fixed>::from_seconds(
-        1. / (SERVER_TICKS_PER_SECOND as f64),
-    )
+    Time::<Fixed>::from_seconds(1. / (SERVER_TICKS_PER_SECOND as f64))
 }
 
 pub fn new_renet_server() -> (RenetServer, NetcodeServerTransport) {

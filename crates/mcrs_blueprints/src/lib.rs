@@ -1,11 +1,11 @@
 use std::fs::read_to_string;
 
 use bevy::{ecs::system::Resource, utils::HashMap};
-use std::hash::Hash;
 use blocks::{BlockBlueprint, BlockId};
-use ghosts::{GhostId, GhostBlueprint};
+use ghosts::{GhostBlueprint, GhostId};
 use ron::from_str;
 use serde::Deserialize;
+use std::hash::Hash;
 
 pub mod blocks;
 pub mod ghosts;
@@ -32,9 +32,10 @@ pub trait HasNameId<ID> {
 }
 
 impl<
-    ID: Clone + Copy + Default +  Eq + PartialEq + Hash, 
-    BL: HasNameId<ID> + Clone + Default + for<'de> Deserialize<'de>
-> BlueprintList<ID, BL> {
+        ID: Clone + Copy + Default + Eq + PartialEq + Hash,
+        BL: HasNameId<ID> + Clone + Default + for<'de> Deserialize<'de>,
+    > BlueprintList<ID, BL>
+{
     fn from_file(path: &str) -> Self {
         let string = read_to_string(path).unwrap();
         let blueprints_vec: Vec<BL> = from_str(&string).unwrap();

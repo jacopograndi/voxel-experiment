@@ -1,4 +1,10 @@
-use bevy::{ui::{node_bundles::NodeBundle, Style, Val, AlignItems, JustifyContent}, prelude::default, render::color::Color, ecs::system::Commands, hierarchy::BuildChildren};
+use bevy::{
+    ecs::system::Commands,
+    hierarchy::BuildChildren,
+    prelude::default,
+    render::color::Color,
+    ui::{node_bundles::NodeBundle, AlignItems, JustifyContent, Style, Val},
+};
 
 pub fn client_ui(mut commands: Commands) {
     // UI center cursor

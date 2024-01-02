@@ -30,4 +30,3 @@ impl FlagBank {
         (self._flags >> flag.to_u8()) & 0b1 == 1
     }
 }
-

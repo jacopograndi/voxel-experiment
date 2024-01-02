@@ -1,10 +1,5 @@
-
 use bevy::{
-    core_pipeline::{
-        fxaa::FxaaNode,
-        tonemapping::TonemappingNode,
-        upscaling::UpscalingNode,
-    },
+    core_pipeline::{fxaa::FxaaNode, tonemapping::TonemappingNode, upscaling::UpscalingNode},
     prelude::*,
     render::{
         extract_resource::ExtractResourcePlugin,
@@ -14,7 +9,18 @@ use bevy::{
     ui::{draw_ui_graph, UiPassNode},
 };
 
-use crate::{settings::RenderGraphSettings, pipeline::{compute::ComputeResourcesPlugin, trace::{TracePlugin, TraceNode}, stream::StreamNode}, boxes_world::BoxesWorldPlugin, voxel_world::VoxelWorldPlugin, graph, VOXEL};
+use crate::{
+    boxes_world::BoxesWorldPlugin,
+    graph,
+    pipeline::{
+        compute::ComputeResourcesPlugin,
+        stream::StreamNode,
+        trace::{TraceNode, TracePlugin},
+    },
+    settings::RenderGraphSettings,
+    voxel_world::VoxelWorldPlugin,
+    VOXEL,
+};
 
 pub struct VoxelRenderPlugin;
 

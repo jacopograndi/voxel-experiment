@@ -1,7 +1,16 @@
-use bevy::{ecs::bundle::Bundle, render::{camera::{Camera, CameraRenderGraph, Projection}, view::VisibleEntities, primitives::Frustum}, transform::components::{Transform, GlobalTransform}, core_pipeline::{core_3d::Camera3d, tonemapping::Tonemapping}, prelude::default};
+use bevy::{
+    core_pipeline::{core_3d::Camera3d, tonemapping::Tonemapping},
+    ecs::bundle::Bundle,
+    prelude::default,
+    render::{
+        camera::{Camera, CameraRenderGraph, Projection},
+        primitives::Frustum,
+        view::VisibleEntities,
+    },
+    transform::components::{GlobalTransform, Transform},
+};
 
 use crate::{pipeline::trace::TraceSettings, VOXEL};
-
 
 #[derive(Bundle)]
 pub struct VoxelCameraBundle {
