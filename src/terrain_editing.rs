@@ -22,8 +22,6 @@ pub fn player_edit_terrain(
             continue;
         };
 
-        println!("eeeeeeeeeeeh, {:?}", input);
-
         #[derive(PartialEq)]
         enum Act {
             PlaceBlock,

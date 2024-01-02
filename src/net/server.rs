@@ -189,9 +189,7 @@ pub fn server_update_system(
             let player_input: PlayerInput = bincode::deserialize(&message).unwrap();
             if let Some(player_entity) = lobby.players.get(&client_id) {
                 if let Ok(mut current_player_input) = player_input_query.get_mut(*player_entity) {
-                    println!("pre  {:?}", current_player_input);
                     current_player_input.update(player_input);
-                    println!("post {:?}", current_player_input);
                 }
             }
         }
