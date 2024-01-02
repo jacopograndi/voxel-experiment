@@ -66,7 +66,6 @@ pub fn server_update_system(
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
-                println!("Player {} connected.", client_id);
                 let is_local_player = if let Some(local_id) = transport
                     .as_ref()
                     .map(|t| ClientId::from_raw(t.client_id()))
@@ -75,6 +74,13 @@ pub fn server_update_system(
                 } else {
                     true
                 };
+
+                if is_local_player {
+                    debug!(target: "net_server", "Connected to the server");
+                } else {
+                    debug!(target: "net_server", "New player connected with id = {}", client_id);
+                }
+
                 let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 // player character
                 let player_entity = commands
@@ -148,7 +154,20 @@ pub fn server_update_system(
                 server.broadcast_message(ServerChannel::ServerMessages, message);
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
-                println!("Player {} disconnected: {}", client_id, reason);
+                let is_local_player = if let Some(local_id) = transport
+                    .as_ref()
+                    .map(|t| ClientId::from_raw(t.client_id()))
+                {
+                    local_id == *client_id
+                } else {
+                    true
+                };
+
+                if is_local_player {
+                    debug!(target: "net_server", "Disconnected from the server: {}", reason);
+                } else {
+                    debug!(target: "net_server", "Player {} disconnected: {}", client_id, reason);
+                }
                 if let Some(player_entity) = lobby.players.remove(client_id) {
                     commands.entity(player_entity).despawn_recursive();
                 }

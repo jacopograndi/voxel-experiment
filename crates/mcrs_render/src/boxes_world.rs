@@ -119,7 +119,6 @@ fn read_info_textures(
             block_info.voxel_texture_path.clone(),
             vox_texture_index.clone(),
         ));
-        println!("{:?}, {:?}", block_info, vox_texture_index);
         loaded.blocks_id.insert(block_info.id, vox_texture_index);
         max_id = max_id.max(*block_info.id as u32);
     }
@@ -130,7 +129,6 @@ fn read_info_textures(
             ghost_info.voxel_texture_path.clone(),
             vox_texture_index.clone(),
         ));
-        println!("{:?}, {:?}", ghost_info, vox_texture_index);
         loaded.ghosts_id.insert(ghost_info.id, vox_texture_index);
         serial_id += 1;
     }
@@ -190,7 +188,6 @@ fn load_vox_textures(
     for (path, id) in queue.to_load.iter() {
         let result = fs::read(path);
         if let Ok(slice) = result {
-            println!("{path}");
             let result = BlockTexture::from_vox(&slice);
             if let Ok(vox) = result {
                 let grid = BlockTexturePtr(Arc::new(RwLock::new(vox)));

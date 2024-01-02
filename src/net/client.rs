@@ -61,9 +61,15 @@ pub fn client_sync_players(
         let server_message = bincode::deserialize(&message).unwrap();
         match server_message {
             ServerMessages::PlayerConnected { id } => {
-                println!("Player {} connected. This client is ", id,);
-                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 let is_local_player = id == ClientId::from_raw(transport.client_id());
+
+                if is_local_player {
+                    debug!(target: "net_client", "Connected to the server");
+                } else {
+                    debug!(target: "net_client", "New player connected with id = {}", id);
+                }
+
+                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
                 if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
                     let player_entity = commands
                         .spawn((
