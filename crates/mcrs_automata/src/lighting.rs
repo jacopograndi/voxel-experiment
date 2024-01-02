@@ -7,11 +7,11 @@ use mcrs_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,
     universe::Universe,
-    CHUNK_SIDE, CHUNK_VOLUME,
+    CHUNK_SIDE,
 };
 
 pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Blueprints) {
-    println!("lighting {:?} chunks", chunks.len());
+    debug!(target: "automata_lighting", chunks = ?chunks);
 
     // calculate sunlight beams
     let mut suns: Vec<IVec3> = vec![];
@@ -72,8 +72,7 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
     let mut torches: Vec<IVec3> = vec![];
     for pos in chunks.iter() {
         let chunk = universe.chunks.get(pos).unwrap();
-        for i in 0..CHUNK_VOLUME {
-            let xyz = Chunk::_idx2xyz(i);
+        for xyz in Chunk::iter() {
             let id = chunk.read_block(xyz).id;
             if info.blocks.get(&id).is_light_source() {
                 torches.push(*pos + xyz);
@@ -108,7 +107,7 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
     dark.set_light(lt, 0);
     universe.set_chunk_block(&source, dark);
 
-    println!("1 source of {lt} darkness val:{val}");
+    debug!(target: "automata_lighting", "1 source of {lt} darkness val:{val}");
 
     let mut new_lights: Vec<IVec3> = vec![];
     let mut frontier: VecDeque<IVec3> = [source].into();
@@ -130,13 +129,10 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
                 if let Some(voxel) = unlit {
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
-                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().dirty_render = true;
-                    universe.chunks.get_mut(&c).unwrap().dirty_replication = true;
                 }
             }
         } else {
-            println!("{} iters for {lt} darkness", iter);
+            debug!(target: "automata_lighting", "{} iters for {lt} darkness", iter);
             break;
         }
     }
@@ -154,7 +150,8 @@ pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightTy
     ];
     const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
 
-    println!("{} sources of {lt} light", sources.len());
+    debug!(target: "automata_lighting", "{} sources of {lt} light", sources.len());
+
     let mut frontier: VecDeque<IVec3> = sources.clone().into();
     for iter in 0..MAX_LIGHTITNG_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
@@ -175,13 +172,10 @@ pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightTy
                 if let Some(voxel) = lit {
                     universe.set_chunk_block(&target, voxel);
                     frontier.push_back(target);
-                    let (c, _) = universe.pos_to_chunk_and_inner(&target);
-                    universe.chunks.get_mut(&c).unwrap().dirty_render = true;
-                    universe.chunks.get_mut(&c).unwrap().dirty_replication = true;
                 }
             }
         } else {
-            println!("{} iters for {lt} light", iter);
+            debug!(target: "automata_lighting", "{} iters for {lt} light", iter);
             break;
         }
     }

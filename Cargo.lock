@@ -3974,6 +3974,7 @@ dependencies = [
  "rand_chacha",
  "renet",
  "serde",
+ "tracing",
 ]
 
 [[package]]

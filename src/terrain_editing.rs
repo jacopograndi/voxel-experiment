@@ -46,9 +46,9 @@ pub fn player_edit_terrain(
                         );
                     }
                     Act::RemoveBlock => {
-                        println!("removed block");
-
                         let pos = hit.grid_pos;
+
+                        debug!(target: "terrain_editing", "removed block at {}", pos);
 
                         let mut light_suns = vec![];
                         let mut light_torches = vec![];
@@ -106,9 +106,9 @@ pub fn player_edit_terrain(
                         propagate_light(&mut universe, light_torches, LightType::Torch);
                     }
                     Act::PlaceBlock => {
-                        println!("placed block");
-
                         let pos = hit.grid_pos + hit.normal;
+
+                        debug!(target: "terrain_editing", "placed block at {}", pos);
 
                         let mut dark_suns = vec![];
 

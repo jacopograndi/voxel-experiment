@@ -15,6 +15,10 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    pub fn iter() -> impl Iterator<Item = IVec3> {
+        (0..CHUNK_VOLUME).map(Self::_idx2xyz)
+    }
+
     pub fn get_ref(&self) -> RwLockReadGuard<[Block; CHUNK_VOLUME]> {
         self._blocks.read().unwrap()
     }
@@ -52,11 +56,11 @@ impl Chunk {
         self._blocks.read().unwrap()[Self::_xyz2idx(xyz)]
     }
 
-    pub fn _xyz2idx(xyz: IVec3) -> usize {
+    fn _xyz2idx(xyz: IVec3) -> usize {
         xyz.x as usize * CHUNK_AREA + xyz.y as usize * CHUNK_SIDE + xyz.z as usize
     }
 
-    pub fn _idx2xyz(index: usize) -> IVec3 {
+    fn _idx2xyz(index: usize) -> IVec3 {
         let layer = index / CHUNK_SIDE;
         IVec3 {
             x: (layer / CHUNK_SIDE) as i32,

@@ -23,7 +23,7 @@ impl Universe {
             .map(|(pos, chunk)| (pos.clone(), chunk.get_mut()))
     }
 
-    pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
+    fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
         let chunk_size = IVec3::splat(CHUNK_SIDE as i32);
         let chunk_pos = (pos.div_euclid(chunk_size)) * chunk_size;
         let inner_pos = pos.rem_euclid(chunk_size);
