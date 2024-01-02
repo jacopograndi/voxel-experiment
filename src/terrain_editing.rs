@@ -21,6 +21,9 @@ pub fn player_edit_terrain(
         let Ok(input) = player_query.get(parent.get()) else {
             continue;
         };
+
+        println!("eeeeeeeeeeeh, {:?}", input);
+
         #[derive(PartialEq)]
         enum Act {
             PlaceBlock,

@@ -137,7 +137,7 @@ pub fn client_sync_players(
                 }
             }
             ServerMessages::PlayerDisconnected { id } => {
-                println!("Player {} disconnected.", id);
+                debug!(target: "net_client", "Player {} disconnected.", id);
                 if let Some(player_entity) = lobby.players.remove(&id) {
                     commands.entity(player_entity).despawn_recursive();
                 }
@@ -171,7 +171,7 @@ pub fn client_sync_players(
 pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
     while let Some(message) = client.receive_message(ServerChannel::NetworkedUniverse) {
         let server_message: SyncUniverse = bincode::deserialize(&message).unwrap();
-        println!("{:?}", server_message.chunks.len());
+        debug!(target: "net_client", "{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
             if let Some(chunk) = universe.chunks.get_mut(pos) {
                 chunk.dirty_render = true;
@@ -191,7 +191,8 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
     }
 }
 
-pub fn client_send_input(player_input: Res<PlayerInput>, mut client: ResMut<RenetClient>) {
-    let input_message = bincode::serialize(&*player_input).unwrap();
+pub fn client_send_input(mut res_player_input: ResMut<PlayerInput>, mut client: ResMut<RenetClient>) {
+    let input_message = bincode::serialize(&*res_player_input).unwrap();
     client.send_message(DefaultChannel::ReliableOrdered, input_message);
+    res_player_input.consume();
 }

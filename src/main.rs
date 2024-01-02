@@ -28,8 +28,8 @@ use input::*;
 use net::{
     client::{client_send_input, client_sync_players, client_sync_universe, new_renet_client},
     server::{
-        move_players_system, new_renet_server, server_refresh_time, server_sync_players,
-        server_sync_universe, server_update_system,
+        consume_player_input, move_players_system, new_renet_server, server_refresh_time,
+        server_sync_players, server_sync_universe, server_update_system,
     },
     *,
 };
@@ -78,15 +78,17 @@ fn app_server(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-            server_update_system,
-            server_sync_players,
-            server_sync_universe,
-            move_players_system,
-            player_edit_terrain,
+                server_update_system,
+                server_sync_players,
+                server_sync_universe,
+                player_edit_terrain,
+                move_players_system,
+                load_and_gen_chunks,
+            consume_player_input,
         )
+            .chain()
             .run_if(resource_exists::<RenetServer>()),
     );
-    app.add_systems(Update, load_and_gen_chunks);
 }
 
 fn app_client(app: &mut App) {

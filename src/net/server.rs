@@ -62,6 +62,7 @@ pub fn server_update_system(
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
+    mut player_input_query: Query<&mut PlayerInput>,
 ) {
     for event in server_events.read() {
         match event {
@@ -187,7 +188,11 @@ pub fn server_update_system(
         {
             let player_input: PlayerInput = bincode::deserialize(&message).unwrap();
             if let Some(player_entity) = lobby.players.get(&client_id) {
-                commands.entity(*player_entity).insert(player_input);
+                if let Ok(mut current_player_input) = player_input_query.get_mut(*player_entity) {
+                    println!("pre  {:?}", current_player_input);
+                    current_player_input.update(player_input);
+                    println!("post {:?}", current_player_input);
+                }
             }
         }
     }
@@ -257,7 +262,7 @@ pub fn server_sync_universe(
 
         if !sent_chunks.is_empty() {
             let sync_message = bincode::serialize(&sync).unwrap();
-            println!("sending dirty universe: {}", sync_message.len());
+            debug!(target: "net_server", "sending dirty universe (len{})", sync_message.len());
             server.send_message(*client_id, ServerChannel::NetworkedUniverse, sync_message);
             *chunks = chunks.difference(&sent_chunks).cloned().collect();
         }
@@ -291,5 +296,11 @@ pub fn move_players_system(
                 tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
             }
         }
+    }
+}
+
+pub fn consume_player_input(mut player_input_query: Query<&mut PlayerInput>) {
+    for mut input in player_input_query.iter_mut() {
+        input.consume();
     }
 }
