@@ -23,7 +23,7 @@ mcrs_blueprints = { path = "crates/mcrs_blueprints" }
 mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_flag_bank = { path = "crates/mcrs_flag_bank" }
-mcrs_automata = { path = "crates/mcrs_automata" }
+mcrs_chemistry = { path = "crates/mcrs_chemistry" }
 
 [workspace]
 members = ["crates/*"]

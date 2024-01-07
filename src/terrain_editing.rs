@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use mcrs_automata::lighting::*;
 use mcrs_blueprints::Blueprints;
+use mcrs_chemistry::lighting::*;
 use mcrs_flag_bank::BlockFlag;
 use mcrs_physics::{character::CameraController, raycast};
 use mcrs_storage::{

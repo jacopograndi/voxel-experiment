@@ -1,6 +1,6 @@
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_automata::lighting::recalc_lights;
 use mcrs_blueprints::Blueprints;
+use mcrs_chemistry::lighting::recalc_lights;
 use mcrs_render::voxel_world::VIEW_DISTANCE;
 use mcrs_storage::{chunk::Chunk, universe::Universe, CHUNK_SIDE};
 use renet::{transport::NetcodeClientTransport, ClientId};
