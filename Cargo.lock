@@ -2605,16 +2605,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcrs_automata"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "mcrs_blueprints",
- "mcrs_flag_bank",
- "mcrs_storage",
-]
-
-[[package]]
 name = "mcrs_blueprints"
 version = "0.1.0"
 dependencies = [
@@ -2623,6 +2613,16 @@ dependencies = [
  "mcrs_flag_bank",
  "ron",
  "serde",
+]
+
+[[package]]
+name = "mcrs_chemistry"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "mcrs_blueprints",
+ "mcrs_flag_bank",
+ "mcrs_storage",
 ]
 
 [[package]]
@@ -3964,8 +3964,8 @@ dependencies = [
  "bytemuck",
  "clap",
  "egui_plot",
- "mcrs_automata",
  "mcrs_blueprints",
+ "mcrs_chemistry",
  "mcrs_flag_bank",
  "mcrs_physics",
  "mcrs_render",
