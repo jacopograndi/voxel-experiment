@@ -101,11 +101,15 @@ pub const DIRS: [IVec3; 6] = [
 const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
 
 pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
-    let voxel = universe.read_chunk_block(&source).unwrap();
-    let val = voxel.get_light(lt);
-    let mut dark = voxel.clone();
-    dark.set_light(lt, 0);
-    universe.set_chunk_block(&source, dark);
+    let val = if let Some(voxel) = universe.read_chunk_block(&source) {
+        let val = voxel.get_light(lt);
+        let mut dark = voxel.clone();
+        dark.set_light(lt, 0);
+        universe.set_chunk_block(&source, dark);
+        val
+    } else {
+        0
+    };
 
     debug!(target: "automata_lighting", "1 source of {lt} darkness val:{val}");
 
@@ -155,7 +159,9 @@ pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightTy
     let mut frontier: VecDeque<IVec3> = sources.clone().into();
     for iter in 0..MAX_LIGHTITNG_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
-            let voxel = universe.read_chunk_block(&pos).unwrap();
+            let Some(voxel) = universe.read_chunk_block(&pos) else {
+                continue;
+            };
             let light = voxel.get_light(lt);
             for dir in DIRS.iter() {
                 let target = pos + *dir;

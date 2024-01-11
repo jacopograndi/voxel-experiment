@@ -191,7 +191,10 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
     }
 }
 
-pub fn client_send_input(mut res_player_input: ResMut<PlayerInput>, mut client: ResMut<RenetClient>) {
+pub fn client_send_input(
+    mut res_player_input: ResMut<PlayerInput>,
+    mut client: ResMut<RenetClient>,
+) {
     let input_message = bincode::serialize(&*res_player_input).unwrap();
     client.send_message(DefaultChannel::ReliableOrdered, input_message);
     res_player_input.consume();

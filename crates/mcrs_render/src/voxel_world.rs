@@ -15,7 +15,7 @@ use mcrs_storage::chunk::Chunk;
 use mcrs_storage::universe::Universe;
 use mcrs_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
-pub const VIEW_DISTANCE: u32 = 100;
+pub const VIEW_DISTANCE: u32 = 300;
 
 pub struct VoxelWorldPlugin;
 
@@ -232,7 +232,6 @@ fn prepare_uniforms(
 }
 
 fn prepare_chunks(
-    voxel_uniforms: Res<VoxelUniforms>,
     universe: Res<Universe>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
@@ -242,14 +241,14 @@ fn prepare_chunks(
     };
     let cam_pos = view.transform.translation();
 
-    let chunk_side = voxel_uniforms.chunk_size;
-    let camera_chunk_pos = (cam_pos / chunk_side as f32) * chunk_side as f32;
-
+    let chunk_center = Vec3::splat(CHUNK_SIDE as f32 / 2.);
     let visible_chunks: HashSet<IVec3> = universe
         .chunks
         .iter()
         .filter_map(|(pos, _chunk)| {
-            if (camera_chunk_pos - pos.as_vec3()).length_squared() < VIEW_DISTANCE.pow(2) as f32 {
+            if (cam_pos - (pos.as_vec3() + chunk_center)).length_squared()
+                < VIEW_DISTANCE.pow(2) as f32
+            {
                 Some(*pos)
             } else {
                 None
@@ -290,7 +289,6 @@ fn prepare_chunks(
     for &pos in to_be_rendered.iter() {
         let chunk = universe.chunks.get(&pos).unwrap();
         let grid = chunk.clone();
-        // render_chunk_map.versions.insert(pos, chunk.version);
         if let Some(BufferOffset(offset)) = render_chunk_map.buffer_alloc.get(&pos) {
             render_chunk_map.to_be_written.push((offset, grid));
         } else {

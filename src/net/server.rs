@@ -82,7 +82,7 @@ pub fn server_update_system(
                     debug!(target: "net_server", "New player connected with id = {}", client_id);
                 }
 
-                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
+                let spawn_point = Vec3::new(0.0, 5.0, 0.0);
                 // player character
                 let player_entity = commands
                     .spawn((

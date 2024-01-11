@@ -7,8 +7,6 @@ pub struct RenderGraphSettings {
 
 impl Default for RenderGraphSettings {
     fn default() -> Self {
-        Self {
-            trace: true,
-        }
+        Self { trace: true }
     }
 }

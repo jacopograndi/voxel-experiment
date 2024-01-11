@@ -78,12 +78,12 @@ fn app_server(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-                server_update_system,
-                server_sync_players,
-                server_sync_universe,
-                player_edit_terrain,
-                move_players_system,
-                load_and_gen_chunks,
+            server_update_system,
+            server_sync_players,
+            server_sync_universe,
+            player_edit_terrain,
+            move_players_system,
+            generate_chunks,
             consume_player_input,
         )
             .chain()

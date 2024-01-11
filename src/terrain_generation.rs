@@ -11,7 +11,13 @@ fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
     if pos.y < 0 {
         Chunk::filled(info.blocks.get_named("Dirt"))
     } else {
-        Chunk::empty()
+        let chunk = Chunk::empty();
+        // debug block to see which chunks are loaded
+        chunk.set_block(
+            IVec3::new(3, 3, 3),
+            mcrs_storage::block::Block::new(info.blocks.get_named("Stone")),
+        );
+        chunk
     }
 }
 
@@ -27,9 +33,11 @@ pub fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
     for x in -lvdc..=lvdc {
         for y in -lvdc..=lvdc {
             for z in -lvdc..=lvdc {
-                let rel = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
-                if rel.as_vec3().length_squared() < load_view_distance.pow(2) as f32 {
-                    let pos = camera_chunk_pos + rel;
+                let rel_map = IVec3::new(x, y, z) * CHUNK_SIDE as i32;
+                let rel_center = IVec3::new(x, y, z).as_vec3() * CHUNK_SIDE as f32
+                    + Vec3::ONE * CHUNK_SIDE as f32 * 0.5;
+                if rel_center.length_squared() < load_view_distance.pow(2) as f32 {
+                    let pos = camera_chunk_pos + rel_map;
                     chunks.insert(pos);
                 }
             }
@@ -38,7 +46,7 @@ pub fn get_chunks_in_sphere(pos: Vec3) -> HashSet<IVec3> {
     chunks
 }
 
-pub fn load_and_gen_chunks(
+pub fn generate_chunks(
     mut universe: ResMut<Universe>,
     player_query: Query<(&NetPlayer, &Transform)>,
     network_mode: Res<NetworkMode>,
@@ -75,6 +83,7 @@ pub fn load_and_gen_chunks(
     }
 
     if !added.is_empty() {
+        println!("gen");
         recalc_lights(&mut universe, added.into_iter().collect(), &*info);
     }
 }
