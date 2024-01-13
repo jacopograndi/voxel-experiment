@@ -17,15 +17,17 @@ pub struct PlayerInput {
 
 impl PlayerInput {
     pub fn update(&mut self, next: Self) {
-        let placing = self.placing | next.placing;
-        let mining = self.mining | next.mining;
+        let old = self.clone();
         *self = next.clone();
-        self.placing = placing;
-        self.mining = mining;
+        self.placing |= old.placing;
+        self.mining |= old.mining;
     }
 
     pub fn consume(&mut self) {
+        let old = self.clone();
         *self = Self::default();
+        self.rotation_body = old.rotation_body;
+        self.rotation_camera = old.rotation_camera;
     }
 }
 

@@ -70,7 +70,7 @@ pub fn client_sync_players(
                 }
 
                 let spawn_point = Vec3::new(0.0, 0.0, 0.0);
-                if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
+                if !matches!(*network_mode, NetworkMode::ClientAndServer) {
                     let player_entity = commands
                         .spawn((
                             SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
@@ -153,7 +153,7 @@ pub fn client_sync_players(
                 if let Ok((_, _, children)) = query.get(*player_entity) {
                     let camera_entity = children.iter().next().unwrap(); // todo find camera
                     let mut tr = query_transform.get_mut(*player_entity).unwrap();
-                    if !is_local_player {
+                    if !is_local_player && !matches!(*network_mode, NetworkMode::ClientAndServer) {
                         tr.translation = playerstate.position;
                         tr.rotation = Quat::from_axis_angle(Vec3::Y, playerstate.rotation_body);
                         let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
@@ -196,6 +196,7 @@ pub fn client_send_input(
     mut client: ResMut<RenetClient>,
 ) {
     let input_message = bincode::serialize(&*res_player_input).unwrap();
+    // maybe unreliable is better (faster and if a packet is lost, whatever)
     client.send_message(DefaultChannel::ReliableOrdered, input_message);
     res_player_input.consume();
 }

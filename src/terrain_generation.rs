@@ -83,7 +83,6 @@ pub fn generate_chunks(
     }
 
     if !added.is_empty() {
-        println!("gen");
         recalc_lights(&mut universe, added.into_iter().collect(), &*info);
     }
 }

@@ -1,4 +1,5 @@
 use bevy::{
+    log::LogPlugin,
     prelude::*,
     window::{PresentMode, WindowPlugin},
 };
@@ -50,11 +51,11 @@ fn main() {
     app.init_resource::<Lobby>();
     app.insert_resource(network_mode.clone());
     app.insert_resource(server_refresh_time());
-    app.add_plugins((VoxelPhysicsPlugin, VoxelStoragePlugin, BlueprintsPlugin));
+    app.add_plugins((VoxelStoragePlugin, BlueprintsPlugin));
 
     match network_mode {
         NetworkMode::Server => {
-            app.add_plugins((MinimalPlugins, TransformPlugin));
+            app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default()));
             app_server(&mut app);
         }
         NetworkMode::ClientAndServer => {
@@ -70,7 +71,7 @@ fn main() {
 }
 
 fn app_server(app: &mut App) {
-    app.add_plugins((RenetServerPlugin, NetcodeServerPlugin));
+    app.add_plugins((RenetServerPlugin, NetcodeServerPlugin, VoxelPhysicsPlugin));
     let (server, transport) = new_renet_server();
     app.insert_resource(server);
     app.insert_resource(transport);
@@ -111,15 +112,10 @@ fn app_client(app: &mut App) {
     app.insert_resource(client);
     app.insert_resource(transport);
     app.add_systems(Update, camera_controller_movement);
+    app.add_systems(Update, player_input);
     app.add_systems(
-        PreUpdate,
-        (
-            player_input,
-            client_send_input,
-            client_sync_players,
-            client_sync_universe,
-        )
-            .run_if(client_connected()),
+        FixedUpdate,
+        (client_send_input, client_sync_players, client_sync_universe).run_if(client_connected()),
     );
     app.add_plugins(DebugDiagnosticPlugin);
     app.add_systems(Startup, client_ui)

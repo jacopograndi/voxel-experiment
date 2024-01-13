@@ -9,10 +9,14 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     DefaultChannel, RenetServer, ServerEvent,
 };
+use mcrs_blueprints::Blueprints;
 use mcrs_physics::character::{
     CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
 };
-use mcrs_render::camera::VoxelCameraBundle;
+use mcrs_render::{
+    boxes_world::{Ghost, LoadedVoxTextures},
+    camera::VoxelCameraBundle,
+};
 use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},
@@ -63,6 +67,8 @@ pub fn server_update_system(
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
     mut player_input_query: Query<&mut PlayerInput>,
+    loaded_textures: Option<Res<LoadedVoxTextures>>,
+    info: Res<Blueprints>,
 ) {
     for event in server_events.read() {
         match event {
@@ -77,7 +83,7 @@ pub fn server_update_system(
                 };
 
                 if is_local_player {
-                    debug!(target: "net_server", "Connected to the server");
+                    debug!(target: "net_server", "Connected to the server (our id = {})", client_id);
                 } else {
                     debug!(target: "net_server", "New player connected with id = {}", client_id);
                 }
@@ -128,7 +134,25 @@ pub fn server_update_system(
                         }
                     })
                     .id();
-                if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer) {
+                if !is_local_player && !matches!(*network_mode, NetworkMode::Server) {
+                    if let Some(loaded_textures) = loaded_textures.as_ref() {
+                        commands.entity(player_entity).with_children(|parent| {
+                            parent.spawn((
+                                SpatialBundle::from_transform(Transform {
+                                    scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
+                                    ..default()
+                                }),
+                                Ghost {
+                                    vox_texture_index: loaded_textures
+                                        .ghosts_id
+                                        .get(&info.ghosts.get_named("Steve").id)
+                                        .unwrap()
+                                        .clone(),
+                                },
+                            ));
+                        });
+                    }
+                } else if matches!(*network_mode, NetworkMode::ClientAndServer) {
                     commands.entity(player_entity).insert(LocalPlayer);
                 }
 
@@ -260,7 +284,7 @@ pub fn server_sync_universe(
 
         if !sent_chunks.is_empty() {
             let sync_message = bincode::serialize(&sync).unwrap();
-            debug!(target: "net_server", "sending dirty universe (len{})", sync_message.len());
+            debug!(target: "net_server", "sending dirty universe ({} bytes)", sync_message.len());
             server.send_message(*client_id, ServerChannel::NetworkedUniverse, sync_message);
             *chunks = chunks.difference(&sent_chunks).cloned().collect();
         }
