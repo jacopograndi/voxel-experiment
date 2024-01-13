@@ -15,7 +15,7 @@ use mcrs_storage::chunk::Chunk;
 use mcrs_storage::universe::Universe;
 use mcrs_storage::{CHUNK_SIDE, CHUNK_VOLUME};
 
-pub const VIEW_DISTANCE: u32 = 300;
+pub const VIEW_DISTANCE: u32 = 70;
 
 pub struct VoxelWorldPlugin;
 
