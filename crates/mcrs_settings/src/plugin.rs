@@ -22,7 +22,11 @@ impl Plugin for McrsSettingsPlugin {
         app.insert_resource(ticks_per_second(tps.0));
         app.insert_resource(tps);
 
-        app.insert_resource(ViewDistance::default());
+        if let Some(view_distance) = args.view_distance {
+            app.insert_resource(ViewDistance(view_distance));
+        } else {
+            app.insert_resource(ViewDistance::default());
+        }
     }
 }
 

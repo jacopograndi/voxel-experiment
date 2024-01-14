@@ -10,6 +10,7 @@ tracing = "0.1"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 bevy-inspector-egui = "0.22.1"
+noise = "0.8.2"
 
 mcrs_core = { path = "crates/mcrs_core" }
 mcrs_physics = { path = "crates/mcrs_physics" }

@@ -9,6 +9,9 @@ pub fn hotbar(
     mut contexts: EguiContexts,
     blueprints: Res<Blueprints>,
 ) {
+    if *hand == 0 {
+        *hand = 1;
+    }
     egui::Window::new("Hotbar")
         .anchor(egui::Align2::CENTER_BOTTOM, egui::Vec2::ZERO)
         .title_bar(false)
@@ -21,7 +24,10 @@ pub fn hotbar(
                     if blueprint.name == "Air" {
                         continue;
                     }
-                    let response = ui.button(format!("{}", blueprint.name));
+                    let selected = *hand == *blueprint.id;
+                    let button =
+                        egui::Button::new(format!("{}", blueprint.name)).selected(selected);
+                    let response = ui.add(button);
                     if response.clicked() {
                         *hand = *blueprint.id;
                     }
