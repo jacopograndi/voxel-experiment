@@ -169,10 +169,10 @@ pub fn server_update_system(
 pub fn server_sync_players(
     mut server: ResMut<RenetServer>,
     transforms: Query<&Transform>,
-    query: Query<(Entity, &NetPlayer, &Children)>,
+    query: Query<(Entity, &NetPlayer, &PlayerInput, &Children)>,
 ) {
     let mut players: HashMap<ClientId, PlayerState> = HashMap::new();
-    for (entity, player, children) in query.iter() {
+    for (entity, player, input, children) in query.iter() {
         let tr = transforms.get(entity).unwrap();
         let camera_entity = children.iter().next().unwrap();
         let tr_camera = transforms.get(*camera_entity).unwrap();
@@ -180,6 +180,7 @@ pub fn server_sync_players(
             position: tr.translation,
             rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
             rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
+            block_in_hand: input.block_in_hand,
         };
         players.insert(player.id, playerstate);
     }

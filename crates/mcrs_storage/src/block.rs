@@ -23,7 +23,7 @@ impl Block {
     pub fn new(block_info: &BlockBlueprint) -> Self {
         let mut new_block: Block = Self {
             id: block_info.id,
-            light0: 0,
+            light0: block_info.light_level,
             light1: 0,
             properties: FlagBank::default(),
         };

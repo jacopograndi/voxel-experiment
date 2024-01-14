@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
+use mcrs_blueprints::{blocks::BlockId, flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
 use mcrs_physics::{character::CameraController, raycast};
 use mcrs_storage::{
@@ -13,10 +13,9 @@ pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     player_query: Query<&PlayerInput>,
     mut universe: ResMut<Universe>,
-    info: Res<Blueprints>,
+    blueprints: Res<Blueprints>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
-        // only on the server
         let Ok(input) = player_query.get(parent.get()) else {
             continue;
         };
@@ -25,26 +24,15 @@ pub fn terrain_editing(
         enum Act {
             PlaceBlock,
             RemoveBlock,
-            Inspect,
         }
-        let act = match (input.placing, input.mining, false) {
-            (true, _, _) => Some(Act::PlaceBlock),
-            (_, true, _) => Some(Act::RemoveBlock),
-            (_, _, true) => Some(Act::Inspect),
+        let act = match (input.placing, input.mining) {
+            (true, _) => Some(Act::PlaceBlock),
+            (_, true) => Some(Act::RemoveBlock),
             _ => None,
         };
         if let Some(act) = act {
             if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &universe) {
                 match act {
-                    Act::Inspect => {
-                        println!(
-                            "hit(pos:{}, block:{:?}, dist:{}), head(block:{:?})",
-                            hit.pos,
-                            universe.read_chunk_block(&hit.grid_pos),
-                            hit.distance,
-                            universe.read_chunk_block(&tr.translation().floor().as_ivec3()),
-                        );
-                    }
                     Act::RemoveBlock => {
                         let pos = hit.grid_pos;
 
@@ -54,14 +42,14 @@ pub fn terrain_editing(
                         let mut light_torches = vec![];
 
                         if let Some(block) = universe.read_chunk_block(&pos) {
-                            // todo: use BlockBlueprint.is_light_source
-                            if info.blocks.get(&block.id).is_light_source() {
+                            if blueprints.blocks.get(&block.id).is_light_source() {
                                 let new = propagate_darkness(&mut universe, pos, LightType::Torch);
                                 propagate_light(&mut universe, new, LightType::Torch)
                             }
                         }
 
-                        universe.set_chunk_block(&pos, Block::new(info.blocks.get_named("Air")));
+                        universe
+                            .set_chunk_block(&pos, Block::new(blueprints.blocks.get_named("Air")));
 
                         let planar = IVec2::new(pos.x, pos.z);
                         if let Some(height) = universe.heightfield.get(&planar) {
@@ -112,26 +100,12 @@ pub fn terrain_editing(
 
                         let mut dark_suns = vec![];
 
-                        //if keys.pressed(KeyCode::Key3) {
-                        // todo: implement hotbar
-                        if false {
-                            universe.set_chunk_block(
-                                &pos,
-                                Block::new(info.blocks.get_named("Glowstone")),
-                            );
-                            universe
-                                .read_chunk_block(&pos)
-                                .unwrap()
-                                .set_light(LightType::Torch, 14);
-                            propagate_light(&mut universe, vec![pos], LightType::Torch)
-                        } else {
-                            let new = propagate_darkness(&mut universe, pos, LightType::Torch);
+                        let blueprint = blueprints
+                            .blocks
+                            .get(&BlockId::from_u8(input.block_in_hand));
+                        universe.set_chunk_block(&pos, Block::new(blueprint));
 
-                            universe
-                                .set_chunk_block(&pos, Block::new(info.blocks.get_named("Wood")));
-
-                            propagate_light(&mut universe, new, LightType::Torch);
-                        }
+                        propagate_light(&mut universe, vec![pos], LightType::Torch);
 
                         let planar = IVec2::new(pos.x, pos.z);
                         if let Some(height) = universe.heightfield.get(&planar) {

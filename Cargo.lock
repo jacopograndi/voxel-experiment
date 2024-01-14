@@ -3992,6 +3992,7 @@ name = "voxel-experiment"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_egui",
  "mcrs_blueprints",
  "mcrs_chemistry",
  "mcrs_core",

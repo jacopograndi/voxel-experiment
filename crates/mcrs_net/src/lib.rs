@@ -104,6 +104,7 @@ struct PlayerState {
     position: Vec3,
     rotation_body: f32,
     rotation_camera: f32,
+    block_in_hand: u8,
 }
 
 // todo: consider using an event instead of a marker component
