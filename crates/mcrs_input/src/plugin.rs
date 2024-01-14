@@ -13,10 +13,7 @@ impl Plugin for McrsInputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlayerInput>();
         app.add_systems(Update, player_input);
-        app.add_systems(
-            FixedUpdate,
-            consume_player_input.in_set(InputSet::Consume),
-        );
+        app.add_systems(FixedUpdate, consume_player_input.in_set(InputSet::Consume));
     }
 }
 

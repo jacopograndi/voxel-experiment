@@ -37,7 +37,9 @@ impl Plugin for McrsNetServerPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (server_update_system, move_players_system).chain().in_set(NetSet::Receive),
+                (server_update_system, move_players_system)
+                    .chain()
+                    .in_set(NetSet::Receive),
                 (server_sync_players, server_sync_universe)
                     .chain()
                     .in_set(NetSet::Send),

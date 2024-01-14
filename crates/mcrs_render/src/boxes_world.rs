@@ -235,7 +235,7 @@ fn write_boxes(
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
     render_queue: Res<RenderQueue>,
     boxes_data: Res<BoxesData>,
-    view_distance: Res<ViewDistance>
+    view_distance: Res<ViewDistance>,
 ) {
     let Ok((view, ..)) = view_query.get_single() else {
         return;
