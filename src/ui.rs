@@ -6,7 +6,7 @@ use bevy::{
     ui::{node_bundles::NodeBundle, AlignItems, JustifyContent, Style, Val},
 };
 
-pub fn client_ui(mut commands: Commands) {
+pub fn ui(mut commands: Commands) {
     // UI center cursor
     commands
         .spawn(NodeBundle {

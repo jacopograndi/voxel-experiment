@@ -5,11 +5,13 @@ use mcrs_debug::plugin::McrsDebugPlugin;
 mod spawn_player;
 mod terrain_editing;
 mod terrain_generation;
+mod ui;
 
 use mcrs_net::IsServer;
 use spawn_player::spawn_player;
 use terrain_editing::terrain_editing;
 use terrain_generation::terrain_generation;
+use ui::ui;
 
 fn main() {
     let mut app = App::new();
@@ -21,5 +23,6 @@ fn main() {
             .run_if(resource_exists::<IsServer>()),
     );
     app.add_systems(Update, spawn_player);
+    app.add_systems(Update, ui);
     app.run()
 }
