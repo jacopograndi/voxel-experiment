@@ -9,6 +9,7 @@ bevy_egui = "0.24.0"
 tracing = "0.1"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
+bevy-inspector-egui = "0.22.1"
 
 mcrs_core = { path = "crates/mcrs_core" }
 mcrs_physics = { path = "crates/mcrs_physics" }
