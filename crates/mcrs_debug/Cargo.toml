@@ -1,0 +1,9 @@
+[package]
+name = "mcrs_debug"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.12.0"
+bevy_egui = "0.24.0"
+egui_plot = "0.24.0"

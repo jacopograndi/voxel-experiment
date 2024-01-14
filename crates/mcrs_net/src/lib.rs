@@ -1,4 +1,5 @@
 pub mod client;
+pub mod plugin;
 pub mod server;
 
 use std::{collections::HashMap, time::Duration};
@@ -12,33 +13,18 @@ const PROTOCOL_ID: u64 = 7;
 
 const PORT: u32 = 54550;
 
-#[derive(Resource, Debug, Clone, PartialEq, Eq)]
-pub enum NetworkMode {
-    /// A server without a local player (headless hosting)
-    Server,
-    /// A server with a local player (singleplayer and hosting)
-    ClientAndServer,
-    /// A player connected to a server.
-    Client,
-}
-
-impl From<Option<&str>> for NetworkMode {
-    fn from(netmode: Option<&str>) -> NetworkMode {
-        match netmode {
-            Some("client") => NetworkMode::Client,
-            Some("server") => NetworkMode::Server,
-            None => NetworkMode::ClientAndServer,
-            Some(_) => panic!("Use \"client\" for client-only mode, \"server\" for server-only mode, leave blank for standard (client+server) mode."),
-        }
-    }
-}
+// helper resources
+#[derive(Resource, Debug, Clone)]
+pub struct IsServer;
+#[derive(Resource, Debug, Clone)]
+pub struct IsClient;
 
 #[derive(Debug, Component)]
 pub struct NetPlayer {
     pub id: ClientId,
 }
 
-#[derive(Debug, Component)]
+#[derive(Debug, Component, Clone)]
 pub struct LocalPlayer;
 
 #[derive(Debug, Default, Resource)]
@@ -119,3 +105,7 @@ struct PlayerState {
     rotation_body: f32,
     rotation_camera: f32,
 }
+
+// todo: consider using an event instead of a marker component
+#[derive(Debug, Clone, Component)]
+pub struct NewPlayerSpawned;

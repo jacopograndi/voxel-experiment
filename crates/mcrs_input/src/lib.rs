@@ -1,8 +1,7 @@
-use bevy::prelude::*;
-use mcrs_physics::character::CharacterController;
-use serde::{Deserialize, Serialize};
+pub mod plugin;
 
-use crate::net::{LocalPlayer, NetworkMode};
+use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
 pub struct PlayerInput {
@@ -37,8 +36,6 @@ pub fn player_input(
     query_transform: Query<&Transform>,
     query_camera: Query<(Entity, &Camera, &Parent)>,
     mouse: Res<Input<MouseButton>>,
-    mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
-    network_mode: Res<NetworkMode>,
 ) {
     let mut input = PlayerInput::default();
     if let Ok((entity, _, parent)) = query_camera.get_single() {
@@ -68,11 +65,4 @@ pub fn player_input(
     input.mining = mouse.just_pressed(MouseButton::Left);
 
     player_input.update(input);
-
-    if matches!(*network_mode, NetworkMode::ClientAndServer) {
-        if let Ok(mut controller) = query_player.get_single_mut() {
-            controller.acceleration = player_input.acceleration;
-            controller.jumping = player_input.jumping;
-        }
-    }
 }

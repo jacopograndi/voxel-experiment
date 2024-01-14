@@ -1,0 +1,18 @@
+[package]
+name = "mcrs_net"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.12.0"
+renet = { version = "0.0.14", features = ["serde"] }
+bevy_renet = { version = "0.0.10", features = ["serde"] }
+serde = "1.0.193"
+bincode = "1.3.3"
+bytemuck = "1.14.0"
+
+mcrs_storage = { path = "../mcrs_storage" }
+mcrs_blueprints = { path = "../mcrs_blueprints" }
+mcrs_physics = { path = "../mcrs_physics" }
+mcrs_input = { path = "../mcrs_input" }
+mcrs_settings = { path = "../mcrs_settings" }

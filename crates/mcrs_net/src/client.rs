@@ -1,29 +1,20 @@
-use mcrs_blueprints::Blueprints;
+use mcrs_input::PlayerInput;
+use mcrs_settings::NetworkMode;
 use renet::DefaultChannel;
 use std::{net::UdpSocket, time::SystemTime};
 
-use bevy::{core_pipeline::fxaa::Fxaa, prelude::*, utils::HashMap};
-use mcrs_physics::character::{
-    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
-};
-use mcrs_render::{
-    boxes_world::{Ghost, LoadedVoxTextures},
-    camera::VoxelCameraBundle,
-};
+use bevy::{prelude::*, utils::HashMap};
 use mcrs_storage::{chunk::Chunk, universe::Universe};
 use renet::{
     transport::{ClientAuthentication, NetcodeClientTransport},
     ClientId, RenetClient,
 };
 
-use crate::{
-    input::PlayerInput,
-    net::{LocalPlayer, SyncUniverse},
-};
+use crate::{LocalPlayer, NewPlayerSpawned, SyncUniverse};
 
 use super::{
-    connection_config, Lobby, NetPlayer, NetworkMode, PlayerState, ServerChannel, ServerMessages,
-    PORT, PROTOCOL_ID,
+    connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,
+    PROTOCOL_ID,
 };
 
 pub fn new_renet_client(addr: &str) -> (RenetClient, NetcodeClientTransport) {
@@ -56,8 +47,6 @@ pub fn client_sync_players(
     query: Query<(Entity, &NetPlayer, &Children)>,
     mut query_transform: Query<&mut Transform>,
     network_mode: Res<NetworkMode>,
-    loaded_textures: Res<LoadedVoxTextures>,
-    info: Res<Blueprints>,
 ) {
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();
@@ -72,66 +61,15 @@ pub fn client_sync_players(
                 }
 
                 let spawn_point = Vec3::new(0.0, 0.0, 0.0);
-                if !matches!(*network_mode, NetworkMode::ClientAndServer) {
+                if matches!(*network_mode, NetworkMode::Client) {
                     let player_entity = commands
                         .spawn((
                             SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
-                            Character {
-                                id: CharacterId(0),
-                                size: Vec3::new(0.5, 1.99, 0.5),
-                                air_speed: 0.001,
-                                ground_speed: 0.03,
-                                jump_strenght: 0.17,
-                            },
-                            CharacterController {
-                                acceleration: Vec3::splat(0.0),
-                                jumping: false,
-                                ..default()
-                            },
-                            Velocity::default(),
-                            Friction {
-                                air: Vec3::splat(0.99),
-                                ground: Vec3::splat(0.78),
-                            },
+                            NewPlayerSpawned,
                             NetPlayer { id },
                         ))
-                        .with_children(|parent| {
-                            let mut camera_pivot =
-                                parent.spawn((Fxaa::default(), CameraController::default()));
-                            if is_local_player {
-                                camera_pivot.insert(VoxelCameraBundle {
-                                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                    projection: Projection::Perspective(PerspectiveProjection {
-                                        fov: 1.57,
-                                        ..default()
-                                    }),
-                                    ..default()
-                                });
-                            } else {
-                                camera_pivot.insert(SpatialBundle {
-                                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                    ..default()
-                                });
-                            }
-                        })
                         .id();
-                    if !is_local_player {
-                        commands.entity(player_entity).with_children(|parent| {
-                            parent.spawn((
-                                SpatialBundle::from_transform(Transform {
-                                    scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
-                                    ..default()
-                                }),
-                                Ghost {
-                                    vox_texture_index: loaded_textures
-                                        .ghosts_id
-                                        .get(&info.ghosts.get_named("Steve").id)
-                                        .unwrap()
-                                        .clone(),
-                                },
-                            ));
-                        });
-                    } else {
+                    if is_local_player {
                         commands.entity(player_entity).insert(LocalPlayer);
                     }
 

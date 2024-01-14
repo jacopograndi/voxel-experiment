@@ -20,11 +20,9 @@ use bevy::{
     utils::{EntityHashMap, HashMap},
 };
 use mcrs_blueprints::{blocks::BlockId, ghosts::GhostId, Blueprints};
+use mcrs_settings::ViewDistance;
 
-use crate::{
-    block_texture::BlockTexture,
-    voxel_world::{VoxelUniforms, VIEW_DISTANCE},
-};
+use crate::{block_texture::BlockTexture, voxel_world::VoxelUniforms};
 
 const MAX_BOXES: usize = 10000;
 const MAX_VOX_TEXTURE_BYTES: usize = 100000000;
@@ -237,6 +235,7 @@ fn write_boxes(
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
     render_queue: Res<RenderQueue>,
     boxes_data: Res<BoxesData>,
+    view_distance: Res<ViewDistance>
 ) {
     let Ok((view, ..)) = view_query.get_single() else {
         return;
@@ -251,7 +250,7 @@ fn write_boxes(
         .iter()
         .filter_map(|(_ent, texbox)| {
             let pos = texbox.transform.translation();
-            if (camera_chunk_pos - pos).length_squared() < VIEW_DISTANCE.pow(2) as f32 {
+            if (camera_chunk_pos - pos).length_squared() < view_distance.0.pow(2) as f32 {
                 Some(texbox.clone())
             } else {
                 None

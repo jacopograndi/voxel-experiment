@@ -4,7 +4,6 @@ use std::{
 };
 
 use bevy::{
-    core_pipeline::fxaa::Fxaa,
     prelude::*,
     utils::{HashMap, HashSet},
 };
@@ -12,29 +11,22 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     DefaultChannel, RenetServer, ServerEvent,
 };
-use mcrs_blueprints::Blueprints;
-use mcrs_physics::character::{
-    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
+use mcrs_input::PlayerInput;
+use mcrs_physics::{
+    character::{CameraController, CharacterController},
+    intersect::get_chunks_in_sphere,
 };
-use mcrs_render::{
-    boxes_world::{Ghost, LoadedVoxTextures},
-    camera::VoxelCameraBundle,
-};
+use mcrs_settings::{NetworkMode, ViewDistance};
 use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},
     ClientId,
 };
 
-use crate::{
-    input::PlayerInput,
-    net::{LocalPlayer, NetPlayer, ServerChannel, ServerMessages},
-    terrain_generation::get_chunks_in_sphere,
-};
+use crate::{LocalPlayer, NetPlayer, NewPlayerSpawned, ServerChannel, ServerMessages};
 
 use super::{
-    connection_config, ChunkReplication, Lobby, NetworkMode, PlayerState, SyncUniverse, PORT,
-    PROTOCOL_ID,
+    connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
 };
 
 const SERVER_TICKS_PER_SECOND: u32 = 60;
@@ -76,8 +68,7 @@ pub fn server_update_system(
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
     mut player_input_query: Query<&mut PlayerInput>,
-    loaded_textures: Option<Res<LoadedVoxTextures>>,
-    info: Res<Blueprints>,
+    view_distance: Res<ViewDistance>,
 ) {
     for event in server_events.read() {
         match event {
@@ -98,70 +89,15 @@ pub fn server_update_system(
                 }
 
                 let spawn_point = Vec3::new(0.0, 5.0, 0.0);
-                // player character
                 let player_entity = commands
                     .spawn((
                         SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
-                        Character {
-                            id: CharacterId(0),
-                            size: Vec3::new(0.5, 1.99, 0.5),
-                            air_speed: 0.001,
-                            ground_speed: 0.03,
-                            jump_strenght: 0.17,
-                        },
-                        CharacterController {
-                            acceleration: Vec3::splat(0.0),
-                            jumping: false,
-                            ..default()
-                        },
-                        Velocity::default(),
-                        Friction {
-                            air: Vec3::splat(0.99),
-                            ground: Vec3::splat(0.78),
-                        },
+                        NewPlayerSpawned,
                         NetPlayer { id: *client_id },
                         PlayerInput::default(),
                     ))
-                    .with_children(|parent| {
-                        let mut camera_pivot =
-                            parent.spawn((Fxaa::default(), CameraController::default()));
-                        if is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)
-                        {
-                            camera_pivot.insert(VoxelCameraBundle {
-                                transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                projection: Projection::Perspective(PerspectiveProjection {
-                                    fov: 1.57,
-                                    ..default()
-                                }),
-                                ..default()
-                            });
-                        } else {
-                            camera_pivot.insert(SpatialBundle {
-                                transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                ..default()
-                            });
-                        }
-                    })
                     .id();
-                if !is_local_player && !matches!(*network_mode, NetworkMode::Server) {
-                    if let Some(loaded_textures) = loaded_textures.as_ref() {
-                        commands.entity(player_entity).with_children(|parent| {
-                            parent.spawn((
-                                SpatialBundle::from_transform(Transform {
-                                    scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
-                                    ..default()
-                                }),
-                                Ghost {
-                                    vox_texture_index: loaded_textures
-                                        .ghosts_id
-                                        .get(&info.ghosts.get_named("Steve").id)
-                                        .unwrap()
-                                        .clone(),
-                                },
-                            ));
-                        });
-                    }
-                } else if matches!(*network_mode, NetworkMode::ClientAndServer) {
+                if matches!(*network_mode, NetworkMode::ClientAndServer) && is_local_player {
                     commands.entity(player_entity).insert(LocalPlayer);
                 }
 
@@ -175,9 +111,10 @@ pub fn server_update_system(
                 }
 
                 if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
-                    chunk_replication
-                        .requested_chunks
-                        .insert(*client_id, get_chunks_in_sphere(spawn_point));
+                    chunk_replication.requested_chunks.insert(
+                        *client_id,
+                        get_chunks_in_sphere(spawn_point, view_distance.0 as f32),
+                    );
                 }
 
                 lobby.players.insert(*client_id, player_entity);
@@ -307,9 +244,8 @@ pub fn move_players_system(
             &mut CharacterController,
             &PlayerInput,
             &mut Transform,
-            Option<&LocalPlayer>,
         ),
-        Without<CameraController>,
+        (Without<CameraController>, Without<LocalPlayer>),
     >,
     mut query_camera: Query<
         (&CameraController, &Parent, &mut Transform),
@@ -317,21 +253,21 @@ pub fn move_players_system(
     >,
 ) {
     for (_, parent, mut tr_camera) in query_camera.iter_mut() {
-        if let Ok((_, mut controller, input, mut tr, localplayer)) =
-            query_player.get_mut(parent.get())
-        {
-            if localplayer.is_none() {
-                controller.acceleration = input.acceleration;
-                controller.jumping = input.jumping;
-                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
-                tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
-            }
+        if let Ok((_, mut controller, input, mut tr)) = query_player.get_mut(parent.get()) {
+            controller.acceleration = input.acceleration;
+            controller.jumping = input.jumping;
+            tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
+            tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
         }
     }
 }
 
-pub fn consume_player_input(mut player_input_query: Query<&mut PlayerInput>) {
-    for mut input in player_input_query.iter_mut() {
-        input.consume();
+pub fn move_local_player(
+    player_input: Res<PlayerInput>,
+    mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
+) {
+    if let Ok(mut controller) = query_player.get_single_mut() {
+        controller.acceleration = player_input.acceleration;
+        controller.jumping = player_input.jumping;
     }
 }

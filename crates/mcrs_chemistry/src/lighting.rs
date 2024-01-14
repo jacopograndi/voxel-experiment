@@ -1,8 +1,7 @@
 use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_blueprints::Blueprints;
-use mcrs_flag_bank::BlockFlag;
+use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
 use mcrs_storage::{
     block::{Block, LightType, MAX_LIGHT},
     chunk::Chunk,

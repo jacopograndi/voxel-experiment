@@ -6,24 +6,19 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.0"
 tracing = "0.1"
-bevy_egui = "0.23.0"
-egui_plot = "0.23.0"
-bevy_flycam = "0.12.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
-renet = { version = "0.0.14", features = ["serde"] }
-bevy_renet = { version = "0.0.10", features = ["serde"] }
-serde = "1.0.193"
-bincode = "1.3.3"
-bytemuck = "1.14.0"
-clap = { version = "4.4.12", features = ["derive"] }
 
-mcrs_render = { path = "crates/mcrs_render" }
-mcrs_blueprints = { path = "crates/mcrs_blueprints" }
-mcrs_storage = { path = "crates/mcrs_storage" }
+mcrs_core = { path = "crates/mcrs_core" }
 mcrs_physics = { path = "crates/mcrs_physics" }
-mcrs_flag_bank = { path = "crates/mcrs_flag_bank" }
+mcrs_render = { path = "crates/mcrs_render" }
+mcrs_debug = { path = "crates/mcrs_debug" }
+mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_chemistry = { path = "crates/mcrs_chemistry" }
+mcrs_input = { path = "crates/mcrs_input" }
+mcrs_blueprints = { path = "crates/mcrs_blueprints" }
+mcrs_net = { path = "crates/mcrs_net" }
+mcrs_settings = { path = "crates/mcrs_settings" }
 
 [workspace]
 members = ["crates/*"]

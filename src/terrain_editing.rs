@@ -1,16 +1,15 @@
 use bevy::prelude::*;
-use mcrs_blueprints::Blueprints;
+use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
-use mcrs_flag_bank::BlockFlag;
 use mcrs_physics::{character::CameraController, raycast};
 use mcrs_storage::{
     block::{Block, LightType},
     universe::Universe,
 };
 
-use crate::PlayerInput;
+use mcrs_input::PlayerInput;
 
-pub fn player_edit_terrain(
+pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     player_query: Query<&PlayerInput>,
     mut universe: ResMut<Universe>,

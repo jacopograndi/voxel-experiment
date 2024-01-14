@@ -10,4 +10,4 @@ dot_vox = "5.1.1"
 
 mcrs_storage = { path = "../mcrs_storage" }
 mcrs_blueprints = { path = "../mcrs_blueprints" }
-mcrs_flag_bank = { path = "../mcrs_flag_bank" }
+mcrs_settings = { path = "../mcrs_settings" }

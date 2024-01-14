@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
-use mcrs_flag_bank::BlockFlag;
 use serde::{Deserialize, Serialize};
 
-use crate::HasNameId;
+use crate::{flagbank::BlockFlag, HasNameId};
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct BlockBlueprint {

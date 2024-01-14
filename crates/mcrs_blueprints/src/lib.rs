@@ -8,6 +8,7 @@ use serde::Deserialize;
 use std::hash::Hash;
 
 pub mod blocks;
+pub mod flagbank;
 pub mod ghosts;
 pub mod plugin;
 

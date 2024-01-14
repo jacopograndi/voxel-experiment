@@ -4,10 +4,11 @@ use bevy::{
     render::{
         extract_resource::ExtractResourcePlugin,
         render_graph::{RenderGraph, RenderGraphApp, RunGraphOnViewNode, ViewNodeRunner},
-        RenderApp,
+        Extract, RenderApp,
     },
     ui::{draw_ui_graph, UiPassNode},
 };
+use mcrs_settings::ViewDistance;
 
 use crate::{
     boxes_world::BoxesWorldPlugin,
@@ -22,9 +23,9 @@ use crate::{
     VOXEL,
 };
 
-pub struct VoxelRenderPlugin;
+pub struct McrsVoxelRenderPlugin;
 
-impl Plugin for VoxelRenderPlugin {
+impl Plugin for McrsVoxelRenderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Msaa::Off);
         app.insert_resource(RenderGraphSettings::default())
@@ -62,5 +63,16 @@ impl Plugin for VoxelRenderPlugin {
             graph_voxel.add_node_edge(FXAA, draw_ui_graph::node::UI_PASS);
             graph_voxel.add_node_edge(draw_ui_graph::node::UI_PASS, UPSCALING);
         }
+
+        render_app
+            .insert_resource(ViewDistance::default())
+            .add_systems(ExtractSchedule, extract_settings);
     }
+}
+
+pub fn extract_settings(
+    view_distance: Extract<Res<ViewDistance>>,
+    mut render_view_distance: ResMut<ViewDistance>,
+) {
+    render_view_distance.0 = view_distance.0;
 }
