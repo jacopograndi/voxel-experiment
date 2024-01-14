@@ -23,12 +23,14 @@ use crate::{
 
 use super::{
     connection_config, Lobby, NetPlayer, NetworkMode, PlayerState, ServerChannel, ServerMessages,
-    PROTOCOL_ID,
+    PORT, PROTOCOL_ID,
 };
 
-pub fn new_renet_client() -> (RenetClient, NetcodeClientTransport) {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+pub fn new_renet_client(addr: &str) -> (RenetClient, NetcodeClientTransport) {
+    let server_addr = (addr.to_string() + ":" + &PORT.to_string())
+        .parse()
+        .unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();

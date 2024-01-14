@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 const PROTOCOL_ID: u64 = 7;
 
+const PORT: u32 = 54550;
+
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub enum NetworkMode {
     /// A server without a local player (headless hosting)

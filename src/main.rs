@@ -41,11 +41,21 @@ use ui::client_ui;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    netmode: Option<String>,
+    #[arg(short, long)]
+    network_mode: Option<String>,
+
+    #[arg(short, long)]
+    address_server: Option<String>,
 }
 
 fn main() {
-    let network_mode = NetworkMode::from(Args::parse().netmode.as_deref());
+    let args = Args::parse();
+    let network_mode = NetworkMode::from(args.network_mode.as_deref());
+    let addr = if let Some(addr) = args.address_server {
+        addr
+    } else {
+        "127.0.0.1".to_string()
+    };
 
     let mut app = App::new();
     app.init_resource::<Lobby>();
@@ -56,23 +66,23 @@ fn main() {
     match network_mode {
         NetworkMode::Server => {
             app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default()));
-            app_server(&mut app);
+            app_server(&mut app, &addr);
         }
         NetworkMode::ClientAndServer => {
-            app_server(&mut app);
-            app_client(&mut app);
+            app_server(&mut app, &addr);
+            app_client(&mut app, "127.0.0.1");
         }
         NetworkMode::Client => {
-            app_client(&mut app);
+            app_client(&mut app, &addr);
         }
     }
 
     app.run();
 }
 
-fn app_server(app: &mut App) {
+fn app_server(app: &mut App, addr: &str) {
     app.add_plugins((RenetServerPlugin, NetcodeServerPlugin, VoxelPhysicsPlugin));
-    let (server, transport) = new_renet_server();
+    let (server, transport) = new_renet_server(addr);
     app.insert_resource(server);
     app.insert_resource(transport);
     app.init_resource::<ChunkReplication>();
@@ -92,7 +102,7 @@ fn app_server(app: &mut App) {
     );
 }
 
-fn app_client(app: &mut App) {
+fn app_client(app: &mut App, addr: &str) {
     app.add_plugins((
         DefaultPlugins
             .set(WindowPlugin {
@@ -108,7 +118,7 @@ fn app_client(app: &mut App) {
         VoxelRenderPlugin,
     ));
     app.init_resource::<PlayerInput>();
-    let (client, transport) = new_renet_client();
+    let (client, transport) = new_renet_client(addr);
     app.insert_resource(client);
     app.insert_resource(transport);
     app.add_systems(Update, camera_controller_movement);
