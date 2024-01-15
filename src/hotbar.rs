@@ -3,6 +3,8 @@ use bevy_egui::{egui, EguiContexts};
 use mcrs_blueprints::{blocks::BlockBlueprint, Blueprints};
 use mcrs_input::PlayerInput;
 
+// this is very much a hack
+
 pub fn hotbar(
     mut input: ResMut<PlayerInput>,
     mut hand: Local<u8>,
@@ -29,6 +31,8 @@ pub fn hotbar(
                         egui::Button::new(format!("{}", blueprint.name)).selected(selected);
                     let response = ui.add(button);
                     if response.clicked() {
+                        // eat the input
+                        input.mining = false;
                         *hand = *blueprint.id;
                     }
                 }

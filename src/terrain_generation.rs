@@ -28,7 +28,7 @@ fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
                 "sample {} not in 0.0..1.0",
                 sample
             );
-            let block = if sample < 0.2 {
+            let block = if sample > 0.9 {
                 dirt
             } else if sample > 0.5 {
                 air

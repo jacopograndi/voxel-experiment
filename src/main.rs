@@ -27,7 +27,11 @@ fn main() {
             .run_if(resource_exists::<IsServer>()),
     );
     app.add_systems(Update, spawn_player);
-    app.add_plugins(WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::I)));
+    if app.world.get_resource::<IsClient>().is_some() {
+        app.add_plugins(
+            WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::I)),
+        );
+    }
 
     app.add_systems(Startup, ui.run_if(resource_exists::<IsClient>()));
 

@@ -51,6 +51,7 @@ impl Plugin for McrsCorePlugin {
                 app_client(app);
             }
         }
+        app.add_plugins(McrsInputPlugin);
     }
 }
 
@@ -65,7 +66,6 @@ fn app_client(app: &mut App) {
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
-        McrsInputPlugin,
         McrsVoxelRenderPlugin,
     ));
 }
