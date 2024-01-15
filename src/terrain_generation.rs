@@ -4,32 +4,39 @@ use mcrs_chemistry::lighting::recalc_lights;
 use mcrs_physics::{character::CharacterController, intersect::get_chunks_in_sphere};
 use mcrs_settings::ViewDistance;
 use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
-use noise::{NoiseFn, OpenSimplex};
+use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
 
 fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
-    let noise = OpenSimplex::new(41);
+    let noise = RidgedMulti::<OpenSimplex>::default().set_seed(23);
 
-    let blocks = [
-        Block::new(info.blocks.get_named("Stone")),
-        Block::new(info.blocks.get_named("Air")),
-        Block::new(info.blocks.get_named("Dirt")),
-    ];
+    let air = Block::new(info.blocks.get_named("Air"));
+    let stone = Block::new(info.blocks.get_named("Stone"));
+    let dirt = Block::new(info.blocks.get_named("Dirt"));
 
     let chunk = Chunk::empty();
-    for xyz in Chunk::iter() {
-        let mut sample = noise.get(((pos + xyz).as_dvec3() * 0.03).to_array());
-        sample = (sample + 1.0) * 0.5;
-        sample = sample.clamp(0.0, 1.0);
-        if sample >= 1.0 {
-            sample = 0.99999
+    {
+        let mut chunk_mut = chunk.get_mut();
+        for (i, xyz) in Chunk::iter().enumerate() {
+            let mut sample = noise.get(((pos + xyz).as_dvec3() * 0.01).to_array());
+            sample = (sample + 1.0) * 0.5;
+            sample = sample.clamp(0.0, 1.0);
+            if sample >= 1.0 {
+                sample = 0.999999;
+            }
+            assert!(
+                (0.0..1.0).contains(&sample),
+                "sample {} not in 0.0..1.0",
+                sample
+            );
+            let block = if sample < 0.2 {
+                dirt
+            } else if sample > 0.5 {
+                air
+            } else {
+                stone
+            };
+            chunk_mut[i] = block;
         }
-        assert!(
-            (0.0..1.0).contains(&sample),
-            "sample {} not in 0.0..1.0",
-            sample
-        );
-        let block = blocks[(sample * blocks.len() as f64) as usize];
-        chunk.set_block(xyz, block);
     }
     chunk
 }
