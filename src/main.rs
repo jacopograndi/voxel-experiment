@@ -1,5 +1,4 @@
-use bevy::{input::common_conditions::input_toggle_active, prelude::*};
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy::{prelude::*};
 use mcrs_core::plugin::{CoreSet, McrsCorePlugin};
 use mcrs_debug::plugin::McrsDebugPlugin;
 
@@ -27,11 +26,6 @@ fn main() {
             .run_if(resource_exists::<IsServer>()),
     );
     app.add_systems(Update, spawn_player);
-    if app.world.get_resource::<IsClient>().is_some() {
-        app.add_plugins(
-            WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::I)),
-        );
-    }
 
     app.add_systems(Startup, ui.run_if(resource_exists::<IsClient>()));
 
