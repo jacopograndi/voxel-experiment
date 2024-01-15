@@ -1,7 +1,10 @@
 use mcrs_input::PlayerInput;
 use mcrs_settings::NetworkMode;
 use renet::DefaultChannel;
-use std::{net::UdpSocket, time::SystemTime};
+use std::{
+    net::{ToSocketAddrs, UdpSocket},
+    time::SystemTime,
+};
 
 use bevy::{prelude::*, utils::HashMap};
 use mcrs_storage::{chunk::Chunk, universe::Universe};
@@ -18,9 +21,14 @@ use super::{
 };
 
 pub fn new_renet_client(addr: &str) -> (RenetClient, NetcodeClientTransport) {
-    let server_addr = (addr.to_string() + ":" + &PORT.to_string())
-        .parse()
-        .unwrap();
+    let addr_port = addr.to_string() + ":" + &PORT.to_string();
+    let Ok(mut resolved_addrs) = addr_port.to_socket_addrs() else {
+        panic!("cannot resolve addr {}", addr_port);
+    };
+    let Some(resolved_addr) = resolved_addrs.next() else {
+        panic!("cannot resolve addr {}", addr_port);
+    };
+    let server_addr = resolved_addr.to_socket_addrs().unwrap().next().unwrap();
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
