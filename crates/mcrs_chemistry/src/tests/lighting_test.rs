@@ -3,9 +3,9 @@ mod test {
     use bevy::math::IVec3;
     use mcrs_blueprints::{
         blocks::{BlockBlueprint, BlockId},
+        flagbank::BlockFlag,
         BlueprintList, Blueprints,
     };
-    use mcrs_flag_bank::BlockFlag;
     use mcrs_storage::{
         block::{
             Block,
@@ -134,12 +134,9 @@ mod test {
             .get_light(Torch);
         assert_eq!(light, 0, "at {}", stone_pos);
 
-        for i in 0..15 {
+        for i in 1..15 {
             let xyz = light_pos + IVec3::Z * i;
-            let light = universe
-                .read_chunk_block(&stone_pos)
-                .unwrap()
-                .get_light(Torch);
+            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
             assert_eq!(light, 0, "at {}", xyz);
         }
 
@@ -172,17 +169,15 @@ mod test {
 
         let mut universe = Universe::default();
         universe.chunks.insert(IVec3::new(0, 0, 0), Chunk::empty());
+
         universe.set_chunk_block(
             &IVec3::new(2, 2, 2),
             Block::new(blueprints.blocks.get_named("Glowstone")),
         );
 
-        for i in 0..15 {
+        for i in 1..15 {
             let xyz = light_pos + IVec3::Z * i;
-            let light = universe
-                .read_chunk_block(&light_pos)
-                .unwrap()
-                .get_light(Torch);
+            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
             assert_eq!(light, 0, "at {}", xyz);
         }
 

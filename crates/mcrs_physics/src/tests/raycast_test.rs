@@ -4,8 +4,10 @@ mod test {
 
     use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
     use bevy::{prelude::*, utils::HashMap};
-    use mcrs_blueprints::blocks::{BlockBlueprint, BlockId};
-    use mcrs_flag_bank::BlockFlag;
+    use mcrs_blueprints::{
+        blocks::{BlockBlueprint, BlockId},
+        flagbank::BlockFlag,
+    };
     use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
 
     #[test]
