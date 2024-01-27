@@ -59,20 +59,22 @@ impl Raycaster {
             mask: IVec3::ZERO,
             delta_dist,
         };
-        log_test(format!("ray started: {:?}", raycaster));
+        test_trace(format!("ray started: {:?}", raycaster));
 
         for _i in 0..RAYCAST_MAX_ITERATIONS {
             if raycaster.distance() < ray.reach {
                 if collision_check(&raycaster) {
-                    log_test(format!("ray hit: {:?}", raycaster));
+                    test_trace(format!("ray hit: {:?}", raycaster));
                     return Some(raycaster);
                 } else {
                     raycaster.step();
                 }
             } else {
+                test_trace(format!("no hit"));
                 return None;
             }
         }
+        test_trace(format!("out of ray iterations"));
         None
     }
 
@@ -87,7 +89,7 @@ impl Raycaster {
         };
         self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
         self.grid_pos += self.mask * self.grid_step;
-        log_test(format!("ray stepped: {:?}", self));
+        test_trace(format!("ray stepped: {:?}", self));
     }
 
     pub fn final_position(&self) -> Vec3 {
@@ -110,7 +112,7 @@ pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
     })
 }
 
-/// Checks if by sweeping a cuboid along a segment defined by ray
+/// Checks if by sweeping a cuboid along a segment defined by a ray
 /// the cuboid intersects a collidable block in universe.
 pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Raycaster> {
     let leading_vertex = get_leading_aabb_vertex(size, ray.direction);
@@ -144,7 +146,7 @@ pub fn is_block_collidable(pos: &IVec3, universe: &Universe) -> bool {
     }
 }
 
-// iterates through all integers inside a cuboid
+// Iterates through all integers inside a cuboid
 pub fn iter_cuboid(min: IVec3, max: IVec3) -> impl Iterator<Item = IVec3> {
     (min.x..max.x + 1)
         .map(move |x| {
@@ -155,7 +157,7 @@ pub fn iter_cuboid(min: IVec3, max: IVec3) -> impl Iterator<Item = IVec3> {
         .flatten()
 }
 
-// finds the corner which is furthest from the center of a cuboid given a direction.
+// Finds the corner which is furthest from the center of a cuboid given a direction.
 pub fn get_leading_aabb_vertex(size: Vec3, direction: Vec3) -> Vec3 {
     let vertices = [
         size * Vec3::new(1., 1., 1.),
@@ -212,8 +214,8 @@ fn mul_or_zero_vec(v: Vec3, w: Vec3) -> Vec3 {
     )
 }
 
-// used to trace in testing
-fn log_test(_s: String) {
+// Used to trace in testing
+fn test_trace(_s: String) {
     #[cfg(test)]
     {
         println!("{}", _s);
