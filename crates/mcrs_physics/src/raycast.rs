@@ -1,32 +1,185 @@
-use bevy::math::{IVec3, Vec3, Vec3Swizzles};
+use bevy::math::{IVec3, Vec3};
 
 use mcrs_blueprints::flagbank::BlockFlag;
 use mcrs_storage::universe::Universe;
 
 use crate::MARGIN_EPSILON;
 
-const RAYCAST_MAX_ITERATIONS: u32 = 10;
+const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RaycastHit {
-    pub grid_pos: IVec3,
-    pub normal: IVec3,
-    pub distance: f32,
-    pub pos: Vec3,
+#[derive(Debug, Clone)]
+/// Represents a line segment
+pub struct RayFinite {
+    /// Origin of the segment
+    pub position: Vec3,
+    /// Direction of the line parallel to the segment
+    pub direction: Vec3,
+    /// Lenght of the segment
+    pub reach: f32,
 }
 
-fn step(edge: f32, x: f32) -> i32 {
-    if edge <= x {
-        1
-    } else {
-        0
+#[derive(Debug, Clone)]
+/// Checks intersections of rays through a grid.
+pub struct Raycaster {
+    /// Starting conditions
+    ray: RayFinite,
+
+    /// Precalculated values
+    /// The direction to follow when checking a new block.
+    grid_step: IVec3,
+    /// For each direction holds the distance required to travel 1 unit.
+    delta_dist: Vec3,
+
+    /// Mutated at every step
+    /// The current position in the grid that is being checked.
+    pub grid_pos: IVec3,
+    /// Is 1 in the direction of the last checked grid position, 0 otherwise.
+    pub mask: IVec3,
+    /// Accumulates the distance travelled for each direction.
+    side_dist: Vec3,
+}
+
+impl Raycaster {
+    /// Steps through the grid until a collision is detected.
+    pub fn cast(ray: RayFinite, collision_check: impl Fn(&Self) -> bool) -> Option<Raycaster> {
+        if ray.direction.length_squared() <= MARGIN_EPSILON {
+            return None;
+        }
+
+        // Inspired by https://lodev.org/cgtutor/raycasting.html
+        let dir_sign = signum_or_zero_vec(ray.direction);
+        let grid_pos = ray.position.floor().as_ivec3();
+        let delta_dist = (1. / ray.direction).abs();
+        let mut raycaster = Self {
+            ray: ray.clone(),
+            grid_pos,
+            grid_step: dir_sign.floor().as_ivec3(),
+            side_dist: (dir_sign * (grid_pos.as_vec3() - ray.position) + (dir_sign * 0.5) + 0.5)
+                * delta_dist,
+            mask: IVec3::ZERO,
+            delta_dist,
+        };
+        log_test(format!("ray started: {:?}", raycaster));
+
+        for _i in 0..RAYCAST_MAX_ITERATIONS {
+            log_test(format!("dist: {}", raycaster.distance()));
+            if raycaster.distance() < ray.reach {
+                if collision_check(&raycaster) {
+                    return Some(raycaster);
+                } else {
+                    raycaster.step();
+                }
+            } else {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// Advance the ray by one block
+    fn step(&mut self) {
+        let Vec3 { x, y, z } = self.side_dist;
+        self.mask = match (x < y, x < z, y < z) {
+            (true, true, _) => IVec3::X,
+            (false, _, true) => IVec3::Y,
+            (_, false, false) => IVec3::Z,
+            _ => unreachable!(),
+        };
+        self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
+        self.grid_pos += self.mask * self.grid_step;
+        log_test(format!("ray stepped: {:?}", self));
+    }
+
+    pub fn final_position(&self) -> Vec3 {
+        self.ray.position + self.ray.direction * self.distance()
+    }
+
+    pub fn distance(&self) -> f32 {
+        mul_or_zero_vec(self.mask.as_vec3(), self.side_dist - self.delta_dist).length()
+    }
+
+    pub fn normal(&self) -> IVec3 {
+        -self.grid_step * self.mask
     }
 }
 
-fn step_vec(edge: Vec3, x: Vec3) -> IVec3 {
-    IVec3::new(step(edge.x, x.x), step(edge.y, x.y), step(edge.z, x.z))
+/// Checks if the segment defined by ray intersects a collidable block in universe.
+pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
+    Raycaster::cast(ray, |raycast: &Raycaster| {
+        is_block_collidable(&raycast.grid_pos, universe)
+    })
 }
 
+/// Checks if by sweeping a cuboid along a segment defined by ray
+/// the cuboid intersects a collidable block in universe.
+pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Raycaster> {
+    let leading_vertex = get_leading_aabb_vertex(size, ray.direction);
+    let start = leading_vertex + ray.position;
+    let collision_check = |raycaster: &Raycaster| {
+        // inspired by https://github.com/fenomas/voxel-aabb-sweep
+        let vert_pos = raycaster.final_position();
+        let inv_mask = IVec3::ONE - raycaster.mask;
+        let center_pos = vert_pos - leading_vertex * inv_mask.as_vec3()
+            + (raycaster.mask * raycaster.grid_step).as_vec3() * size * 0.5;
+        let min = (center_pos - size * 0.5 * inv_mask.as_vec3())
+            .floor()
+            .as_ivec3();
+        let max = (center_pos + size * 0.5 * inv_mask.as_vec3())
+            .floor()
+            .as_ivec3();
+        iter_cuboid(min, max).any(|sample| is_block_collidable(&sample, universe))
+    };
+    let ray = RayFinite {
+        position: start,
+        direction: ray.direction,
+        reach: ray.reach,
+    };
+    Raycaster::cast(ray, collision_check)
+}
+
+pub fn is_block_collidable(pos: &IVec3, universe: &Universe) -> bool {
+    match universe.read_chunk_block(pos) {
+        Some(voxel) => voxel.properties.check(BlockFlag::Collidable),
+        None => false,
+    }
+}
+
+// iterates through all integers inside a cuboid
+pub fn iter_cuboid(min: IVec3, max: IVec3) -> impl Iterator<Item = IVec3> {
+    (min.x..max.x + 1)
+        .map(move |x| {
+            (min.y..max.y + 1)
+                .map(move |y| (min.z..max.z + 1).map(move |z| IVec3::new(x, y, z)))
+                .flatten()
+        })
+        .flatten()
+}
+
+// finds the corner which is furthest from the center of a cuboid given a direction.
+pub fn get_leading_aabb_vertex(size: Vec3, direction: Vec3) -> Vec3 {
+    let vertices = [
+        size * Vec3::new(1., 1., 1.),
+        size * Vec3::new(1., 1., -1.),
+        size * Vec3::new(1., -1., 1.),
+        size * Vec3::new(1., -1., -1.),
+        size * Vec3::new(-1., 1., 1.),
+        size * Vec3::new(-1., 1., -1.),
+        size * Vec3::new(-1., -1., 1.),
+        size * Vec3::new(-1., -1., -1.),
+    ];
+    let leading_vertex = vertices
+        .iter()
+        .map(|vert| (vert.normalize().dot(direction), vert))
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+        .unwrap()
+        .1
+        .clone();
+    leading_vertex * 0.5
+}
+
+// todo: maybe remove these functions
+// they exist to make the code more succint (and more akin to wgsl)
+// but it may be a disadvantage
 fn signum_or_zero(x: f32) -> f32 {
     if x == 0.0 {
         x
@@ -59,176 +212,10 @@ fn mul_or_zero_vec(v: Vec3, w: Vec3) -> Vec3 {
     )
 }
 
-#[derive(Debug, Clone)]
-struct Ray {
-    start_pos: Vec3,
-    direction: Vec3,
-    grid_pos: IVec3,
-    grid_step: IVec3,
-    side_dist: Vec3,
-    mask: IVec3,
-    delta_dist: Vec3,
-}
-
-impl Ray {
-    fn new(start_pos: Vec3, direction: Vec3) -> Self {
-        let dir_sign = signum_or_zero_vec(direction);
-        let grid_pos = start_pos.floor().as_ivec3();
-        let delta_dist = (direction.length() / direction).abs();
-        Self {
-            start_pos,
-            direction,
-            grid_pos,
-            grid_step: dir_sign.floor().as_ivec3(),
-            side_dist: (dir_sign * (grid_pos.as_vec3() - start_pos) + (dir_sign * 0.5) + 0.5)
-                * delta_dist,
-            mask: IVec3::ZERO,
-            delta_dist,
-        }
+// used to trace in testing
+fn log_test(_s: String) {
+    #[cfg(test)]
+    {
+        println!("{}", _s);
     }
-
-    fn step(&mut self) {
-        self.mask = step_vec(self.side_dist.xyz(), self.side_dist.yzx())
-            * step_vec(self.side_dist.xyz(), self.side_dist.zxy());
-        self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
-        self.grid_pos += self.mask * self.grid_step;
-    }
-
-    fn final_pos(&self) -> Vec3 {
-        let mask_f = self.mask.as_vec3();
-        self.direction / (mask_f * self.direction).dot(Vec3::splat(1.))
-            * (mask_f
-                * (self.grid_pos.as_vec3() + step_vec(self.direction, Vec3::ZERO).as_vec3()
-                    - self.start_pos))
-                .dot(Vec3::splat(1.))
-            + self.start_pos
-    }
-
-    fn distance(&self) -> f32 {
-        // todo: can be faster without lenght sqrt, like `match self.mask`
-        //((self.side_dist - self.delta_dist) * self.mask.as_vec3()).length()
-        (self.start_pos - self.final_pos()).length()
-    }
-
-    fn normal(&self) -> IVec3 {
-        -self.grid_step * self.mask
-    }
-
-    fn raycast_hit(&self) -> RaycastHit {
-        let final_pos = self.final_pos();
-        RaycastHit {
-            grid_pos: self.grid_pos,
-            normal: self.normal(),
-            distance: (self.start_pos - final_pos).length(),
-            pos: final_pos,
-        }
-    }
-}
-
-/// http://www.cs.yorku.ca/~amana/research/grid.pdf
-pub fn raycast(
-    start: Vec3,
-    direction: Vec3,
-    max_distance: f32,
-    universe: &Universe,
-) -> Option<RaycastHit> {
-    if direction.length_squared() <= MARGIN_EPSILON {
-        return None;
-    }
-    let mut ray = Ray::new(start, direction);
-    for _i in 0..RAYCAST_MAX_ITERATIONS {
-        ray.step();
-        if ray.distance() > max_distance {
-            return None;
-        }
-        if let Some(voxel) = universe.read_chunk_block(&ray.grid_pos) {
-            // hardcoded flag 16 to be collision detection
-            if voxel.properties.check(BlockFlag::Collidable) {
-                return Some(ray.raycast_hit());
-            }
-        }
-    }
-    None
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SweepHit {
-    pub blocked: IVec3,
-    pub distance: f32,
-    pub normal: IVec3,
-}
-
-/// https://github.com/fenomas/voxel-aabb-sweep
-pub fn sweep_aabb(
-    pos: Vec3,
-    size: Vec3,
-    direction: Vec3,
-    max_distance: f32,
-    universe: &Universe,
-) -> Option<SweepHit> {
-    if direction.length_squared() < MARGIN_EPSILON {
-        return None;
-    }
-
-    let leading_vertex = get_leading_aabb_vertex(size, direction);
-    let start = leading_vertex + pos;
-
-    let mut ray = Ray::new(start, direction);
-    for _i in 0..RAYCAST_MAX_ITERATIONS {
-        ray.step();
-        if ray.distance() > max_distance {
-            return None;
-        }
-
-        let vert_pos = ray.final_pos();
-        let inv_mask = IVec3::ONE - ray.mask;
-        let center_pos = vert_pos - leading_vertex * inv_mask.as_vec3()
-            + (ray.mask * ray.grid_step).as_vec3() * size * 0.5;
-        let min = (center_pos - size * 0.5 * inv_mask.as_vec3())
-            .floor()
-            .as_ivec3();
-        let max = (center_pos + size * 0.5 * inv_mask.as_vec3())
-            .floor()
-            .as_ivec3();
-        for x in min.x..max.x + 1 {
-            for y in min.y..max.y + 1 {
-                for z in min.z..max.z + 1 {
-                    let sample_pos = IVec3::new(x, y, z);
-                    if let Some(voxel) = universe.read_chunk_block(&sample_pos) {
-                        if voxel.properties.check(BlockFlag::Collidable) {
-                            let hit = SweepHit {
-                                blocked: ray.mask,
-                                distance: ray.distance(),
-                                normal: ray.normal(),
-                            };
-                            return Some(hit);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
-pub fn get_leading_aabb_vertex(size: Vec3, direction: Vec3) -> Vec3 {
-    // find leading corner
-    let vertices = [
-        size * Vec3::new(1., 1., 1.),
-        size * Vec3::new(1., 1., -1.),
-        size * Vec3::new(1., -1., 1.),
-        size * Vec3::new(1., -1., -1.),
-        size * Vec3::new(-1., 1., 1.),
-        size * Vec3::new(-1., 1., -1.),
-        size * Vec3::new(-1., -1., 1.),
-        size * Vec3::new(-1., -1., -1.),
-    ];
-    let leading_vertex = vertices
-        .iter()
-        .map(|vert| (vert.normalize().dot(direction), vert))
-        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
-        .unwrap()
-        .1
-        .clone();
-    leading_vertex * 0.5
 }

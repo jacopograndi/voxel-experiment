@@ -2,7 +2,7 @@
 mod test {
     use std::f32::consts::PI;
 
-    use crate::raycast::{get_leading_aabb_vertex, raycast, sweep_aabb};
+    use crate::raycast::{cast_cuboid, cast_ray, get_leading_aabb_vertex, RayFinite};
     use bevy::{prelude::*, utils::HashMap};
     use mcrs_blueprints::{
         blocks::{BlockBlueprint, BlockId},
@@ -12,52 +12,189 @@ mod test {
 
     #[test]
     fn empty_out_of_range() {
-        let chunk_map = Universe {
+        let universe = Universe {
             chunks: HashMap::new(),
             heightfield: HashMap::new(),
         };
-        assert_eq!(None, raycast(Vec3::ZERO, Vec3::X, 100.0, &chunk_map));
+        assert!(cast_ray(
+            RayFinite {
+                position: Vec3::ZERO,
+                direction: Vec3::X,
+                reach: 100.0
+            },
+            &universe
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn adjacent() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_ray(
+            RayFinite {
+                position: center - Vec3::X * 0.5,
+                direction: Vec3::X,
+                reach: 0.1
+            },
+            &universe
+        )
+        .is_some());
+        assert!(cast_ray(
+            RayFinite {
+                position: center + Vec3::X * 0.5,
+                direction: -Vec3::X,
+                reach: 0.1
+            },
+            &universe
+        )
+        .is_some());
+        assert!(cast_ray(
+            RayFinite {
+                position: center,
+                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
+                reach: 0.1
+            },
+            &universe
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn giant_step() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_ray(
+            RayFinite {
+                position: center + Vec3::X * 0.7,
+                direction: Vec3::new(-100.0, -1.0, 0.0).normalize(),
+                reach: 0.1,
+            },
+            &universe
+        )
+        .is_none());
     }
 
     #[test]
     fn just_of_range() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let center = Vec3::ONE * 0.5;
-        assert_eq!(
-            None,
-            raycast(center + Vec3::X * 1.5, -Vec3::X, 0.999999, &map)
-        );
-        assert!(raycast(center + Vec3::X * 1.5, -Vec3::X, 1.000001, &map).is_some());
+        assert!(cast_ray(
+            RayFinite {
+                position: center + Vec3::X * 1.5,
+                direction: -Vec3::X,
+                reach: 0.999999
+            },
+            &universe
+        )
+        .is_none());
+        assert!(cast_ray(
+            RayFinite {
+                position: center + Vec3::X * 1.5,
+                direction: -Vec3::X,
+                reach: 1.000001
+            },
+            &universe
+        )
+        .is_some());
     }
 
     #[test]
     fn sweep_just_out_of_range() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let center = Vec3::ONE * 0.5;
-        assert_eq!(
-            None,
-            sweep_aabb(center + Vec3::X * 2.0, Vec3::ONE, -Vec3::X, 0.999999, &map)
-        );
-        assert!(sweep_aabb(center + Vec3::X * 2.0, Vec3::ONE, -Vec3::X, 1.000001, &map).is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 2.0,
+                direction: -Vec3::X,
+                reach: 0.999999,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_none());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 2.0,
+                direction: -Vec3::X,
+                reach: 1.000001,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn sweep_adjacent() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: -Vec3::X,
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.00001,
+                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
     }
 
     #[test]
     fn zero_length() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let center = Vec3::ONE * 0.5;
-        assert!(raycast(center + Vec3::X * 0.5, -Vec3::X, 0.000001, &map).is_some());
+        assert!(cast_ray(
+            RayFinite {
+                position: center + Vec3::X * 0.5,
+                direction: -Vec3::X,
+                reach: 0.000001
+            },
+            &universe
+        )
+        .is_some());
     }
 
     #[test]
     fn sweep_zero_length() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let center = Vec3::ONE * 0.5;
-        assert!(sweep_aabb(center + Vec3::X * 1.0, Vec3::ONE, -Vec3::X, 0.000001, &map).is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: -Vec3::X,
+                reach: 0.000001,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
     }
 
     #[test]
     fn axis_aligned() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let axis = vec![Vec3::X, Vec3::Y, Vec3::Z];
         let dirs = axis
             .iter()
@@ -65,49 +202,76 @@ mod test {
             .flatten()
             .collect::<Vec<Vec3>>();
         let center = Vec3::ONE * 0.5;
-        for dir in dirs {
-            let start = center - dir;
-            if let Some(hit) = raycast(start, dir, 2.0, &map) {
-                assert_eq!(hit.distance, 0.5);
+        for direction in dirs {
+            let position = center - direction;
+            if let Some(hit) = cast_ray(
+                RayFinite {
+                    position,
+                    direction,
+                    reach: 2.0,
+                },
+                &universe,
+            ) {
+                assert_eq!(hit.distance(), 0.5);
             } else {
-                println!("No hit for ray ({}, {}) in single block map", start, dir);
-                panic!();
+                panic!(
+                    "No hit for ray ({}, {}) in single block map",
+                    position, direction
+                );
             }
         }
     }
 
     #[test]
     fn bombard_face() {
-        let map = single_block_map();
+        let universe = single_block_universe();
         let center = Vec3::ONE * 0.5 + Vec3::Z * 0.5;
         for angle in 1..180 {
             let rot = Quat::from_rotation_y(angle as f32 / 360.0 * PI);
-            let dir = rot * Vec3::X;
-            let start = center - dir;
-            if let Some(hit) = raycast(start, dir, 2.0, &map) {
-                assert!(close_enough(hit.distance, 1.0));
+            let direction = rot * Vec3::X;
+            let position = center - direction;
+            if let Some(hit) = cast_ray(
+                RayFinite {
+                    position,
+                    direction,
+                    reach: 2.0,
+                },
+                &universe,
+            ) {
+                assert!(close_enough(hit.distance(), 1.0));
             } else {
-                println!("No hit for ray ({}, {}) in single block map", start, dir);
-                panic!();
+                panic!(
+                    "No hit for ray ({}, {}) in single block map",
+                    position, direction
+                );
             }
         }
     }
 
     #[test]
     fn corner_hit() {
-        let map = single_block_map();
-        let start = -Vec3::ONE;
-        let dir = Vec3::ONE.normalize();
-        if let Some(hit) = raycast(start, dir, 2.0, &map) {
-            assert!(close_enough(hit.distance, Vec3::ONE.length()));
+        let universe = single_block_universe();
+        let position = -Vec3::ONE;
+        let direction = Vec3::ONE.normalize();
+        if let Some(hit) = cast_ray(
+            RayFinite {
+                position,
+                direction,
+                reach: 2.0,
+            },
+            &universe,
+        ) {
+            assert!(close_enough(hit.distance(), Vec3::ONE.length()));
         } else {
-            println!("No hit for ray ({}, {}) in single block map", start, dir);
-            panic!();
+            panic!(
+                "No hit for ray ({}, {}) in single block map",
+                position, direction
+            );
         }
     }
 
-    fn single_block_map() -> Universe {
-        let mut chunk_map = Universe {
+    fn single_block_universe() -> Universe {
+        let mut universe = Universe {
             chunks: [(IVec3::ZERO, Chunk::empty())].into_iter().collect(),
             heightfield: HashMap::new(),
         };
@@ -115,12 +279,11 @@ mod test {
             name: "Stone".to_string(),
             id: BlockId::from_u8(1),
             flags: vec![BlockFlag::Collidable],
-            light_level: 0,
             ..default()
         });
-        chunk_map.set_chunk_block(&IVec3::ZERO, stone);
-        assert_eq!(Some(stone), chunk_map.read_chunk_block(&IVec3::ZERO));
-        chunk_map
+        universe.set_chunk_block(&IVec3::ZERO, stone);
+        assert_eq!(Some(stone), universe.read_chunk_block(&IVec3::ZERO));
+        universe
     }
 
     fn close_enough(a: f32, b: f32) -> bool {

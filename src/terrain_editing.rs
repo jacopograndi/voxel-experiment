@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use mcrs_blueprints::{blocks::BlockId, flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
-use mcrs_physics::{character::CameraController, raycast};
+use mcrs_physics::{
+    character::CameraController,
+    raycast::{cast_ray, RayFinite},
+};
 use mcrs_storage::{
     block::{Block, LightType},
     universe::Universe,
@@ -31,7 +34,14 @@ pub fn terrain_editing(
             _ => None,
         };
         if let Some(act) = act {
-            if let Some(hit) = raycast::raycast(tr.translation(), tr.forward(), 4.5, &universe) {
+            if let Some(hit) = cast_ray(
+                RayFinite {
+                    position: tr.translation(),
+                    direction: tr.forward(),
+                    reach: 4.5,
+                },
+                &universe,
+            ) {
                 match act {
                     Act::RemoveBlock => {
                         let pos = hit.grid_pos;
@@ -94,7 +104,7 @@ pub fn terrain_editing(
                         propagate_light(&mut universe, light_torches, LightType::Torch);
                     }
                     Act::PlaceBlock => {
-                        let pos = hit.grid_pos + hit.normal;
+                        let pos = hit.grid_pos + hit.normal();
 
                         debug!(target: "terrain_editing", "placed block at {}", pos);
 

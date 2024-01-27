@@ -64,14 +64,16 @@ pub fn character_controller_movement(
         vel.vel -= Vec3::Y * 0.01;
 
         let mut grounded = false;
-        if let Some(hit) = sweep_aabb(
-            tr.translation,
+        if let Some(hit) = cast_cuboid(
+            RayFinite {
+                position: tr.translation,
+                direction: Vec3::NEG_Y,
+                reach: MARGIN_EPSILON,
+            },
             character.size,
-            Vec3::NEG_Y,
-            MARGIN_EPSILON * 2.,
             &universe,
         ) {
-            if hit.distance <= MARGIN_EPSILON * 2. {
+            if hit.distance() <= MARGIN_EPSILON {
                 grounded = true;
                 if controller.jumping {
                     vel.vel += Vec3::Y * character.jump_strenght;
@@ -90,15 +92,17 @@ pub fn character_controller_movement(
         }
 
         for _ in 0..4 {
-            if let Some(hit) = sweep_aabb(
-                tr.translation,
+            if let Some(hit) = cast_cuboid(
+                RayFinite {
+                    position: tr.translation,
+                    direction: vel.vel.normalize_or_zero(),
+                    reach: vel.vel.length(),
+                },
                 character.size,
-                vel.vel.normalize_or_zero(),
-                vel.vel.length(),
                 &universe,
             ) {
-                tr.translation += vel.vel.normalize_or_zero() * (hit.distance - MARGIN_EPSILON);
-                vel.vel *= (IVec3::ONE - hit.blocked).as_vec3();
+                tr.translation += vel.vel.normalize_or_zero() * (hit.distance() - MARGIN_EPSILON);
+                vel.vel *= (IVec3::ONE - hit.mask).as_vec3();
                 if vel.vel.length() < MARGIN_EPSILON {
                     break;
                 }
