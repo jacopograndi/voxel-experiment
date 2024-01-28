@@ -3,7 +3,12 @@ mod raycast_test;
 
 #[cfg(test)]
 mod test {
-    use bevy::{math::IVec3, prelude::default, utils::HashMap};
+    use bevy::{
+        app::App,
+        math::{IVec3, Vec3},
+        prelude::default,
+        utils::HashMap,
+    };
     use mcrs_blueprints::{
         blocks::{BlockBlueprint, BlockId},
         flagbank::BlockFlag,
@@ -26,8 +31,24 @@ mod test {
         universe
     }
 
+    pub fn add_block(app: &mut App, pos: IVec3) {
+        let mut universe = app.world.get_resource_mut::<Universe>().unwrap();
+        let stone = Block::new(&BlockBlueprint {
+            name: "Stone".to_string(),
+            id: BlockId::from_u8(1),
+            flags: vec![BlockFlag::Collidable],
+            ..default()
+        });
+        universe.set_chunk_block(&pos, stone);
+    }
+
+    // floats are no fun
+    const EPS: f32 = 0.0001;
     pub fn close_enough(a: f32, b: f32) -> bool {
-        const EPS: f32 = 0.0001;
         (a - EPS..a + EPS).contains(&b)
+    }
+
+    pub fn close_enough_vec(a: Vec3, b: Vec3) -> bool {
+        (-EPS..EPS).contains(&(a - b).length())
     }
 }

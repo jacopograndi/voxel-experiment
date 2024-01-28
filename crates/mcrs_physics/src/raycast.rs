@@ -7,6 +7,9 @@ use crate::MARGIN_EPSILON;
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
+#[cfg(test)]
+const DEBUG_TRACE: bool = false;
+
 #[derive(Debug, Clone)]
 /// Represents a line segment
 pub struct RayFinite {
@@ -64,7 +67,11 @@ impl Raycaster {
         for _i in 0..RAYCAST_MAX_ITERATIONS {
             if raycaster.distance() < ray.reach {
                 if collision_check(&raycaster) {
-                    test_trace(format!("ray hit: distance {}, {:?}", raycaster.distance(), raycaster));
+                    test_trace(format!(
+                        "ray hit: distance {}, {:?}",
+                        raycaster.distance(),
+                        raycaster
+                    ));
                     return Some(raycaster);
                 } else {
                     raycaster.step();
@@ -217,7 +224,7 @@ fn mul_or_zero_vec(v: Vec3, w: Vec3) -> Vec3 {
 // Used to trace in testing
 fn test_trace(_s: String) {
     #[cfg(test)]
-    {
+    if DEBUG_TRACE {
         println!("{}", _s);
     }
 }

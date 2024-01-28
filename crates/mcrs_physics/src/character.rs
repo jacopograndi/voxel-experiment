@@ -67,7 +67,6 @@ pub fn character_controller_movement(
 ) {
     for (character, controller, mut tr, mut vel, friction) in character_query.iter_mut() {
         let acc = controller.acceleration.x * tr.forward() + controller.acceleration.z * tr.left();
-        vel.vel -= Vec3::Y * 0.01;
         if is_grounded(character, &tr, &universe) {
             if controller.jumping {
                 vel.vel += Vec3::Y * character.jump_strenght;
@@ -77,6 +76,7 @@ pub fn character_controller_movement(
         } else {
             vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.air_speed;
             vel.vel *= friction.air;
+            vel.vel -= Vec3::Y * 0.01;
         }
 
         for _ in 0..3 {
