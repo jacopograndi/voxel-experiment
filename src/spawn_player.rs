@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use mcrs_blueprints::Blueprints;
 use mcrs_net::{LocalPlayer, NewPlayerSpawned};
 use mcrs_physics::character::{
-    CameraController, Character, CharacterController, CharacterId, Friction, Velocity,
+    CameraController, Character, CharacterController, Friction, Velocity,
 };
 use mcrs_render::{
     boxes_world::{Ghost, LoadedVoxTextures},
@@ -20,8 +20,7 @@ pub fn spawn_player(
         player.remove::<NewPlayerSpawned>();
         player.insert((
             Character {
-                id: CharacterId(0), // todo: delet dis id
-                size: Vec3::new(0.5, 1.99, 0.5),
+                size: Vec3::new(0.5, 2.0, 0.5),
                 air_speed: 0.001,
                 ground_speed: 0.03,
                 jump_strenght: 0.17,

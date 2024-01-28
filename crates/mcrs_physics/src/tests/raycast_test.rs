@@ -1,14 +1,12 @@
 #[cfg(test)]
-mod test {
+mod ray {
     use std::f32::consts::PI;
 
-    use crate::raycast::{cast_cuboid, cast_ray, get_leading_aabb_vertex, RayFinite};
+    use crate::raycast::{cast_ray, RayFinite};
     use bevy::{prelude::*, utils::HashMap};
-    use mcrs_blueprints::{
-        blocks::{BlockBlueprint, BlockId},
-        flagbank::BlockFlag,
-    };
-    use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
+
+    use crate::tests::test::{close_enough, single_block_universe};
+    use mcrs_storage::universe::Universe;
 
     #[test]
     fn empty_out_of_range() {
@@ -61,6 +59,30 @@ mod test {
     }
 
     #[test]
+    fn adjacent_tangent() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_ray(
+            RayFinite {
+                position: center - Vec3::X * 0.5,
+                direction: Vec3::Y,
+                reach: 1.0
+            },
+            &universe
+        )
+        .is_some());
+        assert!(cast_ray(
+            RayFinite {
+                position: center - Vec3::X * 0.50001,
+                direction: Vec3::Y,
+                reach: 1.0
+            },
+            &universe
+        )
+        .is_none());
+    }
+
+    #[test]
     fn giant_step() {
         let universe = single_block_universe();
         let center = Vec3::ONE * 0.5;
@@ -98,69 +120,6 @@ mod test {
         )
         .is_some());
     }
-
-    #[test]
-    fn sweep_just_out_of_range() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 2.0,
-                direction: -Vec3::X,
-                reach: 0.999999,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_none());
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 2.0,
-                direction: -Vec3::X,
-                reach: 1.000001,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn sweep_adjacent() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 1.0,
-                direction: -Vec3::X,
-                reach: 1.0,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 1.00001,
-                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
-                reach: 1.0,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 1.0,
-                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
-                reach: 1.0,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
-    }
-
     #[test]
     fn zero_length() {
         let universe = single_block_universe();
@@ -171,22 +130,6 @@ mod test {
                 direction: -Vec3::X,
                 reach: 0.000001
             },
-            &universe
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn sweep_zero_length() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 1.0,
-                direction: -Vec3::X,
-                reach: 0.000001,
-            },
-            Vec3::ONE,
             &universe
         )
         .is_some());
@@ -269,26 +212,91 @@ mod test {
             );
         }
     }
+}
 
-    fn single_block_universe() -> Universe {
-        let mut universe = Universe {
-            chunks: [(IVec3::ZERO, Chunk::empty())].into_iter().collect(),
-            heightfield: HashMap::new(),
-        };
-        let stone = Block::new(&BlockBlueprint {
-            name: "Stone".to_string(),
-            id: BlockId::from_u8(1),
-            flags: vec![BlockFlag::Collidable],
-            ..default()
-        });
-        universe.set_chunk_block(&IVec3::ZERO, stone);
-        assert_eq!(Some(stone), universe.read_chunk_block(&IVec3::ZERO));
-        universe
+#[cfg(test)]
+mod cuboid {
+    use crate::tests::test::single_block_universe;
+
+    use crate::raycast::{cast_cuboid, get_leading_aabb_vertex, RayFinite};
+    use bevy::prelude::*;
+
+    #[test]
+    fn just_out_of_range() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 2.0,
+                direction: -Vec3::X,
+                reach: 0.999999,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_none());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 2.0,
+                direction: -Vec3::X,
+                reach: 1.000001,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
     }
 
-    fn close_enough(a: f32, b: f32) -> bool {
-        const EPS: f32 = 0.0001;
-        (a - EPS..a + EPS).contains(&b)
+    #[test]
+    fn adjacent() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: -Vec3::X,
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.00001,
+                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
+                reach: 1.0,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn zero_length() {
+        let universe = single_block_universe();
+        let center = Vec3::ONE * 0.5;
+        assert!(cast_cuboid(
+            RayFinite {
+                position: center + Vec3::X * 1.0,
+                direction: -Vec3::X,
+                reach: 0.000001,
+            },
+            Vec3::ONE,
+            &universe
+        )
+        .is_some());
     }
 
     #[test]

@@ -64,7 +64,7 @@ impl Raycaster {
         for _i in 0..RAYCAST_MAX_ITERATIONS {
             if raycaster.distance() < ray.reach {
                 if collision_check(&raycaster) {
-                    test_trace(format!("ray hit: {:?}", raycaster));
+                    test_trace(format!("ray hit: distance {}, {:?}", raycaster.distance(), raycaster));
                     return Some(raycaster);
                 } else {
                     raycaster.step();
