@@ -23,7 +23,7 @@ pub fn spawn_player(
                 size: Vec3::new(0.5, 2.0, 0.5),
                 air_speed: 0.001,
                 ground_speed: 0.03,
-                jump_strenght: 0.17,
+                jump_strenght: 0.2,
             },
             CharacterController {
                 acceleration: Vec3::splat(0.0),
