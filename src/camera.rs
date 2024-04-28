@@ -6,6 +6,14 @@ use bevy::{
 use mcrs_net::LocalPlayer;
 use mcrs_physics::character::{CameraController, Character, CharacterController};
 
+pub struct McrsCameraPlugin;
+
+impl Plugin for McrsCameraPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, (camera_controller_movement, cursor_grab));
+    }
+}
+
 /// Move the camera up and down and the player body left and right.
 pub fn camera_controller_movement(
     mut camera_query: Query<(&CameraController, &mut Transform, &Parent)>,

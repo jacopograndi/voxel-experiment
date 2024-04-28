@@ -11,7 +11,6 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 noise = "0.8.2"
 
-mcrs_core = { path = "crates/mcrs_core" }
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_render = { path = "crates/mcrs_render" }
 mcrs_debug = { path = "crates/mcrs_debug" }

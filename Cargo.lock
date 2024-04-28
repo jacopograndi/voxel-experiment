@@ -2626,20 +2626,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcrs_core"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "mcrs_blueprints",
- "mcrs_input",
- "mcrs_net",
- "mcrs_physics",
- "mcrs_render",
- "mcrs_settings",
- "mcrs_storage",
-]
-
-[[package]]
 name = "mcrs_debug"
 version = "0.1.0"
 dependencies = [
@@ -4067,7 +4053,6 @@ dependencies = [
  "bevy_egui",
  "mcrs_blueprints",
  "mcrs_chemistry",
- "mcrs_core",
  "mcrs_debug",
  "mcrs_input",
  "mcrs_net",
