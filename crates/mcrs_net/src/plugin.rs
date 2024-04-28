@@ -8,8 +8,6 @@ use mcrs_settings::NetworkAddress;
 use mcrs_settings::NetworkMode;
 use renet::RenetServer;
 
-use crate::IsClient;
-use crate::IsServer;
 use crate::Lobby;
 
 use super::client::*;
@@ -32,7 +30,6 @@ impl Plugin for McrsNetServerPlugin {
         app.init_resource::<Lobby>();
         app.insert_resource(server);
         app.insert_resource(transport);
-        app.insert_resource(IsServer);
         app.init_resource::<ChunkReplication>();
         app.add_systems(
             FixedUpdate,
@@ -64,7 +61,6 @@ impl Plugin for McrsNetClientPlugin {
         app.init_resource::<Lobby>();
         app.insert_resource(client);
         app.insert_resource(transport);
-        app.insert_resource(IsClient);
         app.add_systems(
             FixedUpdate,
             (

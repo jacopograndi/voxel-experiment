@@ -13,12 +13,6 @@ const PROTOCOL_ID: u64 = 7;
 
 const PORT: u32 = 54550;
 
-// helper resources
-#[derive(Resource, Debug, Clone)]
-pub struct IsServer;
-#[derive(Resource, Debug, Clone)]
-pub struct IsClient;
-
 #[derive(Debug, Component)]
 pub struct NetPlayer {
     pub id: ClientId,

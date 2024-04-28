@@ -3,7 +3,6 @@ use bevy::{
     prelude::*,
     render::RenderPlugin,
 };
-use bevy_egui::EguiPlugin;
 
 use crate::{ui::debug_diagnostic_ui, DIAGNOSTIC_FPS, DIAGNOSTIC_FRAME_TIME};
 
@@ -22,12 +21,11 @@ impl Plugin for McrsDiagnosticPlugin {
         if !app.is_plugin_added::<RenderPlugin>() {
             return;
         };
-        app.add_plugins(EguiPlugin)
-            .register_diagnostic(
-                Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
-            )
-            .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
-            .add_systems(Update, (debug_diagnostic_system, debug_diagnostic_ui));
+        app.register_diagnostic(
+            Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
+        )
+        .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
+        .add_systems(Update, (debug_diagnostic_system, debug_diagnostic_ui));
     }
 }
 
