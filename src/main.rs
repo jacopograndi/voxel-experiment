@@ -26,8 +26,13 @@ use terrain::{terrain_editing, terrain_generation};
 use ui::ui;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum CoreSet {
+pub enum FixedCoreSet {
     Update,
+}
+
+#[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum CoreSet {
+    Ui,
 }
 
 fn main() {
@@ -38,12 +43,16 @@ fn main() {
         (
             NetSet::Receive,
             PhysicsSet::Update,
-            CoreSet::Update,
+            FixedCoreSet::Update,
             NetSet::Send,
-            InputSet::Consume,
         )
             .chain(),
     );
+
+    app.configure_sets(Update, (
+                                CoreSet::Ui,
+            InputSet::Gather, 
+                                ).chain());
 
     app.add_plugins((
         McrsSettingsPlugin,
@@ -91,7 +100,7 @@ fn add_client(app: &mut App) {
         McrsCameraPlugin,
     ));
     app.add_systems(Startup, ui);
-    app.add_systems(Update, hotbar);
+    app.add_systems(Update, hotbar.in_set(CoreSet::Ui));
     app.add_systems(
         FixedUpdate,
         (
@@ -108,7 +117,7 @@ fn add_server(app: &mut App) {
         FixedUpdate,
         (terrain_generation, terrain_editing)
             .chain()
-            .in_set(CoreSet::Update),
+            .in_set(FixedCoreSet::Update),
     );
     app.add_systems(
         FixedUpdate,

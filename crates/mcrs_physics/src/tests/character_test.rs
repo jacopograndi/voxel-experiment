@@ -45,6 +45,7 @@ mod character {
     #[test]
     fn jumping_hug_corner() {
         for corner in [
+            IVec3::new(0, 0, 0),
             IVec3::new(1, 0, 1),
             IVec3::new(-1, 0, 1),
             IVec3::new(-1, 0, -1),

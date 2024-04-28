@@ -86,6 +86,7 @@ pub fn hotbar(
     mut contexts: EguiContexts,
     mut hand_query: Query<(&mut PlayerHand, &LocalPlayer)>,
     blueprints: Res<Blueprints>,
+    mut mouse: ResMut<Input<MouseButton>>,
 ) {
     let Ok((mut hand, _)) = hand_query.get_single_mut() else {
         egui::Window::new("Hotbar")
@@ -113,14 +114,15 @@ pub fn hotbar(
                     let button =
                         egui::Button::new(format!("{}", blueprint.name)).selected(selected);
                     let response = ui.add(button);
-                    if response.clicked() {
-                        // eat the input
-                        input.buffer.retain(|input| match input {
-                            PlayerInput::Placing(_) => false,
-                            PlayerInput::Mining(_) => false,
-                            _ => true,
-                        });
+                    if response.hovered() && mouse.just_pressed(MouseButton::Left) {
+                        mouse.clear_just_pressed(MouseButton::Left);
+                        mouse.clear_just_pressed(MouseButton::Right);
                         hand.block_id = Some(blueprint.id);
+                    }
+                    if response.hovered() && mouse.just_pressed(MouseButton::Right) {
+                        mouse.clear_just_pressed(MouseButton::Left);
+                        mouse.clear_just_pressed(MouseButton::Right);
+                        hand.block_id = None;
                     }
                 }
             });
