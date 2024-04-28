@@ -47,7 +47,6 @@ fn main() {
         McrsSettingsPlugin,
         McrsVoxelStoragePlugin,
         McrsBlueprintsPlugin,
-        McrsInputPlugin,
     ));
 
     match app.world.get_resource::<NetworkMode>() {
@@ -66,7 +65,7 @@ fn main() {
             "You are not client nor server. Fix yourself. Be a functioning member of society."
         ),
     }
-
+    app.add_plugins(McrsInputPlugin);
     app.add_systems(Update, spawn_player);
 
     app.run()
