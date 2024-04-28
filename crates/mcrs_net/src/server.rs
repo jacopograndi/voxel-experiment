@@ -11,7 +11,7 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     DefaultChannel, RenetServer, ServerEvent,
 };
-use mcrs_input::PlayerInput;
+use mcrs_input::{PlayerInput, PlayerInputBuffer};
 use mcrs_physics::{
     character::{CameraController, CharacterController},
     intersect::get_chunks_in_sphere,
@@ -61,7 +61,7 @@ pub fn server_update_system(
     network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
-    mut player_input_query: Query<&mut PlayerInput>,
+    mut player_input_query: Query<&mut PlayerInputBuffer>,
     view_distance: Res<ViewDistance>,
 ) {
     for event in server_events.read() {
@@ -88,7 +88,7 @@ pub fn server_update_system(
                         SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
                         NewPlayerSpawned,
                         NetPlayer { id: *client_id },
-                        PlayerInput::default(),
+                        PlayerInputBuffer::default(),
                     ))
                     .id();
                 if matches!(*network_mode, NetworkMode::ClientAndServer) && is_local_player {
@@ -150,10 +150,10 @@ pub fn server_update_system(
     for client_id in server.clients_id() {
         while let Some(message) = server.receive_message(client_id, DefaultChannel::ReliableOrdered)
         {
-            let player_input: PlayerInput = bincode::deserialize(&message).unwrap();
+            let mut player_input: PlayerInputBuffer = bincode::deserialize(&message).unwrap();
             if let Some(player_entity) = lobby.players.get(&client_id) {
                 if let Ok(mut current_player_input) = player_input_query.get_mut(*player_entity) {
-                    current_player_input.update(player_input);
+                    current_player_input.buffer.append(&mut player_input.buffer);
                 }
             }
         }
@@ -258,11 +258,13 @@ pub fn move_players_system(
 }
 
 pub fn move_local_player(
-    player_input: Res<PlayerInput>,
+    player_input: Res<PlayerInputBuffer>,
     mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
 ) {
-    if let Ok(mut controller) = query_player.get_single_mut() {
-        controller.acceleration = player_input.acceleration;
-        controller.jumping = player_input.jumping;
+    for input in player_input.buffer.iter() {
+        if let Ok(mut controller) = query_player.get_single_mut() {
+            controller.acceleration = input.acceleration;
+            controller.jumping = input.jumping;
+        }
     }
 }

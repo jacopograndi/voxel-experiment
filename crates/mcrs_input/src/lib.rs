@@ -4,6 +4,11 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
+pub struct PlayerInputBuffer {
+    pub buffer: Vec<PlayerInput>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
 pub struct PlayerInput {
     pub acceleration: Vec3,
     pub rotation_camera: f32,
@@ -14,24 +19,8 @@ pub struct PlayerInput {
     pub block_in_hand: u8,
 }
 
-impl PlayerInput {
-    pub fn update(&mut self, next: Self) {
-        let old = self.clone();
-        *self = next.clone();
-        self.placing |= old.placing;
-        self.mining |= old.mining;
-    }
-
-    pub fn consume(&mut self) {
-        let old = self.clone();
-        *self = Self::default();
-        self.rotation_body = old.rotation_body;
-        self.rotation_camera = old.rotation_camera;
-    }
-}
-
 pub fn player_input(
-    mut player_input: ResMut<PlayerInput>,
+    mut player_input_buffer: ResMut<PlayerInputBuffer>,
     keys: Res<Input<KeyCode>>,
     query_transform: Query<&Transform>,
     query_camera: Query<(Entity, &Camera, &Parent)>,
@@ -64,5 +53,5 @@ pub fn player_input(
     input.placing = mouse.just_pressed(MouseButton::Right);
     input.mining = mouse.just_pressed(MouseButton::Left);
 
-    player_input.update(input);
+    player_input_buffer.buffer.push(input);
 }

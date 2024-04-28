@@ -1,4 +1,4 @@
-use mcrs_input::PlayerInput;
+use mcrs_input::PlayerInputBuffer;
 use mcrs_settings::NetworkMode;
 use renet::DefaultChannel;
 use std::{
@@ -140,11 +140,11 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
 }
 
 pub fn client_send_input(
-    mut res_player_input: ResMut<PlayerInput>,
+    mut res_player_input: ResMut<PlayerInputBuffer>,
     mut client: ResMut<RenetClient>,
 ) {
     let input_message = bincode::serialize(&*res_player_input).unwrap();
     // maybe unreliable is better (faster and if a packet is lost, whatever)
     client.send_message(DefaultChannel::ReliableOrdered, input_message);
-    res_player_input.consume();
+    res_player_input.buffer.clear();
 }

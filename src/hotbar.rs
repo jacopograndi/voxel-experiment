@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use mcrs_blueprints::{blocks::BlockBlueprint, Blueprints};
-use mcrs_input::PlayerInput;
+use mcrs_input::{PlayerInput, PlayerInputBuffer};
 
 // this is very much a hack
 
 pub fn hotbar(
-    mut input: ResMut<PlayerInput>,
+    mut input: ResMut<PlayerInputBuffer>,
     mut hand: Local<u8>,
     mut contexts: EguiContexts,
     blueprints: Res<Blueprints>,
@@ -32,12 +32,21 @@ pub fn hotbar(
                     let response = ui.add(button);
                     if response.clicked() {
                         // eat the input
-                        input.mining = false;
+                        if let Some(last) = input.buffer.last_mut() {
+                            last.mining = false;
+                        }
                         *hand = *blueprint.id;
                     }
                 }
             });
         });
 
-    input.block_in_hand = *hand;
+    if let Some(last) = input.buffer.last_mut() {
+        last.block_in_hand = *hand;
+    } else {
+        input.buffer.push(PlayerInput {
+            block_in_hand: *hand,
+            ..default()
+        });
+    }
 }
