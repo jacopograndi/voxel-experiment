@@ -195,21 +195,21 @@ mod test {
             blocks: BlueprintList::from_list(vec![
                 BlockBlueprint {
                     name: "Air".to_string(),
-                    id: BlockId::from_u8(0),
+                    id: 0.into(),
                     flags: vec![],
                     light_level: 0,
                     ..Default::default()
                 },
                 BlockBlueprint {
                     name: "Stone".to_string(),
-                    id: BlockId::from_u8(1),
+                    id: 1.into(),
                     flags: vec![BlockFlag::Collidable, BlockFlag::Opaque],
                     light_level: 0,
                     ..Default::default()
                 },
                 BlockBlueprint {
                     name: "Glowstone".to_string(),
-                    id: BlockId::from_u8(2),
+                    id: 2.into(),
                     flags: vec![BlockFlag::Collidable],
                     light_level: 15,
                     ..Default::default()

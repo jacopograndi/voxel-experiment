@@ -35,8 +35,8 @@ impl BlockBlueprint {
 #[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Copy, Deref, DerefMut, Pod, Zeroable)]
 pub struct BlockId(u8);
 
-impl BlockId {
-    pub fn from_u8(v: u8) -> Self {
+impl From<u8> for BlockId {
+    fn from(v: u8) -> Self {
         BlockId(v)
     }
 }

@@ -6,9 +6,8 @@ use mcrs_debug::plugin::McrsDebugPlugin;
 
 mod camera;
 mod hotbar;
-mod spawn_player;
-mod terrain_editing;
-mod terrain_generation;
+mod player;
+mod terrain;
 mod ui;
 
 use hotbar::hotbar;
@@ -18,9 +17,8 @@ use mcrs_physics::plugin::{McrsPhysicsPlugin, PhysicsSet};
 use mcrs_render::plugin::McrsVoxelRenderPlugin;
 use mcrs_settings::{plugin::McrsSettingsPlugin, NetworkMode};
 use mcrs_storage::McrsVoxelStoragePlugin;
-use spawn_player::spawn_player;
-use terrain_editing::terrain_editing;
-use terrain_generation::terrain_generation;
+use player::spawn_player;
+use terrain::{terrain_editing, terrain_generation};
 use ui::ui;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
@@ -47,6 +45,7 @@ fn main() {
         McrsSettingsPlugin,
         McrsVoxelStoragePlugin,
         McrsBlueprintsPlugin,
+        McrsInputPlugin,
     ));
 
     match app.world.get_resource::<NetworkMode>() {
@@ -65,7 +64,6 @@ fn main() {
             "You are not client nor server. Fix yourself. Be a functioning member of society."
         ),
     }
-    app.add_plugins(McrsInputPlugin);
     app.add_systems(Update, spawn_player);
 
     app.run()

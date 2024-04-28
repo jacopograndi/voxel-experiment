@@ -22,7 +22,7 @@ mod test {
         };
         let stone = Block::new(&BlockBlueprint {
             name: "Stone".to_string(),
-            id: BlockId::from_u8(1),
+            id: 1.into(),
             flags: vec![BlockFlag::Collidable],
             ..default()
         });
@@ -35,7 +35,7 @@ mod test {
         let mut universe = app.world.get_resource_mut::<Universe>().unwrap();
         let stone = Block::new(&BlockBlueprint {
             name: "Stone".to_string(),
-            id: BlockId::from_u8(1),
+            id: 1.into(),
             flags: vec![BlockFlag::Collidable],
             ..default()
         });
