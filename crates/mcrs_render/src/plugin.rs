@@ -66,11 +66,11 @@ impl Plugin for McrsVoxelRenderPlugin {
 
         render_app
             .insert_resource(ViewDistance::default())
-            .add_systems(ExtractSchedule, extract_settings);
+            .add_systems(ExtractSchedule, extract_render_settings);
     }
 }
 
-pub fn extract_settings(
+pub fn extract_render_settings(
     view_distance: Extract<Res<ViewDistance>>,
     mut render_view_distance: ResMut<ViewDistance>,
 ) {

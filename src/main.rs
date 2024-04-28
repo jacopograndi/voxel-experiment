@@ -16,21 +16,24 @@ use terrain_generation::terrain_generation;
 use ui::ui;
 
 fn main() {
-    let mut app = App::new();
-    app.add_plugins((McrsCorePlugin, McrsDebugPlugin));
+    
+    let mut app = App::new(); // Bevy App
 
+    app.add_plugins(McrsCorePlugin);
+
+    app.add_plugins(McrsDebugPlugin);
     app.add_systems(
         FixedUpdate,
-        (terrain_generation, terrain_editing)
+        (terrain_generation, terrain_editing).chain()
             .in_set(CoreSet::Update)
             .run_if(resource_exists::<IsServer>()),
     );
     app.add_systems(Update, spawn_player);
-
     app.add_systems(Startup, ui.run_if(resource_exists::<IsClient>()));
 
     // already added by McrsDebugPlugin
     //app.add_plugins(EguiPlugin);
     app.add_systems(Update, hotbar.run_if(resource_exists::<IsClient>()));
+    
     app.run()
 }

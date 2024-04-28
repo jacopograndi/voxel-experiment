@@ -43,8 +43,7 @@ impl Universe {
             chunk.set_block(inner_pos, block);
             chunk.dirty_render = true;
             chunk.dirty_replication = true;
-        }
-        else {
+        } else {
             let mut chunk = Chunk::empty();
             chunk.set_block(inner_pos, block);
             chunk.dirty_render = true;

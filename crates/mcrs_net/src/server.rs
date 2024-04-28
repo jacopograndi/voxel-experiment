@@ -29,12 +29,6 @@ use super::{
     connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
 };
 
-const SERVER_TICKS_PER_SECOND: u32 = 60;
-
-pub fn server_refresh_time() -> bevy::prelude::Time<bevy::prelude::Fixed> {
-    Time::<Fixed>::from_seconds(1. / (SERVER_TICKS_PER_SECOND as f64))
-}
-
 pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
     let bind_addr: SocketAddr = ("0.0.0.0:".to_string() + &PORT.to_string())
         .parse()
