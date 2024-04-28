@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use mcrs_blueprints::{blocks::BlockId, flagbank::BlockFlag, Blueprints};
+use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
 use mcrs_physics::{
     character::CameraController,
@@ -10,16 +10,18 @@ use mcrs_storage::{
     universe::Universe,
 };
 
-use mcrs_input::PlayerInputBuffer;
+use mcrs_input::{PlayerInput, PlayerInputBuffer};
+
+use crate::hotbar::PlayerHand;
 
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
-    mut player_query: Query<&mut PlayerInputBuffer>,
+    mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
     mut universe: ResMut<Universe>,
     blueprints: Res<Blueprints>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
-        let Ok(mut input) = player_query.get_mut(parent.get()) else {
+        let Ok((mut input, hand)) = player_query.get_mut(parent.get()) else {
             continue;
         };
 
@@ -29,9 +31,9 @@ pub fn terrain_editing(
             RemoveBlock,
         }
         for input in input.buffer.iter() {
-            let act = match (input.placing, input.mining) {
-                (true, _) => Some(Act::PlaceBlock),
-                (_, true) => Some(Act::RemoveBlock),
+            let act = match input {
+                PlayerInput::Placing(true) => Some(Act::PlaceBlock),
+                PlayerInput::Mining(true) => Some(Act::RemoveBlock),
                 _ => None,
             };
             if let Some(act) = act {
@@ -114,9 +116,11 @@ pub fn terrain_editing(
 
                             let mut dark_suns = vec![];
 
-                            let blueprint = blueprints
-                                .blocks
-                                .get(&BlockId::from_u8(input.block_in_hand));
+                            let Some(block_id) = hand.block_id else {
+                                continue;
+                            };
+
+                            let blueprint = blueprints.blocks.get(&block_id);
                             universe.set_chunk_block(&pos, Block::new(blueprint));
 
                             propagate_light(&mut universe, vec![pos], LightType::Torch);

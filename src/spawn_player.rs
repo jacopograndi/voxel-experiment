@@ -9,6 +9,8 @@ use mcrs_render::{
     camera::VoxelCameraBundle,
 };
 
+use crate::hotbar::PlayerHand;
+
 pub fn spawn_player(
     mut commands: Commands,
     query: Query<(Entity, &NewPlayerSpawned, Option<&LocalPlayer>)>,
@@ -35,6 +37,7 @@ pub fn spawn_player(
                 air: Vec3::splat(0.99),
                 ground: Vec3::splat(0.78),
             },
+            PlayerHand { block_id: None },
         ));
         player.with_children(|parent| {
             let mut camera_pivot = parent.spawn(CameraController::default());

@@ -1,5 +1,6 @@
 use bevy::{log::LogPlugin, prelude::*, window::PresentMode};
 use bevy_egui::EguiPlugin;
+use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use mcrs_blueprints::plugin::McrsBlueprintsPlugin;
 use mcrs_debug::plugin::McrsDebugPlugin;
@@ -11,7 +12,10 @@ mod terrain_editing;
 mod terrain_generation;
 mod ui;
 
-use hotbar::hotbar;
+use hotbar::{
+    client_receive_replica, client_send_replica, hotbar, server_receive_replica,
+    server_send_replica,
+};
 use mcrs_input::plugin::{InputSet, McrsInputPlugin};
 use mcrs_net::plugin::{McrsNetClientPlugin, McrsNetServerPlugin, NetSet};
 use mcrs_physics::plugin::{McrsPhysicsPlugin, PhysicsSet};
@@ -90,6 +94,14 @@ fn add_client(app: &mut App) {
     ));
     app.add_systems(Startup, ui);
     app.add_systems(Update, hotbar);
+    app.add_systems(
+        FixedUpdate,
+        (
+            client_receive_replica.in_set(NetSet::Receive),
+            client_send_replica.in_set(NetSet::Send),
+        )
+            .run_if(client_connected()),
+    );
 }
 
 fn add_server(app: &mut App) {
@@ -99,5 +111,12 @@ fn add_server(app: &mut App) {
         (terrain_generation, terrain_editing)
             .chain()
             .in_set(CoreSet::Update),
+    );
+    app.add_systems(
+        FixedUpdate,
+        (
+            server_receive_replica.in_set(NetSet::Receive),
+            server_send_replica.in_set(NetSet::Send),
+        ),
     );
 }

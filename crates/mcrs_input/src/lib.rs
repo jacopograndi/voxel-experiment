@@ -8,15 +8,14 @@ pub struct PlayerInputBuffer {
     pub buffer: Vec<PlayerInput>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
-pub struct PlayerInput {
-    pub acceleration: Vec3,
-    pub rotation_camera: f32,
-    pub rotation_body: f32,
-    pub jumping: bool,
-    pub placing: bool,
-    pub mining: bool,
-    pub block_in_hand: u8,
+#[derive(Debug, Serialize, Deserialize, Component, Resource, Clone)]
+pub enum PlayerInput {
+    Acceleration(Vec3),
+    RotationCamera(f32),
+    RotationBody(f32),
+    Jumping(bool),
+    Placing(bool),
+    Mining(bool),
 }
 
 pub fn player_input(
@@ -26,12 +25,16 @@ pub fn player_input(
     query_camera: Query<(Entity, &Camera, &Parent)>,
     mouse: Res<Input<MouseButton>>,
 ) {
-    let mut input = PlayerInput::default();
+    let mut input = PlayerInputBuffer::default();
     if let Ok((entity, _, parent)) = query_camera.get_single() {
         let tr_camera = query_transform.get(entity).unwrap();
         let tr_body = query_transform.get(parent.get()).unwrap();
-        input.rotation_camera = tr_camera.rotation.to_euler(EulerRot::YXZ).1;
-        input.rotation_body = tr_body.rotation.to_euler(EulerRot::YXZ).0;
+        input.buffer.push(PlayerInput::RotationCamera(
+            tr_camera.rotation.to_euler(EulerRot::YXZ).1,
+        ));
+        input.buffer.push(PlayerInput::RotationBody(
+            tr_body.rotation.to_euler(EulerRot::YXZ).0,
+        ));
     }
 
     let mut delta = Vec3::ZERO;
@@ -48,10 +51,16 @@ pub fn player_input(
         delta -= Vec3::Z;
     }
     delta = delta.normalize_or_zero();
-    input.acceleration = delta;
-    input.jumping = keys.pressed(KeyCode::Space);
-    input.placing = mouse.just_pressed(MouseButton::Right);
-    input.mining = mouse.just_pressed(MouseButton::Left);
+    input.buffer.push(PlayerInput::Acceleration(delta));
+    input
+        .buffer
+        .push(PlayerInput::Jumping(keys.pressed(KeyCode::Space)));
+    input
+        .buffer
+        .push(PlayerInput::Placing(mouse.just_pressed(MouseButton::Right)));
+    input
+        .buffer
+        .push(PlayerInput::Mining(mouse.just_pressed(MouseButton::Left)));
 
-    player_input_buffer.buffer.push(input);
+    player_input_buffer.buffer.append(&mut input.buffer);
 }

@@ -9,7 +9,7 @@ use bevy::{
 };
 use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
-    DefaultChannel, RenetServer, ServerEvent,
+    RenetServer, ServerEvent,
 };
 use mcrs_input::{PlayerInput, PlayerInputBuffer};
 use mcrs_physics::{
@@ -23,7 +23,9 @@ use renet::{
     ClientId,
 };
 
-use crate::{LocalPlayer, NetPlayer, NewPlayerSpawned, ServerChannel, ServerMessages};
+use crate::{
+    ClientChannel, LocalPlayer, NetPlayer, NewPlayerSpawned, ServerChannel, ServerMessages,
+};
 
 use super::{
     connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
@@ -148,8 +150,7 @@ pub fn server_update_system(
     }
 
     for client_id in server.clients_id() {
-        while let Some(message) = server.receive_message(client_id, DefaultChannel::ReliableOrdered)
-        {
+        while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerInput) {
             let mut player_input: PlayerInputBuffer = bincode::deserialize(&message).unwrap();
             if let Some(player_entity) = lobby.players.get(&client_id) {
                 if let Ok(mut current_player_input) = player_input_query.get_mut(*player_entity) {
@@ -163,10 +164,10 @@ pub fn server_update_system(
 pub fn server_sync_players(
     mut server: ResMut<RenetServer>,
     transforms: Query<&Transform>,
-    query: Query<(Entity, &NetPlayer, &PlayerInput, &Children)>,
+    query: Query<(Entity, &NetPlayer, &Children)>,
 ) {
     let mut players: HashMap<ClientId, PlayerState> = HashMap::new();
-    for (entity, player, input, children) in query.iter() {
+    for (entity, player, children) in query.iter() {
         let tr = transforms.get(entity).unwrap();
         let camera_entity = children.iter().next().unwrap();
         let tr_camera = transforms.get(*camera_entity).unwrap();
@@ -174,13 +175,12 @@ pub fn server_sync_players(
             position: tr.translation,
             rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
             rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
-            block_in_hand: input.block_in_hand,
         };
         players.insert(player.id, playerstate);
     }
 
     let sync_message = bincode::serialize(&players).unwrap();
-    server.broadcast_message(ServerChannel::NetworkedEntities, sync_message);
+    server.broadcast_message(ServerChannel::PlayerTransform, sync_message);
 }
 
 pub fn server_sync_universe(
@@ -202,7 +202,7 @@ pub fn server_sync_universe(
 
     for (client_id, chunks) in chunk_replication.requested_chunks.iter_mut() {
         let channel_size =
-            server.channel_available_memory(*client_id, ServerChannel::NetworkedUniverse) as i32;
+            server.channel_available_memory(*client_id, ServerChannel::Universe) as i32;
         let mut available_bytes = channel_size;
 
         let mut sync = SyncUniverse::default();
@@ -226,7 +226,7 @@ pub fn server_sync_universe(
         if !sent_chunks.is_empty() {
             let sync_message = bincode::serialize(&sync).unwrap();
             debug!(target: "net_server", "sending dirty universe ({} bytes)", sync_message.len());
-            server.send_message(*client_id, ServerChannel::NetworkedUniverse, sync_message);
+            server.send_message(*client_id, ServerChannel::Universe, sync_message);
             *chunks = chunks.difference(&sent_chunks).cloned().collect();
         }
     }
@@ -237,7 +237,7 @@ pub fn move_players_system(
         (
             Entity,
             &mut CharacterController,
-            &PlayerInput,
+            &mut PlayerInputBuffer,
             &mut Transform,
         ),
         (Without<CameraController>, Without<LocalPlayer>),
@@ -248,23 +248,47 @@ pub fn move_players_system(
     >,
 ) {
     for (_, parent, mut tr_camera) in query_camera.iter_mut() {
-        if let Ok((_, mut controller, input, mut tr)) = query_player.get_mut(parent.get()) {
-            controller.acceleration = input.acceleration;
-            controller.jumping = input.jumping;
-            tr_camera.rotation = Quat::from_axis_angle(Vec3::X, input.rotation_camera);
-            tr.rotation = Quat::from_axis_angle(Vec3::Y, input.rotation_body);
+        if let Ok((_, mut controller, mut input_buffer, mut tr)) =
+            query_player.get_mut(parent.get())
+        {
+            input_buffer.buffer.retain(|input| match input {
+                PlayerInput::Acceleration(acc) => {
+                    controller.acceleration = *acc;
+                    false
+                }
+                PlayerInput::RotationCamera(rot) => {
+                    tr_camera.rotation = Quat::from_axis_angle(Vec3::X, *rot);
+                    false
+                }
+                PlayerInput::RotationBody(rot) => {
+                    tr.rotation = Quat::from_axis_angle(Vec3::Y, *rot);
+                    false
+                }
+                PlayerInput::Jumping(jumping) => {
+                    controller.jumping = *jumping;
+                    false
+                }
+                _ => true,
+            });
         }
     }
 }
 
 pub fn move_local_player(
-    player_input: Res<PlayerInputBuffer>,
+    mut player_input: ResMut<PlayerInputBuffer>,
     mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
 ) {
-    for input in player_input.buffer.iter() {
-        if let Ok(mut controller) = query_player.get_single_mut() {
-            controller.acceleration = input.acceleration;
-            controller.jumping = input.jumping;
-        }
+    if let Ok(mut controller) = query_player.get_single_mut() {
+        player_input.buffer.retain(|input| match input {
+            PlayerInput::Acceleration(acc) => {
+                controller.acceleration = *acc;
+                false
+            }
+            PlayerInput::Jumping(jumping) => {
+                controller.jumping = *jumping;
+                false
+            }
+            _ => true,
+        });
     }
 }
