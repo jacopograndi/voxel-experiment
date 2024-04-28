@@ -1,6 +1,5 @@
 use mcrs_input::PlayerInputBuffer;
 use mcrs_settings::NetworkMode;
-use renet::DefaultChannel;
 use std::{
     net::{ToSocketAddrs, UdpSocket},
     time::SystemTime,
@@ -13,7 +12,7 @@ use renet::{
     ClientId, RenetClient,
 };
 
-use crate::{LocalPlayer, NewPlayerSpawned, SyncUniverse};
+use crate::{ClientChannel, LocalPlayer, NewPlayerSpawned, SyncUniverse};
 
 use super::{
     connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,
@@ -93,7 +92,7 @@ pub fn client_sync_players(
         }
     }
 
-    while let Some(message) = client.receive_message(ServerChannel::NetworkedEntities) {
+    while let Some(message) = client.receive_message(ServerChannel::PlayerTransform) {
         let players: HashMap<ClientId, PlayerState> = bincode::deserialize(&message).unwrap();
         for (player_id, playerstate) in players.iter() {
             let is_local_player = *player_id == ClientId::from_raw(transport.client_id());
@@ -117,7 +116,7 @@ pub fn client_sync_players(
 }
 
 pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
-    while let Some(message) = client.receive_message(ServerChannel::NetworkedUniverse) {
+    while let Some(message) = client.receive_message(ServerChannel::Universe) {
         let server_message: SyncUniverse = bincode::deserialize(&message).unwrap();
         debug!(target: "net_client", "{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
@@ -145,6 +144,6 @@ pub fn client_send_input(
 ) {
     let input_message = bincode::serialize(&*res_player_input).unwrap();
     // maybe unreliable is better (faster and if a packet is lost, whatever)
-    client.send_message(DefaultChannel::ReliableOrdered, input_message);
+    client.send_message(ClientChannel::PlayerInput, input_message);
     res_player_input.buffer.clear();
 }
