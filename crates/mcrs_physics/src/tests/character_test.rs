@@ -10,7 +10,7 @@ mod character {
 
     use crate::{
         character::*,
-        plugin::{McrsPhysicsPlugin, PhysicsSet},
+        plugin::{FixedPhysicsSet, McrsPhysicsPlugin},
         tests::test::{add_block, close_enough_vec, single_block_universe},
     };
 
@@ -113,7 +113,7 @@ mod character {
         app.insert_resource(single_block_universe());
         app.add_plugins(McrsPhysicsPlugin);
         app.add_plugins(TimePlugin);
-        app.configure_sets(FixedUpdate, PhysicsSet::Update);
+        app.configure_sets(FixedUpdate, FixedPhysicsSet::Tick);
         // Run the FixedUpdate every app.update()
         app.world
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(

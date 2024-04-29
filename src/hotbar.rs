@@ -4,7 +4,6 @@ use mcrs_blueprints::{
     blocks::{BlockBlueprint, BlockId},
     Blueprints,
 };
-use mcrs_input::{PlayerInput, PlayerInputBuffer};
 use mcrs_net::{ClientChannel, Lobby, LocalPlayer, NetPlayer, ServerChannel};
 use renet::{transport::NetcodeClientTransport, ClientId, RenetClient, RenetServer};
 use serde::{Deserialize, Serialize};
@@ -82,7 +81,6 @@ pub fn client_receive_replica(
 }
 
 pub fn hotbar(
-    mut input: ResMut<PlayerInputBuffer>,
     mut contexts: EguiContexts,
     mut hand_query: Query<(&mut PlayerHand, &LocalPlayer)>,
     blueprints: Res<Blueprints>,

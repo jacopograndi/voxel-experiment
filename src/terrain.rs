@@ -2,17 +2,20 @@ use bevy::{prelude::*, utils::HashSet};
 use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
 use mcrs_physics::{
-    character::{CameraController, CharacterController}, intersect::get_chunks_in_sphere, raycast::{cast_ray, RayFinite}
+    character::{CameraController, CharacterController},
+    intersect::get_chunks_in_sphere,
+    raycast::{cast_ray, RayFinite},
 };
-use mcrs_settings::ViewDistance;
 use mcrs_storage::{
-    block::{Block, LightType}, chunk::Chunk, universe::Universe
+    block::{Block, LightType},
+    chunk::Chunk,
+    universe::Universe,
 };
 
 use mcrs_input::{PlayerInput, PlayerInputBuffer};
 use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
 
-use crate::hotbar::PlayerHand;
+use crate::{hotbar::PlayerHand, settings::McrsSettings};
 
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
@@ -189,7 +192,7 @@ pub fn terrain_generation(
     mut universe: ResMut<Universe>,
     player_query: Query<(&CharacterController, &Transform)>,
     info: Res<Blueprints>,
-    view_distance: Res<ViewDistance>,
+    settings: Res<McrsSettings>,
 ) {
     let players_pos = player_query
         .iter()
@@ -198,7 +201,7 @@ pub fn terrain_generation(
 
     let mut added = HashSet::<IVec3>::new();
     for player_pos in players_pos.iter() {
-        let chunks = get_chunks_in_sphere(*player_pos, view_distance.0 as f32);
+        let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
         for chunk_pos in chunks.iter() {
             if let None = universe.chunks.get(chunk_pos) {
                 let chunk = gen_chunk(*chunk_pos, &*info);

@@ -10,8 +10,54 @@ use renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
 use serde::{Deserialize, Serialize};
 
 const PROTOCOL_ID: u64 = 7;
-
+pub const DEFAULT_NETWORK_ADDRESS: &str = "127.0.0.1";
 const PORT: u32 = 54550;
+pub const DEFAULT_REPLICATION_DISTANCE: u32 = 64;
+
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub enum NetworkMode {
+    Server,
+    ClientAndServer,
+    Client,
+}
+
+impl From<Option<String>> for NetworkMode {
+    fn from(netmode: Option<String>) -> NetworkMode {
+        match netmode {
+            None => NetworkMode::ClientAndServer,
+            Some(s) => {
+                match s.as_str() {
+                    "client" => NetworkMode::Client,
+                    "server" => NetworkMode::Server,
+                    _ => panic!("Use \"client\" for client-only mode, \"server\" for server-only mode, leave blank for standard (client+server) mode."),
+                }
+            },
+        }
+    }
+}
+
+impl From<Option<&str>> for NetworkMode {
+    fn from(netmode: Option<&str>) -> NetworkMode {
+        netmode.map(|s| s.to_string()).into()
+    }
+}
+
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct NetSettings {
+    pub server_address: String,
+    pub network_mode: NetworkMode,
+    pub replication_distance: u32,
+}
+
+impl Default for NetSettings {
+    fn default() -> Self {
+        Self {
+            server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
+            network_mode: NetworkMode::ClientAndServer,
+            replication_distance: DEFAULT_REPLICATION_DISTANCE,
+        }
+    }
+}
 
 #[derive(Debug, Component)]
 pub struct NetPlayer {

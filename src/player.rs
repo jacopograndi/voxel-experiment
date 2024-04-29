@@ -22,7 +22,7 @@ pub fn spawn_player(
         player.remove::<NewPlayerSpawned>();
         player.insert((
             Character {
-                size: Vec3::new(0.5, 2.0, 0.5),
+                size: Vec3::new(0.5, 1.8, 0.5),
                 air_speed: 0.001,
                 ground_speed: 0.03,
                 jump_strenght: 0.2,

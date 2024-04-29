@@ -1,15 +1,3 @@
-use bevy::{
-    core_pipeline::{fxaa::FxaaNode, tonemapping::TonemappingNode, upscaling::UpscalingNode},
-    prelude::*,
-    render::{
-        extract_resource::ExtractResourcePlugin,
-        render_graph::{RenderGraph, RenderGraphApp, RunGraphOnViewNode, ViewNodeRunner},
-        Extract, RenderApp,
-    },
-    ui::{draw_ui_graph, UiPassNode},
-};
-use mcrs_settings::ViewDistance;
-
 use crate::{
     boxes_world::BoxesWorldPlugin,
     graph,
@@ -21,6 +9,16 @@ use crate::{
     settings::RenderGraphSettings,
     voxel_world::VoxelWorldPlugin,
     VOXEL,
+};
+use bevy::{
+    core_pipeline::{fxaa::FxaaNode, tonemapping::TonemappingNode, upscaling::UpscalingNode},
+    prelude::*,
+    render::{
+        extract_resource::ExtractResourcePlugin,
+        render_graph::{RenderGraph, RenderGraphApp, RunGraphOnViewNode, ViewNodeRunner},
+        Extract, RenderApp,
+    },
+    ui::{draw_ui_graph, UiPassNode},
 };
 
 pub struct McrsVoxelRenderPlugin;
@@ -65,14 +63,29 @@ impl Plugin for McrsVoxelRenderPlugin {
         }
 
         render_app
-            .insert_resource(ViewDistance::default())
+            .insert_resource(RenderSettings::default())
             .add_systems(ExtractSchedule, extract_render_settings);
     }
 }
 
 pub fn extract_render_settings(
-    view_distance: Extract<Res<ViewDistance>>,
-    mut render_view_distance: ResMut<ViewDistance>,
+    settings: Extract<Res<RenderSettings>>,
+    mut render_settings: ResMut<RenderSettings>,
 ) {
-    render_view_distance.0 = view_distance.0;
+    *render_settings = settings.clone();
+}
+
+pub const DEFAULT_VIEW_DISTANCE: u32 = 64;
+
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct RenderSettings {
+    pub view_distance_blocks: u32,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self {
+            view_distance_blocks: DEFAULT_VIEW_DISTANCE,
+        }
+    }
 }

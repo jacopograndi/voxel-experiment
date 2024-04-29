@@ -2653,7 +2653,6 @@ dependencies = [
  "mcrs_blueprints",
  "mcrs_input",
  "mcrs_physics",
- "mcrs_settings",
  "mcrs_storage",
  "renet",
  "serde",
@@ -2676,16 +2675,7 @@ dependencies = [
  "bytemuck",
  "dot_vox",
  "mcrs_blueprints",
- "mcrs_settings",
  "mcrs_storage",
-]
-
-[[package]]
-name = "mcrs_settings"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "clap",
 ]
 
 [[package]]
@@ -4053,6 +4043,7 @@ dependencies = [
  "bevy_egui",
  "bevy_renet",
  "bincode",
+ "clap",
  "mcrs_blueprints",
  "mcrs_chemistry",
  "mcrs_debug",
@@ -4060,7 +4051,6 @@ dependencies = [
  "mcrs_net",
  "mcrs_physics",
  "mcrs_render",
- "mcrs_settings",
  "mcrs_storage",
  "noise",
  "rand 0.8.5",

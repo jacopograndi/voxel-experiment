@@ -9,10 +9,7 @@ mod test {
         prelude::default,
         utils::HashMap,
     };
-    use mcrs_blueprints::{
-        blocks::{BlockBlueprint, BlockId},
-        flagbank::BlockFlag,
-    };
+    use mcrs_blueprints::{blocks::BlockBlueprint, flagbank::BlockFlag};
     use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
 
     pub fn single_block_universe() -> Universe {

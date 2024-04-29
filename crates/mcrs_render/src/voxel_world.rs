@@ -11,17 +11,18 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use mcrs_settings::ViewDistance;
 use mcrs_storage::chunk::Chunk;
 use mcrs_storage::universe::Universe;
 use mcrs_storage::{CHUNK_SIDE, CHUNK_VOLUME};
+
+use crate::plugin::RenderSettings;
 
 pub struct VoxelWorldPlugin;
 
 impl Plugin for VoxelWorldPlugin {
     fn build(&self, _app: &mut App) {}
     fn finish(&self, app: &mut App) {
-        let view_distance = app.world.get_resource::<ViewDistance>().unwrap();
+        let settings = app.world.get_resource::<RenderSettings>().unwrap();
 
         let render_app = app.get_sub_app(RenderApp).unwrap();
         let render_device = render_app.world.resource::<RenderDevice>();
@@ -29,7 +30,8 @@ impl Plugin for VoxelWorldPlugin {
 
         let buffer_size = CHUNK_VOLUME * 4;
         let chunk_size = CHUNK_SIDE as u32;
-        let chunks_grid = (view_distance.0 + CHUNK_SIDE as u32) * 2 / CHUNK_SIDE as u32;
+        let chunks_grid =
+            (settings.view_distance_blocks + CHUNK_SIDE as u32) * 2 / CHUNK_SIDE as u32;
         let chunks_volume = chunks_grid * chunks_grid * chunks_grid;
 
         // uniforms
@@ -236,7 +238,7 @@ fn prepare_chunks(
     universe: Res<Universe>,
     mut render_chunk_map: ResMut<RenderChunkMap>,
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
-    view_distance: Res<ViewDistance>,
+    settings: Res<RenderSettings>,
 ) {
     let Ok((view, ..)) = view_query.get_single() else {
         return;
@@ -249,7 +251,7 @@ fn prepare_chunks(
         .iter()
         .filter_map(|(pos, _chunk)| {
             if (cam_pos - (pos.as_vec3() + chunk_center)).length_squared()
-                < view_distance.0.pow(2) as f32
+                < settings.view_distance_blocks.pow(2) as f32
             {
                 Some(*pos)
             } else {

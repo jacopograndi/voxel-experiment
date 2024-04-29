@@ -1,8 +1,0 @@
-[package]
-name = "mcrs_settings"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-bevy = "0.12.0"
-clap = { version = "4.4.12", features = ["derive"] }

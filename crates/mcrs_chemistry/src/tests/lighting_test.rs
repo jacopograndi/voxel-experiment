@@ -1,11 +1,7 @@
 #[cfg(test)]
 mod test {
     use bevy::math::IVec3;
-    use mcrs_blueprints::{
-        blocks::{BlockBlueprint, BlockId},
-        flagbank::BlockFlag,
-        BlueprintList, Blueprints,
-    };
+    use mcrs_blueprints::{blocks::BlockBlueprint, flagbank::BlockFlag, BlueprintList, Blueprints};
     use mcrs_storage::{
         block::{
             Block,

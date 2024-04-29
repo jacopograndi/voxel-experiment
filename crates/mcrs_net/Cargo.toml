@@ -15,4 +15,3 @@ mcrs_storage = { path = "../mcrs_storage" }
 mcrs_blueprints = { path = "../mcrs_blueprints" }
 mcrs_physics = { path = "../mcrs_physics" }
 mcrs_input = { path = "../mcrs_input" }
-mcrs_settings = { path = "../mcrs_settings" }

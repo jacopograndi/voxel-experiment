@@ -1,5 +1,5 @@
+use super::NetworkMode;
 use mcrs_input::PlayerInputBuffer;
-use mcrs_settings::NetworkMode;
 use std::{
     net::{ToSocketAddrs, UdpSocket},
     time::SystemTime,
@@ -12,7 +12,7 @@ use renet::{
     ClientId, RenetClient,
 };
 
-use crate::{ClientChannel, LocalPlayer, NewPlayerSpawned, SyncUniverse};
+use crate::{ClientChannel, LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
 
 use super::{
     connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,
@@ -53,7 +53,7 @@ pub fn client_sync_players(
     transport: Res<NetcodeClientTransport>,
     query: Query<(Entity, &NetPlayer, &Children)>,
     mut query_transform: Query<&mut Transform>,
-    network_mode: Res<NetworkMode>,
+    settings: Res<NetSettings>,
 ) {
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();
@@ -68,7 +68,7 @@ pub fn client_sync_players(
                 }
 
                 let spawn_point = Vec3::new(0.0, 0.0, 0.0);
-                if matches!(*network_mode, NetworkMode::Client) {
+                if matches!(settings.network_mode, NetworkMode::Client) {
                     let player_entity = commands
                         .spawn((
                             SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
@@ -100,13 +100,15 @@ pub fn client_sync_players(
                 if let Ok((_, _, children)) = query.get(*player_entity) {
                     let camera_entity = children.iter().next().unwrap(); // todo find camera
                     let mut tr = query_transform.get_mut(*player_entity).unwrap();
-                    if !is_local_player && !matches!(*network_mode, NetworkMode::ClientAndServer) {
+                    if !is_local_player
+                        && !matches!(settings.network_mode, NetworkMode::ClientAndServer)
+                    {
                         tr.translation = playerstate.position;
                         tr.rotation = Quat::from_axis_angle(Vec3::Y, playerstate.rotation_body);
                         let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
                         tr_camera.rotation =
                             Quat::from_axis_angle(Vec3::X, playerstate.rotation_camera);
-                    } else if matches!(*network_mode, NetworkMode::Client) {
+                    } else if matches!(settings.network_mode, NetworkMode::Client) {
                         tr.translation = playerstate.position;
                     }
                 }

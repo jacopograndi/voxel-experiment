@@ -69,7 +69,7 @@ pub fn character_controller_movement(
         let acc = controller.acceleration.x * tr.forward() + controller.acceleration.z * tr.left();
         if is_grounded(character, &tr, &universe) {
             if controller.jumping {
-                vel.vel = Vec3::Y * character.jump_strenght;
+                vel.vel.y = character.jump_strenght;
             }
             vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.ground_speed;
             vel.vel *= friction.ground;

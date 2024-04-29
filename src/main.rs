@@ -2,12 +2,14 @@ use bevy::{log::LogPlugin, prelude::*, window::PresentMode};
 use bevy_egui::EguiPlugin;
 use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
+use clap::Parser;
 use mcrs_blueprints::plugin::McrsBlueprintsPlugin;
 use mcrs_debug::plugin::McrsDebugPlugin;
 
 mod camera;
 mod hotbar;
 mod player;
+mod settings;
 mod terrain;
 mod ui;
 
@@ -16,23 +18,26 @@ use hotbar::{
     server_send_replica,
 };
 use mcrs_input::plugin::{InputSet, McrsInputPlugin};
-use mcrs_net::plugin::{McrsNetClientPlugin, McrsNetServerPlugin, NetSet};
-use mcrs_physics::plugin::{McrsPhysicsPlugin, PhysicsSet};
-use mcrs_render::plugin::McrsVoxelRenderPlugin;
-use mcrs_settings::{plugin::McrsSettingsPlugin, NetworkMode};
-use mcrs_storage::McrsVoxelStoragePlugin;
+use mcrs_net::{
+    plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
+    NetSettings, NetworkMode,
+};
+use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
+use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
+use mcrs_storage::McrsStoragePlugin;
 use player::spawn_player;
+use settings::{Args, McrsSettings};
 use terrain::{terrain_editing, terrain_generation};
 use ui::ui;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum FixedCoreSet {
-    Update,
+pub enum FixedMainSet {
+    Terrain,
 }
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum CoreSet {
-    Ui,
+pub enum UiSet {
+    Overlay,
 }
 
 fn main() {
@@ -41,41 +46,38 @@ fn main() {
     app.configure_sets(
         FixedUpdate,
         (
-            NetSet::Receive,
-            PhysicsSet::Update,
-            FixedCoreSet::Update,
-            NetSet::Send,
+            FixedNetSet::Receive,
+            FixedPhysicsSet::Tick,
+            FixedMainSet::Terrain,
+            FixedNetSet::Send,
         )
             .chain(),
     );
 
-    app.configure_sets(Update, (
-                                CoreSet::Ui,
-            InputSet::Gather, 
-                                ).chain());
+    app.configure_sets(Update, (UiSet::Overlay, InputSet::Gather).chain());
 
-    app.add_plugins((
-        McrsSettingsPlugin,
-        McrsVoxelStoragePlugin,
-        McrsBlueprintsPlugin,
-        McrsInputPlugin,
+    app.add_plugins((McrsStoragePlugin, McrsBlueprintsPlugin, McrsInputPlugin));
+
+    let settings: McrsSettings = Args::parse().into();
+    app.insert_resource(Time::<Fixed>::from_seconds(
+        1f64 / settings.ticks_per_second as f64,
     ));
+    app.insert_resource::<NetSettings>(settings.clone().into());
+    app.insert_resource::<RenderSettings>(settings.clone().into());
+    app.insert_resource(settings.clone());
 
-    match app.world.get_resource::<NetworkMode>() {
-        Some(NetworkMode::Client) => {
+    match settings.network_mode {
+        NetworkMode::Client => {
             add_client(&mut app);
         }
-        Some(NetworkMode::Server) => {
+        NetworkMode::Server => {
             app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default()));
             add_server(&mut app);
         }
-        Some(NetworkMode::ClientAndServer) => {
+        NetworkMode::ClientAndServer => {
             add_client(&mut app);
             add_server(&mut app);
         }
-        None => panic!(
-            "You are not client nor server. Fix yourself. Be a functioning member of society."
-        ),
     }
     app.add_systems(Update, spawn_player);
 
@@ -100,12 +102,12 @@ fn add_client(app: &mut App) {
         McrsCameraPlugin,
     ));
     app.add_systems(Startup, ui);
-    app.add_systems(Update, hotbar.in_set(CoreSet::Ui));
+    app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
     app.add_systems(
         FixedUpdate,
         (
-            client_receive_replica.in_set(NetSet::Receive),
-            client_send_replica.in_set(NetSet::Send),
+            client_receive_replica.in_set(FixedNetSet::Receive),
+            client_send_replica.in_set(FixedNetSet::Send),
         )
             .run_if(client_connected()),
     );
@@ -117,13 +119,13 @@ fn add_server(app: &mut App) {
         FixedUpdate,
         (terrain_generation, terrain_editing)
             .chain()
-            .in_set(FixedCoreSet::Update),
+            .in_set(FixedMainSet::Terrain),
     );
     app.add_systems(
         FixedUpdate,
         (
-            server_receive_replica.in_set(NetSet::Receive),
-            server_send_replica.in_set(NetSet::Send),
+            server_receive_replica.in_set(FixedNetSet::Receive),
+            server_send_replica.in_set(FixedNetSet::Send),
         ),
     );
 }

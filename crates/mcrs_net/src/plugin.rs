@@ -4,18 +4,18 @@ use bevy_renet::transport::NetcodeClientPlugin;
 use bevy_renet::transport::NetcodeServerPlugin;
 use bevy_renet::RenetClientPlugin;
 use bevy_renet::RenetServerPlugin;
-use mcrs_settings::NetworkAddress;
-use mcrs_settings::NetworkMode;
 use renet::RenetServer;
 
 use crate::Lobby;
+use crate::NetSettings;
+use crate::NetworkMode;
 
 use super::client::*;
 use super::server::*;
 use super::ChunkReplication;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum NetSet {
+pub enum FixedNetSet {
     Receive,
     Send,
 }
@@ -36,15 +36,15 @@ impl Plugin for McrsNetServerPlugin {
             (
                 (server_update_system, move_players_system)
                     .chain()
-                    .in_set(NetSet::Receive),
+                    .in_set(FixedNetSet::Receive),
                 (server_sync_players, server_sync_universe)
                     .chain()
-                    .in_set(NetSet::Send),
+                    .in_set(FixedNetSet::Send),
             )
                 .run_if(resource_exists::<RenetServer>()),
         );
-        if let Some(netmode) = app.world.get_resource::<NetworkMode>() {
-            match netmode {
+        if let Some(settings) = app.world.get_resource::<NetSettings>() {
+            match settings.network_mode {
                 NetworkMode::ClientAndServer => {
                     app.add_systems(Update, move_local_player);
                 }
@@ -64,8 +64,8 @@ impl Plugin for McrsNetClientPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (client_sync_players, client_sync_universe).in_set(NetSet::Receive),
-                client_send_input.in_set(NetSet::Send),
+                (client_sync_players, client_sync_universe).in_set(FixedNetSet::Receive),
+                client_send_input.in_set(FixedNetSet::Send),
             )
                 .run_if(client_connected()),
         );
@@ -73,8 +73,8 @@ impl Plugin for McrsNetClientPlugin {
 }
 
 fn get_server_address(app: &App) -> &str {
-    if let Some(address) = app.world.get_resource::<NetworkAddress>() {
-        &address.server
+    if let Some(settings) = app.world.get_resource::<NetSettings>() {
+        &settings.server_address
     } else {
         "127.0.0.1"
     }

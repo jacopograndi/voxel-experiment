@@ -16,7 +16,6 @@ use mcrs_physics::{
     character::{CameraController, CharacterController},
     intersect::get_chunks_in_sphere,
 };
-use mcrs_settings::{NetworkMode, ViewDistance};
 use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},
@@ -24,7 +23,8 @@ use renet::{
 };
 
 use crate::{
-    ClientChannel, LocalPlayer, NetPlayer, NewPlayerSpawned, ServerChannel, ServerMessages,
+    ClientChannel, LocalPlayer, NetPlayer, NetSettings, NetworkMode, NewPlayerSpawned,
+    ServerChannel, ServerMessages,
 };
 
 use super::{
@@ -60,11 +60,10 @@ pub fn server_update_system(
     mut commands: Commands,
     mut lobby: ResMut<Lobby>,
     mut server: ResMut<RenetServer>,
-    network_mode: Res<NetworkMode>,
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
     mut player_input_query: Query<&mut PlayerInputBuffer>,
-    view_distance: Res<ViewDistance>,
+    settings: Res<NetSettings>,
 ) {
     for event in server_events.read() {
         match event {
@@ -93,7 +92,8 @@ pub fn server_update_system(
                         PlayerInputBuffer::default(),
                     ))
                     .id();
-                if matches!(*network_mode, NetworkMode::ClientAndServer) && is_local_player {
+                if matches!(settings.network_mode, NetworkMode::ClientAndServer) && is_local_player
+                {
                     commands.entity(player_entity).insert(LocalPlayer);
                 }
 
@@ -106,10 +106,12 @@ pub fn server_update_system(
                     server.send_message(*client_id, ServerChannel::ServerMessages, message);
                 }
 
-                if !(is_local_player && matches!(*network_mode, NetworkMode::ClientAndServer)) {
+                if !(is_local_player
+                    && matches!(settings.network_mode, NetworkMode::ClientAndServer))
+                {
                     chunk_replication.requested_chunks.insert(
                         *client_id,
-                        get_chunks_in_sphere(spawn_point, view_distance.0 as f32),
+                        get_chunks_in_sphere(spawn_point, settings.replication_distance as f32),
                     );
                 }
 
