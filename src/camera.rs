@@ -10,6 +10,7 @@ pub struct McrsCameraPlugin;
 
 impl Plugin for McrsCameraPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(Startup, initial_grab_cursor);
         app.add_systems(Update, (camera_controller_movement, cursor_grab));
     }
 }
@@ -59,7 +60,6 @@ pub fn camera_controller_movement(
 }
 
 /// Grabs the cursor when game first starts
-#[allow(dead_code)]
 pub fn initial_grab_cursor(mut primary_window: Query<&mut Window, With<PrimaryWindow>>) {
     if let Ok(mut window) = primary_window.get_single_mut() {
         toggle_grab_cursor(&mut window);
