@@ -11,9 +11,9 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use mcrs_storage::chunk::Chunk;
-use mcrs_storage::universe::Universe;
-use mcrs_storage::{CHUNK_SIDE, CHUNK_VOLUME};
+use mcrs_universe::chunk::Chunk;
+use mcrs_universe::universe::Universe;
+use mcrs_universe::{CHUNK_SIDE, CHUNK_VOLUME};
 
 use crate::plugin::RenderSettings;
 

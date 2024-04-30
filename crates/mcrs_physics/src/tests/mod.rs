@@ -9,8 +9,12 @@ mod test {
         prelude::default,
         utils::HashMap,
     };
-    use mcrs_blueprints::{blocks::BlockBlueprint, flagbank::BlockFlag};
-    use mcrs_storage::{block::Block, chunk::Chunk, universe::Universe};
+    use mcrs_universe::{
+        block::{Block, BlockBlueprint},
+        chunk::Chunk,
+        flagbank::BlockFlag,
+        universe::Universe,
+    };
 
     pub fn single_block_universe() -> Universe {
         let mut universe = Universe {

@@ -1,5 +1,5 @@
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_storage::CHUNK_SIDE;
+use mcrs_universe::CHUNK_SIDE;
 
 pub fn get_chunks_in_sphere(pos: Vec3, radius: f32) -> HashSet<IVec3> {
     let load_view_distance: u32 = radius as u32;

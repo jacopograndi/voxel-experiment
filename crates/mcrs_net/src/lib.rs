@@ -5,7 +5,7 @@ pub mod server;
 use std::{collections::HashMap, time::Duration};
 
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_storage::CHUNK_VOLUME;
+use mcrs_universe::CHUNK_VOLUME;
 use renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
 use serde::{Deserialize, Serialize};
 

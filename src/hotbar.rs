@@ -1,10 +1,10 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::{egui, EguiContexts};
-use mcrs_blueprints::{
-    blocks::{BlockBlueprint, BlockId},
+use mcrs_net::{ClientChannel, Lobby, LocalPlayer, NetPlayer, ServerChannel};
+use mcrs_universe::{
+    block::{BlockBlueprint, BlockId},
     Blueprints,
 };
-use mcrs_net::{ClientChannel, Lobby, LocalPlayer, NetPlayer, ServerChannel};
 use renet::{transport::NetcodeClientTransport, ClientId, RenetClient, RenetServer};
 use serde::{Deserialize, Serialize};
 

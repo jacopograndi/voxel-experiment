@@ -6,5 +6,4 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.0"
 
-mcrs_storage = { path = "../mcrs_storage" }
-mcrs_blueprints = { path = "../mcrs_blueprints" }
+mcrs_universe = { path = "../mcrs_universe" }

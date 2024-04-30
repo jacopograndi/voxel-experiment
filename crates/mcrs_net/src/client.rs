@@ -5,13 +5,13 @@ use std::{
 };
 
 use bevy::{prelude::*, utils::HashMap};
-use mcrs_storage::{chunk::Chunk, universe::Universe};
+use mcrs_universe::{chunk::Chunk, universe::Universe};
 use renet::{
     transport::{ClientAuthentication, NetcodeClientTransport},
     ClientId, RenetClient,
 };
 
-use crate::{ClientChannel, LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
+use crate::{LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
 
 use super::{
     connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,
@@ -138,4 +138,3 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
         }
     }
 }
-

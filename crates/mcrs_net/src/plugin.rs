@@ -6,11 +6,14 @@ use bevy_renet::RenetClientPlugin;
 use bevy_renet::RenetServerPlugin;
 use renet::RenetServer;
 
+use crate::server::new_renet_server;
+use crate::server::server_sync_players;
+use crate::server::server_sync_universe;
+use crate::server::server_update_system;
 use crate::Lobby;
 use crate::NetSettings;
 
 use super::client::*;
-use super::server::*;
 use super::ChunkReplication;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]

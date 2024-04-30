@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use mcrs_blueprints::Blueprints;
 use mcrs_net::{LocalPlayer, NewPlayerSpawned};
 use mcrs_physics::character::{
     CameraController, Character, CharacterController, Friction, Velocity,
@@ -8,6 +7,7 @@ use mcrs_render::{
     boxes_world::{Ghost, LoadedVoxTextures},
     camera::VoxelCameraBundle,
 };
+use mcrs_universe::Blueprints;
 
 use crate::{hotbar::PlayerHand, PlayerInputBuffer};
 

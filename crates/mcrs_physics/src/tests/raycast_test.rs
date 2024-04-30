@@ -4,9 +4,9 @@ mod ray {
 
     use crate::raycast::{cast_ray, RayFinite};
     use bevy::{prelude::*, utils::HashMap};
+    use mcrs_universe::universe::Universe;
 
     use crate::tests::test::{close_enough, single_block_universe};
-    use mcrs_storage::universe::Universe;
 
     #[test]
     fn empty_out_of_range() {

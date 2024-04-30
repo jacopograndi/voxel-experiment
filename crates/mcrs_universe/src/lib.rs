@@ -1,19 +1,42 @@
 use std::fs::read_to_string;
+use std::hash::Hash;
 
-use bevy::{ecs::system::Resource, utils::HashMap};
-use blocks::{BlockBlueprint, BlockId};
+use bevy::{
+    app::{App, Plugin},
+    ecs::system::Resource,
+    utils::HashMap,
+};
+use block::{BlockBlueprint, BlockId};
 use ghosts::{GhostBlueprint, GhostId};
 use ron::from_str;
 use serde::Deserialize;
-use std::hash::Hash;
+use universe::Universe;
 
-pub mod blocks;
+pub mod block;
+pub mod chunk;
 pub mod flagbank;
 pub mod ghosts;
 pub mod plugin;
+pub mod universe;
 
+// TODO: To be passed from above
 pub const BLOCK_BLUEPRINTS_PATH: &str = "assets/block_blueprints.ron";
 pub const GHOST_BLUEPRINTS_PATH: &str = "assets/ghost_blueprints.ron";
+pub const CHUNK_SIDE: usize = 32;
+pub const CHUNK_AREA: usize = CHUNK_SIDE * CHUNK_SIDE;
+pub const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIDE;
+
+pub struct McrsUniversePlugin;
+
+impl Plugin for McrsUniversePlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(Universe::default());
+        app.insert_resource(Blueprints {
+            blocks: BlueprintList::from_file(BLOCK_BLUEPRINTS_PATH),
+            ghosts: BlueprintList::from_file(GHOST_BLUEPRINTS_PATH),
+        });
+    }
+}
 
 #[derive(Resource, Debug)]
 pub struct Blueprints {

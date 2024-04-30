@@ -1,7 +1,6 @@
 use bevy::math::{IVec3, Vec3};
 
-use mcrs_blueprints::flagbank::BlockFlag;
-use mcrs_storage::universe::Universe;
+use mcrs_universe::{flagbank::BlockFlag, universe::Universe};
 
 use crate::MARGIN_EPSILON;
 

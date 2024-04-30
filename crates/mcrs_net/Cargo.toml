@@ -11,6 +11,5 @@ serde = "1.0.193"
 bincode = "1.3.3"
 bytemuck = "1.14.0"
 
-mcrs_storage = { path = "../mcrs_storage" }
-mcrs_blueprints = { path = "../mcrs_blueprints" }
+mcrs_universe = { path = "../mcrs_universe" }
 mcrs_physics = { path = "../mcrs_physics" }

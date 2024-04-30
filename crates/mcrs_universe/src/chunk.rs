@@ -1,9 +1,8 @@
 use bevy::prelude::*;
-use mcrs_blueprints::blocks::BlockBlueprint;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
-    block::{Block, LightType},
+    block::{Block, BlockBlueprint, LightType},
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
 };
 

@@ -6,7 +6,7 @@ mod character {
         prelude::*,
         time::{TimePlugin, TimeUpdateStrategy},
     };
-    use mcrs_storage::universe::Universe;
+    use mcrs_universe::universe::Universe;
 
     use crate::{
         character::*,

@@ -1,17 +1,14 @@
 #[cfg(test)]
 mod test {
-    use bevy::math::IVec3;
-    use mcrs_blueprints::{blocks::BlockBlueprint, flagbank::BlockFlag, BlueprintList, Blueprints};
-    use mcrs_storage::{
-        block::{
-            Block,
-            LightType::{self, *},
-        },
-        chunk::Chunk,
-        universe::Universe,
-    };
-
     use crate::lighting::{propagate_darkness, propagate_light, recalc_lights, DIRS};
+    use bevy::math::IVec3;
+    use mcrs_universe::{
+        block::{Block, BlockBlueprint, LightType},
+        chunk::Chunk,
+        flagbank::BlockFlag,
+        universe::Universe,
+        BlueprintList, Blueprints,
+    };
 
     #[test]
     fn two_torches_remove_one() {
@@ -43,20 +40,20 @@ mod test {
             Block::new(blueprints.blocks.get_named("Glowstone")),
         );
         recalc_lights(&mut universe_double, vec![IVec3::new(0, 0, 0)], &blueprints);
-        let new_lights = propagate_darkness(&mut universe_double, light_pos1, Torch);
+        let new_lights = propagate_darkness(&mut universe_double, light_pos1, LightType::Torch);
         universe_double
             .set_chunk_block(&light_pos1, Block::new(blueprints.blocks.get_named("Air")));
-        propagate_light(&mut universe_double, new_lights, Torch);
+        propagate_light(&mut universe_double, new_lights, LightType::Torch);
 
         for xyz in Chunk::iter() {
             let light0 = universe_single
                 .read_chunk_block(&xyz)
                 .unwrap()
-                .get_light(Torch);
+                .get_light(LightType::Torch);
             let light1 = universe_double
                 .read_chunk_block(&xyz)
                 .unwrap()
-                .get_light(Torch);
+                .get_light(LightType::Torch);
             assert_eq!(light0, light1, "at {}", xyz,);
         }
     }
@@ -78,7 +75,10 @@ mod test {
         universe.set_chunk_block(&light_pos, Block::new(blueprints.blocks.get_named("Air")));
 
         for xyz in Chunk::iter() {
-            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+            let light = universe
+                .read_chunk_block(&xyz)
+                .unwrap()
+                .get_light(LightType::Torch);
             assert_eq!(light, 0, "at {}", xyz);
         }
     }
@@ -104,7 +104,10 @@ mod test {
 
         for xyz in Chunk::iter() {
             if xyz != IVec3::new(2, 2, 2) {
-                let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+                let light = universe
+                    .read_chunk_block(&xyz)
+                    .unwrap()
+                    .get_light(LightType::Torch);
                 assert_eq!(light, 0, "at {}", xyz);
             }
         }
@@ -127,12 +130,15 @@ mod test {
         let light = universe
             .read_chunk_block(&stone_pos)
             .unwrap()
-            .get_light(Torch);
+            .get_light(LightType::Torch);
         assert_eq!(light, 0, "at {}", stone_pos);
 
         for i in 1..15 {
             let xyz = light_pos + IVec3::Z * i;
-            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+            let light = universe
+                .read_chunk_block(&xyz)
+                .unwrap()
+                .get_light(LightType::Torch);
             assert_eq!(light, 0, "at {}", xyz);
         }
 
@@ -141,7 +147,7 @@ mod test {
         let light = universe
             .read_chunk_block(&stone_pos)
             .unwrap()
-            .get_light(Torch);
+            .get_light(LightType::Torch);
         assert_eq!(
             light, 0,
             "at {}, base light is {}, should be 0",
@@ -150,7 +156,10 @@ mod test {
 
         for i in 1..13 {
             let xyz = stone_pos + IVec3::Z * i;
-            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+            let light = universe
+                .read_chunk_block(&xyz)
+                .unwrap()
+                .get_light(LightType::Torch);
             // 14 13 12
             // 15 ## 11
             // 14 13 12
@@ -173,7 +182,10 @@ mod test {
 
         for i in 1..15 {
             let xyz = light_pos + IVec3::Z * i;
-            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+            let light = universe
+                .read_chunk_block(&xyz)
+                .unwrap()
+                .get_light(LightType::Torch);
             assert_eq!(light, 0, "at {}", xyz);
         }
 
@@ -181,7 +193,10 @@ mod test {
 
         for i in 0..15 {
             let xyz = light_pos + IVec3::Z * i;
-            let light = universe.read_chunk_block(&xyz).unwrap().get_light(Torch);
+            let light = universe
+                .read_chunk_block(&xyz)
+                .unwrap()
+                .get_light(LightType::Torch);
             assert_eq!(light, 15 - i as u8, "at {}", xyz);
         }
     }

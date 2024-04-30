@@ -1,15 +1,16 @@
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_blueprints::{flagbank::BlockFlag, Blueprints};
 use mcrs_chemistry::lighting::*;
 use mcrs_physics::{
     character::{CameraController, CharacterController},
     intersect::get_chunks_in_sphere,
     raycast::{cast_ray, RayFinite},
 };
-use mcrs_storage::{
+use mcrs_universe::{
     block::{Block, LightType},
     chunk::Chunk,
+    flagbank::BlockFlag,
     universe::Universe,
+    Blueprints,
 };
 
 use crate::{PlayerInput, PlayerInputBuffer};

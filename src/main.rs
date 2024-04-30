@@ -3,7 +3,6 @@ use bevy_egui::EguiPlugin;
 use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
-use mcrs_blueprints::plugin::McrsBlueprintsPlugin;
 use mcrs_debug::plugin::McrsDebugPlugin;
 
 mod camera;
@@ -25,7 +24,7 @@ use mcrs_net::{
 };
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
 use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
-use mcrs_storage::McrsStoragePlugin;
+use mcrs_universe::McrsUniversePlugin;
 use player::spawn_player;
 use settings::{Args, McrsSettings};
 use terrain::{terrain_editing, terrain_generation};
@@ -57,7 +56,7 @@ fn main() {
 
     app.configure_sets(Update, (UiSet::Overlay, InputSet::Gather).chain());
 
-    app.add_plugins((McrsStoragePlugin, McrsBlueprintsPlugin));
+    app.add_plugins(McrsUniversePlugin);
     app.init_resource::<PlayerInputBuffer>();
 
     let settings: McrsSettings = Args::parse().into();

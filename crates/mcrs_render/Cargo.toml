@@ -8,5 +8,4 @@ bevy = "0.12.0"
 bytemuck = "1.14.0"
 dot_vox = "5.1.1"
 
-mcrs_storage = { path = "../mcrs_storage" }
-mcrs_blueprints = { path = "../mcrs_blueprints" }
+mcrs_universe = { path = "../mcrs_universe" }

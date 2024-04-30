@@ -1,10 +1,10 @@
 [package]
-name = "mcrs_storage"
+name = "mcrs_universe"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bevy = "0.12.0"
 bytemuck = "1.14.0"
-
-mcrs_blueprints = { path = "../mcrs_blueprints" }
+ron = "0.8"
+serde = { version = "1", features = ["derive"] }

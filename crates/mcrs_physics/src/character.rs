@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-
-use mcrs_storage::universe::Universe;
+use mcrs_universe::universe::Universe;
 
 use crate::{raycast::*, MARGIN_EPSILON};
 
