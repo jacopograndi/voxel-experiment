@@ -11,7 +11,7 @@ use renet::{
     ClientId, RenetClient,
 };
 
-use crate::{ClientChannel, LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
+use crate::{LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
 
 use super::{
     connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,

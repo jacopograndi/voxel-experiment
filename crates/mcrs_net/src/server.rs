@@ -11,10 +11,7 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     RenetServer, ServerEvent,
 };
-use mcrs_physics::{
-    character::{CameraController, CharacterController},
-    intersect::get_chunks_in_sphere,
-};
+use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_storage::{universe::Universe, CHUNK_VOLUME};
 use renet::{
     transport::{NetcodeClientTransport, NetcodeServerTransport},
@@ -22,7 +19,7 @@ use renet::{
 };
 
 use crate::{
-    ClientChannel, LocalPlayer, NetPlayer, NetSettings, NetworkMode, NewPlayerSpawned,
+    LocalPlayer, NetPlayer, NetSettings, NetworkMode, NewPlayerSpawned,
     ServerChannel, ServerMessages,
 };
 
