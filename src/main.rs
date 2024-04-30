@@ -80,7 +80,6 @@ fn main() {
         NetworkMode::ClientAndServer => {
             add_client(&mut app);
             add_server(&mut app);
-            app.add_systems(Update, move_local_player);
         }
     }
     app.add_systems(Update, spawn_player);

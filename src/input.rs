@@ -84,7 +84,7 @@ pub fn client_send_input(
 pub fn server_receive_input(
     lobby: Res<Lobby>,
     mut server: ResMut<RenetServer>,
-    mut player_input_query: Query<&mut PlayerInputBuffer, Without<LocalPlayer>>,
+    mut player_input_query: Query<&mut PlayerInputBuffer>,
 ) {
     for client_id in server.clients_id() {
         while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerInput) {
@@ -105,8 +105,9 @@ pub fn server_move_players(
             &mut CharacterController,
             &mut PlayerInputBuffer,
             &mut Transform,
+            Option<&LocalPlayer>,
         ),
-        (Without<CameraController>, Without<LocalPlayer>),
+        Without<CameraController>,
     >,
     mut query_camera: Query<
         (&CameraController, &Parent, &mut Transform),
@@ -114,7 +115,7 @@ pub fn server_move_players(
     >,
 ) {
     for (_, parent, mut tr_camera) in query_camera.iter_mut() {
-        if let Ok((_, mut controller, mut input_buffer, mut tr)) =
+        if let Ok((_, mut controller, mut input_buffer, mut tr, local)) =
             query_player.get_mut(parent.get())
         {
             input_buffer.buffer.retain(|input| match input {
@@ -122,39 +123,24 @@ pub fn server_move_players(
                     controller.acceleration = *acc;
                     false
                 }
+                PlayerInput::Jumping(jumping) => {
+                    controller.jumping = *jumping;
+                    false
+                }
                 PlayerInput::RotationCamera(rot) => {
-                    tr_camera.rotation = Quat::from_axis_angle(Vec3::X, *rot);
+                    if local.is_none() {
+                        tr_camera.rotation = Quat::from_axis_angle(Vec3::X, *rot);
+                    }
                     false
                 }
                 PlayerInput::RotationBody(rot) => {
-                    tr.rotation = Quat::from_axis_angle(Vec3::Y, *rot);
-                    false
-                }
-                PlayerInput::Jumping(jumping) => {
-                    controller.jumping = *jumping;
+                    if local.is_none() {
+                        tr.rotation = Quat::from_axis_angle(Vec3::Y, *rot);
+                    }
                     false
                 }
                 _ => true,
             });
         }
-    }
-}
-
-pub fn move_local_player(
-    mut player_input: ResMut<PlayerInputBuffer>,
-    mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
-) {
-    if let Ok(mut controller) = query_player.get_single_mut() {
-        player_input.buffer.retain(|input| match input {
-            PlayerInput::Acceleration(acc) => {
-                controller.acceleration = *acc;
-                false
-            }
-            PlayerInput::Jumping(jumping) => {
-                controller.jumping = *jumping;
-                false
-            }
-            _ => true,
-        });
     }
 }
