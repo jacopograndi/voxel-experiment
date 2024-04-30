@@ -4,14 +4,12 @@ use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
-use mcrs_blueprints::plugin::McrsBlueprintsPlugin;
-use mcrs_net::{
+use mcrs_universe::McrsUniversePlugin;use mcrs_net::{
     plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
     NetSettings, NetworkMode,
 };
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
 use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
-use mcrs_storage::McrsStoragePlugin;
 
 mod camera;
 mod chemistry;

@@ -19,8 +19,8 @@ clap = { version = "4.4.12", features = ["derive"] }
 
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_render = { path = "crates/mcrs_render" }
-mcrs_debug = { path = "crates/mcrs_debug" }
 mcrs_net = { path = "crates/mcrs_net" }
+mcrs_universe = { path = "crates/mcrs_universe" }
 
 [workspace]
 members = ["crates/*"]
