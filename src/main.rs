@@ -14,6 +14,7 @@ use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
 use mcrs_storage::McrsStoragePlugin;
 
 mod camera;
+mod chemistry;
 mod debug;
 mod hotbar;
 mod input;
