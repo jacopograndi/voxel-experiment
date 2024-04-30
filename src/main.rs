@@ -108,16 +108,17 @@ fn add_client(app: &mut App) {
     ));
     app.add_systems(Startup, ui);
     app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
+    app.add_systems(Update, player_input.in_set(InputSet::Gather));
     app.add_systems(
         FixedUpdate,
         (
             client_receive_replica.in_set(FixedNetSet::Receive),
-            client_send_replica.in_set(FixedNetSet::Send),
+            (client_send_input, client_send_replica)
+                .chain()
+                .in_set(FixedNetSet::Send),
         )
             .run_if(client_connected()),
     );
-    app.add_systems(Update, player_input.in_set(InputSet::Gather));
-    app.add_systems(Update, client_send_input.in_set(FixedNetSet::Send));
 }
 
 fn add_server(app: &mut App) {

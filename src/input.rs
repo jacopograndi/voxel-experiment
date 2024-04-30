@@ -84,7 +84,7 @@ pub fn client_send_input(
 pub fn server_receive_input(
     lobby: Res<Lobby>,
     mut server: ResMut<RenetServer>,
-    mut player_input_query: Query<&mut PlayerInputBuffer>,
+    mut player_input_query: Query<&mut PlayerInputBuffer, Without<LocalPlayer>>,
 ) {
     for client_id in server.clients_id() {
         while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerInput) {
