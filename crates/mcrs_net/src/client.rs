@@ -1,5 +1,4 @@
 use super::NetworkMode;
-use mcrs_input::PlayerInputBuffer;
 use std::{
     net::{ToSocketAddrs, UdpSocket},
     time::SystemTime,
@@ -140,12 +139,3 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
     }
 }
 
-pub fn client_send_input(
-    mut res_player_input: ResMut<PlayerInputBuffer>,
-    mut client: ResMut<RenetClient>,
-) {
-    let input_message = bincode::serialize(&*res_player_input).unwrap();
-    // maybe unreliable is better (faster and if a packet is lost, whatever)
-    client.send_message(ClientChannel::PlayerInput, input_message);
-    res_player_input.buffer.clear();
-}

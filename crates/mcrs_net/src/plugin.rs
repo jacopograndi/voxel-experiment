@@ -8,7 +8,6 @@ use renet::RenetServer;
 
 use crate::Lobby;
 use crate::NetSettings;
-use crate::NetworkMode;
 
 use super::client::*;
 use super::server::*;
@@ -34,23 +33,13 @@ impl Plugin for McrsNetServerPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (server_update_system, move_players_system)
-                    .chain()
-                    .in_set(FixedNetSet::Receive),
+                server_update_system.in_set(FixedNetSet::Receive),
                 (server_sync_players, server_sync_universe)
                     .chain()
                     .in_set(FixedNetSet::Send),
             )
                 .run_if(resource_exists::<RenetServer>()),
         );
-        if let Some(settings) = app.world.get_resource::<NetSettings>() {
-            match settings.network_mode {
-                NetworkMode::ClientAndServer => {
-                    app.add_systems(Update, move_local_player);
-                }
-                _ => (),
-            }
-        }
     }
 }
 
@@ -63,10 +52,7 @@ impl Plugin for McrsNetClientPlugin {
         app.insert_resource(transport);
         app.add_systems(
             FixedUpdate,
-            (
-                (client_sync_players, client_sync_universe).in_set(FixedNetSet::Receive),
-                client_send_input.in_set(FixedNetSet::Send),
-            )
+            ((client_sync_players, client_sync_universe).in_set(FixedNetSet::Receive),)
                 .run_if(client_connected()),
         );
     }

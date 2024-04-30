@@ -2635,14 +2635,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcrs_input"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "serde",
-]
-
-[[package]]
 name = "mcrs_net"
 version = "0.1.0"
 dependencies = [
@@ -2651,7 +2643,6 @@ dependencies = [
  "bincode",
  "bytemuck",
  "mcrs_blueprints",
- "mcrs_input",
  "mcrs_physics",
  "mcrs_storage",
  "renet",
@@ -4047,7 +4038,6 @@ dependencies = [
  "mcrs_blueprints",
  "mcrs_chemistry",
  "mcrs_debug",
- "mcrs_input",
  "mcrs_net",
  "mcrs_physics",
  "mcrs_render",

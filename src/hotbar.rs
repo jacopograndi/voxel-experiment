@@ -8,8 +8,6 @@ use mcrs_net::{ClientChannel, Lobby, LocalPlayer, NetPlayer, ServerChannel};
 use renet::{transport::NetcodeClientTransport, ClientId, RenetClient, RenetServer};
 use serde::{Deserialize, Serialize};
 
-// this is very much a hack
-
 #[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
 pub struct PlayerHand {
     pub block_id: Option<BlockId>,

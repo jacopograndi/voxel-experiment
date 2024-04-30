@@ -9,7 +9,7 @@ use mcrs_render::{
     camera::VoxelCameraBundle,
 };
 
-use crate::hotbar::PlayerHand;
+use crate::{hotbar::PlayerHand, PlayerInputBuffer};
 
 pub fn spawn_player(
     mut commands: Commands,
@@ -22,6 +22,7 @@ pub fn spawn_player(
             .entity(player_entity)
             .remove::<NewPlayerSpawned>()
             .insert((
+                PlayerInputBuffer::default(),
                 Character {
                     size: Vec3::new(0.5, 1.8, 0.5),
                     air_speed: 0.001,

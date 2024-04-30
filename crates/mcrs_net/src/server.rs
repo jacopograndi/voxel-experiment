@@ -11,7 +11,6 @@ use bevy_renet::renet::{
     transport::{ServerAuthentication, ServerConfig},
     RenetServer, ServerEvent,
 };
-use mcrs_input::{PlayerInput, PlayerInputBuffer};
 use mcrs_physics::{
     character::{CameraController, CharacterController},
     intersect::get_chunks_in_sphere,
@@ -62,7 +61,6 @@ pub fn server_update_system(
     mut server: ResMut<RenetServer>,
     transport: Option<Res<NetcodeClientTransport>>,
     mut chunk_replication: ResMut<ChunkReplication>,
-    mut player_input_query: Query<&mut PlayerInputBuffer>,
     settings: Res<NetSettings>,
 ) {
     for event in server_events.read() {
@@ -89,7 +87,6 @@ pub fn server_update_system(
                         SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
                         NewPlayerSpawned,
                         NetPlayer { id: *client_id },
-                        PlayerInputBuffer::default(),
                     ))
                     .id();
                 if matches!(settings.network_mode, NetworkMode::ClientAndServer) && is_local_player
@@ -147,17 +144,6 @@ pub fn server_update_system(
                     bincode::serialize(&ServerMessages::PlayerDisconnected { id: *client_id })
                         .unwrap();
                 server.broadcast_message(ServerChannel::ServerMessages, message);
-            }
-        }
-    }
-
-    for client_id in server.clients_id() {
-        while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerInput) {
-            let mut player_input: PlayerInputBuffer = bincode::deserialize(&message).unwrap();
-            if let Some(player_entity) = lobby.players.get(&client_id) {
-                if let Ok(mut current_player_input) = player_input_query.get_mut(*player_entity) {
-                    current_player_input.buffer.append(&mut player_input.buffer);
-                }
             }
         }
     }
@@ -231,66 +217,5 @@ pub fn server_sync_universe(
             server.send_message(*client_id, ServerChannel::Universe, sync_message);
             *chunks = chunks.difference(&sent_chunks).cloned().collect();
         }
-    }
-}
-
-pub fn move_players_system(
-    mut query_player: Query<
-        (
-            Entity,
-            &mut CharacterController,
-            &mut PlayerInputBuffer,
-            &mut Transform,
-        ),
-        (Without<CameraController>, Without<LocalPlayer>),
-    >,
-    mut query_camera: Query<
-        (&CameraController, &Parent, &mut Transform),
-        Without<CharacterController>,
-    >,
-) {
-    for (_, parent, mut tr_camera) in query_camera.iter_mut() {
-        if let Ok((_, mut controller, mut input_buffer, mut tr)) =
-            query_player.get_mut(parent.get())
-        {
-            input_buffer.buffer.retain(|input| match input {
-                PlayerInput::Acceleration(acc) => {
-                    controller.acceleration = *acc;
-                    false
-                }
-                PlayerInput::RotationCamera(rot) => {
-                    tr_camera.rotation = Quat::from_axis_angle(Vec3::X, *rot);
-                    false
-                }
-                PlayerInput::RotationBody(rot) => {
-                    tr.rotation = Quat::from_axis_angle(Vec3::Y, *rot);
-                    false
-                }
-                PlayerInput::Jumping(jumping) => {
-                    controller.jumping = *jumping;
-                    false
-                }
-                _ => true,
-            });
-        }
-    }
-}
-
-pub fn move_local_player(
-    mut player_input: ResMut<PlayerInputBuffer>,
-    mut query_player: Query<&mut CharacterController, With<LocalPlayer>>,
-) {
-    if let Ok(mut controller) = query_player.get_single_mut() {
-        player_input.buffer.retain(|input| match input {
-            PlayerInput::Acceleration(acc) => {
-                controller.acceleration = *acc;
-                false
-            }
-            PlayerInput::Jumping(jumping) => {
-                controller.jumping = *jumping;
-                false
-            }
-            _ => true,
-        });
     }
 }

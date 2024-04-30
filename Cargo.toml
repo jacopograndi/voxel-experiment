@@ -21,7 +21,6 @@ mcrs_render = { path = "crates/mcrs_render" }
 mcrs_debug = { path = "crates/mcrs_debug" }
 mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_chemistry = { path = "crates/mcrs_chemistry" }
-mcrs_input = { path = "crates/mcrs_input" }
 mcrs_blueprints = { path = "crates/mcrs_blueprints" }
 mcrs_net = { path = "crates/mcrs_net" }
 

@@ -12,7 +12,7 @@ use mcrs_storage::{
     universe::Universe,
 };
 
-use mcrs_input::{PlayerInput, PlayerInputBuffer};
+use crate::{PlayerInput, PlayerInputBuffer};
 use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
 
 use crate::{hotbar::PlayerHand, settings::McrsSettings};

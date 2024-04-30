@@ -8,6 +8,7 @@ use mcrs_debug::plugin::McrsDebugPlugin;
 
 mod camera;
 mod hotbar;
+mod input;
 mod player;
 mod settings;
 mod terrain;
@@ -17,7 +18,7 @@ use hotbar::{
     client_receive_replica, client_send_replica, hotbar, server_receive_replica,
     server_send_replica,
 };
-use mcrs_input::plugin::{InputSet, McrsInputPlugin};
+use input::*;
 use mcrs_net::{
     plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
     NetSettings, NetworkMode,
@@ -56,7 +57,8 @@ fn main() {
 
     app.configure_sets(Update, (UiSet::Overlay, InputSet::Gather).chain());
 
-    app.add_plugins((McrsStoragePlugin, McrsBlueprintsPlugin, McrsInputPlugin));
+    app.add_plugins((McrsStoragePlugin, McrsBlueprintsPlugin));
+    app.init_resource::<PlayerInputBuffer>();
 
     let settings: McrsSettings = Args::parse().into();
     app.insert_resource(Time::<Fixed>::from_seconds(
@@ -77,6 +79,7 @@ fn main() {
         NetworkMode::ClientAndServer => {
             add_client(&mut app);
             add_server(&mut app);
+            app.add_systems(Update, move_local_player);
         }
     }
     app.add_systems(Update, spawn_player);
@@ -111,6 +114,8 @@ fn add_client(app: &mut App) {
         )
             .run_if(client_connected()),
     );
+    app.add_systems(Update, player_input.in_set(InputSet::Gather));
+    app.add_systems(Update, client_send_input.in_set(FixedNetSet::Send));
 }
 
 fn add_server(app: &mut App) {
@@ -124,7 +129,13 @@ fn add_server(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-            server_receive_replica.in_set(FixedNetSet::Receive),
+            (
+                server_receive_replica,
+                server_receive_input,
+                server_move_players,
+            )
+                .chain()
+                .in_set(FixedNetSet::Receive),
             server_send_replica.in_set(FixedNetSet::Send),
         ),
     );
