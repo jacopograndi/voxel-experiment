@@ -2626,15 +2626,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcrs_debug"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_egui",
- "egui_plot",
-]
-
-[[package]]
 name = "mcrs_net"
 version = "0.1.0"
 dependencies = [
@@ -4035,9 +4026,9 @@ dependencies = [
  "bevy_renet",
  "bincode",
  "clap",
+ "egui_plot",
  "mcrs_blueprints",
  "mcrs_chemistry",
- "mcrs_debug",
  "mcrs_net",
  "mcrs_physics",
  "mcrs_render",

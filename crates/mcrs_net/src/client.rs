@@ -138,4 +138,3 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
         }
     }
 }
-

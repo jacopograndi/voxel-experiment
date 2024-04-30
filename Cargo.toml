@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bevy = "0.12.0"
 bevy_egui = "0.24.0"
+egui_plot = "0.24.0"
 tracing = "0.1"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
@@ -18,7 +19,6 @@ clap = { version = "4.4.12", features = ["derive"] }
 
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_render = { path = "crates/mcrs_render" }
-mcrs_debug = { path = "crates/mcrs_debug" }
 mcrs_storage = { path = "crates/mcrs_storage" }
 mcrs_chemistry = { path = "crates/mcrs_chemistry" }
 mcrs_blueprints = { path = "crates/mcrs_blueprints" }

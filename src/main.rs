@@ -3,22 +3,8 @@ use bevy_egui::EguiPlugin;
 use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
+
 use mcrs_blueprints::plugin::McrsBlueprintsPlugin;
-use mcrs_debug::plugin::McrsDebugPlugin;
-
-mod camera;
-mod hotbar;
-mod input;
-mod player;
-mod settings;
-mod terrain;
-mod ui;
-
-use hotbar::{
-    client_receive_replica, client_send_replica, hotbar, server_receive_replica,
-    server_send_replica,
-};
-use input::*;
 use mcrs_net::{
     plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
     NetSettings, NetworkMode,
@@ -26,6 +12,22 @@ use mcrs_net::{
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
 use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
 use mcrs_storage::McrsStoragePlugin;
+
+mod camera;
+mod debug;
+mod hotbar;
+mod input;
+mod player;
+mod settings;
+mod terrain;
+mod ui;
+
+use debug::DebugDiagnosticPlugin;
+use hotbar::{
+    client_receive_replica, client_send_replica, hotbar, server_receive_replica,
+    server_send_replica,
+};
+use input::*;
 use player::spawn_player;
 use settings::{Args, McrsSettings};
 use terrain::{terrain_editing, terrain_generation};
@@ -100,7 +102,7 @@ fn add_client(app: &mut App) {
             .set(ImagePlugin::default_nearest()),
         McrsVoxelRenderPlugin,
         EguiPlugin,
-        McrsDebugPlugin,
+        DebugDiagnosticPlugin,
         McrsNetClientPlugin,
         McrsCameraPlugin,
     ));
