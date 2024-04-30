@@ -1,7 +1,31 @@
-use bevy::{diagnostic::DiagnosticsStore, ecs::system::Res};
+use bevy::{diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic}, prelude::*};
 use bevy_egui::{egui, EguiContexts};
 
-use crate::{DIAGNOSTIC_FPS, DIAGNOSTIC_FRAME_TIME};
+pub const DIAGNOSTIC_FPS: DiagnosticId =
+    DiagnosticId::from_u128(288146834822086093791974408528866909484);
+pub const DIAGNOSTIC_FRAME_TIME: DiagnosticId =
+    DiagnosticId::from_u128(54021991829115352065418785002088010278);
+
+pub struct DebugDiagnosticPlugin;
+
+impl Plugin for DebugDiagnosticPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.register_diagnostic(
+            Diagnostic::new(DIAGNOSTIC_FRAME_TIME, "frame_time", 1000).with_suffix("ms"),
+        )
+        .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS, "fps", 1000))
+        .add_systems(Update, (debug_diagnostic_system, debug_diagnostic_ui));
+    }
+}
+
+pub fn debug_diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real>>) {
+    let delta_seconds = time.delta_seconds_f64();
+    if delta_seconds == 0.0 {
+        return;
+    }
+    diagnostics.add_measurement(DIAGNOSTIC_FRAME_TIME, || delta_seconds * 1000.0);
+    diagnostics.add_measurement(DIAGNOSTIC_FPS, || 1.0 / delta_seconds);
+}
 
 pub fn debug_diagnostic_ui(mut contexts: EguiContexts, diagnostics: Res<DiagnosticsStore>) {
     egui::Window::new("Debug menu").show(contexts.ctx_mut(), |ui| {
