@@ -7,15 +7,14 @@ use bevy::{
     utils::HashMap,
 };
 use block::{BlockBlueprint, BlockId};
-use ghosts::{GhostBlueprint, GhostId};
+use ghost::{GhostBlueprint, GhostId};
 use ron::from_str;
 use serde::Deserialize;
 use universe::Universe;
 
 pub mod block;
 pub mod chunk;
-pub mod flagbank;
-pub mod ghosts;
+pub mod ghost;
 pub mod plugin;
 pub mod universe;
 
@@ -25,6 +24,7 @@ pub const GHOST_BLUEPRINTS_PATH: &str = "assets/ghost_blueprints.ron";
 pub const CHUNK_SIDE: usize = 32;
 pub const CHUNK_AREA: usize = CHUNK_SIDE * CHUNK_SIDE;
 pub const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIDE;
+pub const MAX_LIGHT: u8 = 15;
 
 pub struct McrsUniversePlugin;
 

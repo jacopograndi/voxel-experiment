@@ -10,9 +10,9 @@ mod test {
         utils::HashMap,
     };
     use mcrs_universe::{
+        block::BlockFlag,
         block::{Block, BlockBlueprint},
         chunk::Chunk,
-        flagbank::BlockFlag,
         universe::Universe,
     };
 

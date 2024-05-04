@@ -1,4 +1,7 @@
-use bevy::{diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic}, prelude::*};
+use bevy::{
+    diagnostic::{Diagnostic, DiagnosticId, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
+    prelude::*,
+};
 use bevy_egui::{egui, EguiContexts};
 
 pub const DIAGNOSTIC_FPS: DiagnosticId =

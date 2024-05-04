@@ -2,11 +2,11 @@ use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_universe::{
-    block::{Block, LightType, MAX_LIGHT},
+    block::BlockFlag,
+    block::{Block, LightType},
     chunk::Chunk,
-    flagbank::BlockFlag,
     universe::Universe,
-    Blueprints, CHUNK_SIDE,
+    Blueprints, CHUNK_SIDE, MAX_LIGHT,
 };
 
 pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Blueprints) {
