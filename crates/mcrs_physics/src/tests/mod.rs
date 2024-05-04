@@ -10,8 +10,7 @@ mod test {
         utils::HashMap,
     };
     use mcrs_universe::{
-        block::BlockFlag,
-        block::{Block, BlockBlueprint},
+        block::{Block, BlockBlueprint, BlockFlag, FlagBank},
         chunk::Chunk,
         universe::Universe,
     };
@@ -24,7 +23,7 @@ mod test {
         let stone = Block::new(&BlockBlueprint {
             name: "Stone".to_string(),
             id: 1.into(),
-            flags: vec![BlockFlag::Collidable],
+            flags: FlagBank::from(vec![BlockFlag::Collidable]),
             ..default()
         });
         universe.set_chunk_block(&IVec3::ZERO, stone);
@@ -37,7 +36,7 @@ mod test {
         let stone = Block::new(&BlockBlueprint {
             name: "Stone".to_string(),
             id: 1.into(),
-            flags: vec![BlockFlag::Collidable],
+            flags: FlagBank::from(vec![BlockFlag::Collidable]),
             ..default()
         });
         universe.set_chunk_block(&pos, stone);

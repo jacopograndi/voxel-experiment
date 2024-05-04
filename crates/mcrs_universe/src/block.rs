@@ -26,7 +26,7 @@ impl Block {
             id: block_info.id,
             light0: block_info.light_level,
             light1: 0,
-            ..Default::default()
+            properties: block_info.flags,
         }
     }
 
@@ -49,7 +49,7 @@ impl Block {
 pub struct BlockBlueprint {
     pub name: String,
     pub id: BlockId,
-    pub flags: Vec<BlockFlag>,
+    pub flags: FlagBank,
     pub light_level: u8,
     pub voxel_texture_path: String,
     pub drop_item_id: BlockId,
@@ -169,12 +169,22 @@ impl From<Vec<String>> for FlagBank {
     }
 }
 
+impl From<Vec<BlockFlag>> for FlagBank {
+    fn from(vec: Vec<BlockFlag>) -> Self {
+        let mut flagbank = FlagBank::default();
+        for v in vec {
+            flagbank.set(v);
+        }
+        flagbank
+    }
+}
+
 impl Serialize for FlagBank {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        <FlagBank as Into<Vec<String>>>::into(*self).serialize(serializer)
+        <FlagBank as Into<Vec<BlockFlag>>>::into(*self).serialize(serializer)
     }
 }
 impl<'de> Deserialize<'de> for FlagBank {
@@ -182,7 +192,7 @@ impl<'de> Deserialize<'de> for FlagBank {
     where
         D: serde::Deserializer<'de>,
     {
-        Deserialize::deserialize(deserializer).map(|flagbank_vec: Vec<String>| flagbank_vec.into())
+        Deserialize::deserialize(deserializer).map(|flagbank_vec: Vec<BlockFlag>| flagbank_vec.into())
     }
 }
 
