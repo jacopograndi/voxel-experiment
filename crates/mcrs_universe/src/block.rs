@@ -151,6 +151,14 @@ impl From<FlagBank> for Vec<String> {
     }
 }
 
+impl From<FlagBank> for Vec<BlockFlag> {
+    fn from(v: FlagBank) -> Self {
+        BlockFlag::iter()
+            .filter_map(|flag| v.check(flag).then_some(flag))
+            .collect()
+    }
+}
+
 impl From<Vec<String>> for FlagBank {
     fn from(vec: Vec<String>) -> Self {
         let mut flagbank = FlagBank::default();
