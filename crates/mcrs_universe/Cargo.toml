@@ -8,3 +8,5 @@ bevy = "0.12.0"
 bytemuck = "1.14.0"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
+
+mcrs_macros = { path = "../mcrs_macros" }

@@ -1,10 +1,16 @@
-use bytemuck::{Pod, Zeroable};
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
-// Struct representing 1 cubic meter cube inside the game
+use bevy::prelude::{Deref, DerefMut};
+use bytemuck::{Pod, Zeroable};
+use mcrs_macros::EnumIter;
+use serde::{Deserialize, Serialize};
+
+use crate::{HasNameId, MAX_LIGHT};
+
 #[repr(C)]
 #[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
 pub struct Block {
+    // 1 cubic meter ingame
     pub id: BlockId,
     pub properties: FlagBank,
     // for now i'm using light0 as torchlight and light1 as sunlight
@@ -13,21 +19,15 @@ pub struct Block {
     pub light0: u8,
     pub light1: u8,
 }
-
-// Generation and flag checking/setting utilities
 impl Block {
+    // Generation and flag checking/setting utilities
     pub fn new(block_info: &BlockBlueprint) -> Self {
-        let mut new_block: Block = Self {
+        Self {
             id: block_info.id,
             light0: block_info.light_level,
             light1: 0,
-            properties: FlagBank::default(),
-        };
-        let flags: &Vec<BlockFlag> = &block_info.flags;
-        for flag in flags {
-            new_block.properties.set(*flag);
+            properties: block_info.flags,
         }
-        new_block
     }
 
     pub fn get_light(&self, light_type: LightType) -> u8 {
@@ -45,8 +45,158 @@ impl Block {
     }
 }
 
-pub const MAX_LIGHT: u8 = 15;
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct BlockBlueprint {
+    pub name: String,
+    pub id: BlockId,
+    pub flags: FlagBank,
+    pub light_level: u8,
+    pub voxel_texture_path: String,
+    pub drop_item_id: BlockId,
+}
+impl HasNameId<BlockId> for BlockBlueprint {
+    fn id(&self) -> BlockId {
+        self.id
+    }
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+}
+impl BlockBlueprint {
+    pub fn is_light_source(&self) -> bool {
+        self.light_level > 0
+    }
+}
 
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Copy, Deref, DerefMut, Pod, Zeroable)]
+pub struct BlockId(u8); // Logical block ID. Also offset in 3d texture buffer
+impl From<u8> for BlockId {
+    fn from(v: u8) -> Self {
+        BlockId(v)
+    }
+}
+impl Serialize for BlockId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer) // Only serialize the number, not the type
+    }
+}
+impl<'de> Deserialize<'de> for BlockId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Deserialize::deserialize(deserializer).map(|id| BlockId(id))
+    }
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumIter)]
+pub enum BlockFlag {
+    // Bit index of each block flag in human readable form
+    Collidable,
+    Opaque,
+    Flag3,
+    Flag4,
+    Flag5,
+    Flag6,
+    Flag7,
+    Flag8,
+}
+
+impl From<BlockFlag> for u8 {
+    fn from(v: BlockFlag) -> Self {
+        v as u8
+    }
+}
+impl ToString for BlockFlag {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+impl FromStr for BlockFlag {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(format!("{:?}", s).parse()?)
+    }
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+pub struct FlagBank {
+    _flags: u8,
+}
+
+impl FlagBank {
+    pub fn set(&mut self, flag: impl Into<u8>) {
+        self._flags |= 0b1 << flag.into();
+    }
+
+    pub fn unset(&mut self, flag: impl Into<u8>) {
+        self._flags &= !(0b1 << flag.into());
+    }
+
+    pub fn check(&self, flag: impl Into<u8>) -> bool {
+        (self._flags >> flag.into()) & 0b1 == 1
+    }
+}
+
+impl From<FlagBank> for Vec<String> {
+    fn from(v: FlagBank) -> Self {
+        BlockFlag::iter()
+            .filter_map(|flag| v.check(flag).then_some(flag.to_string()))
+            .collect()
+    }
+}
+
+impl From<FlagBank> for Vec<BlockFlag> {
+    fn from(v: FlagBank) -> Self {
+        BlockFlag::iter()
+            .filter_map(|flag| v.check(flag).then_some(flag))
+            .collect()
+    }
+}
+
+impl From<Vec<String>> for FlagBank {
+    fn from(vec: Vec<String>) -> Self {
+        let mut flagbank = FlagBank::default();
+        for v in vec {
+            flagbank.set(BlockFlag::from_str(&v).unwrap());
+        }
+        flagbank
+    }
+}
+
+impl From<Vec<BlockFlag>> for FlagBank {
+    fn from(vec: Vec<BlockFlag>) -> Self {
+        let mut flagbank = FlagBank::default();
+        for v in vec {
+            flagbank.set(v);
+        }
+        flagbank
+    }
+}
+
+impl Serialize for FlagBank {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        <FlagBank as Into<Vec<BlockFlag>>>::into(*self).serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for FlagBank {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Deserialize::deserialize(deserializer).map(|flagbank_vec: Vec<BlockFlag>| flagbank_vec.into())
+    }
+}
+
+// TODO remove this. Awful. Why two lights. Why
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LightType {
     Torch,
@@ -62,68 +212,5 @@ impl Display for LightType {
                 LightType::Sun => "sun",
             }
         )
-    }
-}
-
-use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    flagbank::{BlockFlag, FlagBank},
-    HasNameId,
-};
-
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
-pub struct BlockBlueprint {
-    pub name: String,
-    pub id: BlockId,
-    pub flags: Vec<BlockFlag>,
-    pub light_level: u8,
-    pub voxel_texture_path: String,
-    pub drop_item_id: BlockId,
-}
-
-impl HasNameId<BlockId> for BlockBlueprint {
-    fn id(&self) -> BlockId {
-        self.id
-    }
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-impl BlockBlueprint {
-    pub fn is_light_source(&self) -> bool {
-        self.light_level > 0
-    }
-}
-
-/// This is the logical block id.
-/// It also is the offset in the 3d texture buffer.
-#[repr(C)]
-#[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Copy, Deref, DerefMut, Pod, Zeroable)]
-pub struct BlockId(u8);
-
-impl From<u8> for BlockId {
-    fn from(v: u8) -> Self {
-        BlockId(v)
-    }
-}
-
-// tell serde to serialize only the number and not the type
-impl Serialize for BlockId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-impl<'de> Deserialize<'de> for BlockId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Deserialize::deserialize(deserializer).map(|id| BlockId(id))
     }
 }

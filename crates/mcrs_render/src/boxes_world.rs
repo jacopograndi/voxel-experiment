@@ -19,7 +19,7 @@ use bevy::{
     },
     utils::{EntityHashMap, HashMap},
 };
-use mcrs_universe::{block::BlockId, ghosts::GhostId, Blueprints};
+use mcrs_universe::{block::BlockId, ghost::GhostId, Blueprints};
 
 use crate::{block_texture::BlockTexture, plugin::RenderSettings, voxel_world::VoxelUniforms};
 

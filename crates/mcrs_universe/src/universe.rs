@@ -4,13 +4,11 @@ use crate::{block::Block, chunk::Chunk, CHUNK_SIDE, CHUNK_VOLUME};
 
 use bevy::{prelude::*, utils::HashMap};
 
-/// Game resource, it's mutations are propagated to `RenderUniverse`
-/// and written to the gpu buffer.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
+    // Game resource for the game world. Mutations go to -> `RenderUniverse` -> gpyu buffer
     pub chunks: HashMap<IVec3, Chunk>,
-    /// Stores the highest block which still receives sunlight
-    pub heightfield: HashMap<IVec2, i32>,
+    pub heightfield: HashMap<IVec2, i32>, // Highest block which still receives sunlight
 }
 
 impl Universe {

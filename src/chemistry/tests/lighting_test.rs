@@ -207,21 +207,21 @@ mod test {
                 BlockBlueprint {
                     name: "Air".to_string(),
                     id: 0.into(),
-                    flags: vec![],
+                    flags: FlagBank::default(), 
                     light_level: 0,
                     ..Default::default()
                 },
                 BlockBlueprint {
                     name: "Stone".to_string(),
                     id: 1.into(),
-                    flags: vec![BlockFlag::Collidable, BlockFlag::Opaque],
+                    flags: FlagBank::From(vec![BlockFlag::Collidable, BlockFlag::Opaque]),
                     light_level: 0,
                     ..Default::default()
                 },
                 BlockBlueprint {
                     name: "Glowstone".to_string(),
                     id: 2.into(),
-                    flags: vec![BlockFlag::Collidable],
+                    flags: FlagBank::from(vec![BlockFlag::Collidable]),
                     light_level: 15,
                     ..Default::default()
                 },
