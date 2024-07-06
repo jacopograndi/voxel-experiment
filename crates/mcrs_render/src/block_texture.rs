@@ -31,7 +31,7 @@ impl BlockTexture {
         bytes.extend(
             self.palette
                 .iter()
-                .map(|col| col.as_rgba_u8())
+                .map(|col| col.to_srgba().to_u8_array())
                 .flatten()
                 .collect::<Vec<u8>>(),
         );
@@ -48,26 +48,26 @@ impl BlockTexture {
 
         for i in 0..vox.palette.len().min(255) {
             let colour = vox.palette[i];
-            let mut material = Vec4::new(
+            let mut m = Vec4::new(
                 colour.r as f32 / 255.0,
                 colour.g as f32 / 255.0,
                 colour.b as f32 / 255.0,
                 0.0,
             );
-            material = material.powf(2.2);
+            m = m.powf(2.2);
             if let Some(vox_material) = vox.materials.get(i) {
                 let vox_material = vox_material.properties.clone();
                 if let Some(material_type) = vox_material.get("_type") {
                     if material_type == "_emit" {
-                        material *= 1.0 + vox_material["_emit"].parse::<f32>().unwrap();
+                        m *= 1.0 + vox_material["_emit"].parse::<f32>().unwrap();
                         if vox_material.contains_key("_flux") {
-                            material = material.powf(vox_material["_flux"].parse::<f32>().unwrap());
+                            m = m.powf(vox_material["_flux"].parse::<f32>().unwrap());
                         }
-                        material.w = 1.0;
+                        m.w = 1.0;
                     }
                 }
             }
-            grid.palette[i + 1] = material.into();
+            grid.palette[i + 1] = Color::srgba(m.x, m.y, m.z, m.w);
         }
 
         for voxel in &vox.models[0].voxels {

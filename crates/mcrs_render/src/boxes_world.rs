@@ -9,9 +9,9 @@ use bevy::{
         camera::ExtractedCamera,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
-            BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferInitDescriptor,
-            BufferSize, BufferUsages, ShaderStages,
+            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
+            Buffer, BufferBindingType, BufferInitDescriptor, BufferSize, BufferUsages,
+            ShaderStages,
         },
         renderer::{RenderDevice, RenderQueue},
         view::ExtractedView,
@@ -32,7 +32,7 @@ impl Plugin for BoxesWorldPlugin {
     fn build(&self, _app: &mut App) {}
     fn finish(&self, app: &mut App) {
         let render_app = app.get_sub_app(RenderApp).unwrap();
-        let render_device = render_app.world.resource::<RenderDevice>();
+        let render_device = render_app.world().resource::<RenderDevice>();
 
         let boxes_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             contents: &vec![0; std::mem::size_of::<PodTexturedBox>() * MAX_BOXES],
@@ -46,32 +46,31 @@ impl Plugin for BoxesWorldPlugin {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
 
-        let bind_group_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("boxes bind group layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
+        let bind_group_layout = render_device.create_bind_group_layout(
+            "boxes bind group layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(0),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(0),
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        );
 
         let bind_group = render_device.create_bind_group(
             None,
@@ -239,7 +238,7 @@ fn write_boxes(
     let Ok((view, ..)) = view_query.get_single() else {
         return;
     };
-    let cam_pos = view.transform.translation();
+    let cam_pos = view.world_from_view.translation();
 
     let chunk_side = voxel_uniforms.chunk_size;
     let camera_chunk_pos = (cam_pos / chunk_side as f32) * chunk_side as f32;

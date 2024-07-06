@@ -41,7 +41,7 @@ impl Plugin for McrsNetServerPlugin {
                     .chain()
                     .in_set(FixedNetSet::Send),
             )
-                .run_if(resource_exists::<RenetServer>()),
+                .run_if(resource_exists::<RenetServer>),
         );
     }
 }
@@ -56,13 +56,13 @@ impl Plugin for McrsNetClientPlugin {
         app.add_systems(
             FixedUpdate,
             ((client_sync_players, client_sync_universe).in_set(FixedNetSet::Receive),)
-                .run_if(client_connected()),
+                .run_if(client_connected),
         );
     }
 }
 
 fn get_server_address(app: &App) -> &str {
-    if let Some(settings) = app.world.get_resource::<NetSettings>() {
+    if let Some(settings) = app.world().get_resource::<NetSettings>() {
         &settings.server_address
     } else {
         "127.0.0.1"

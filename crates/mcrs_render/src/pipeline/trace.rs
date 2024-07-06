@@ -136,9 +136,9 @@ impl FromWorld for TracePipelineData {
         let voxel_bind_group_layout = voxel_data.bind_group_layout.clone();
         let trace_bind_group_layout = render_world
             .resource::<RenderDevice>()
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("trace bind group layout"),
-                entries: &[
+            .create_bind_group_layout(
+                "voxel_trace",
+                &[
                     BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::FRAGMENT,
@@ -170,7 +170,7 @@ impl FromWorld for TracePipelineData {
                         count: None,
                     },
                 ],
-            });
+            );
         let boxes_bind_group_layout = boxes_data.bind_group_layout.clone();
 
         let trace_pipeline_descriptor = RenderPipelineDescriptor {
@@ -251,10 +251,10 @@ impl ViewNode for TraceNode {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Load,
-                    store: true,
+                    store: StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            ..default()
         };
 
         {

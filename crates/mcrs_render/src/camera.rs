@@ -10,7 +10,7 @@ use bevy::{
     transform::components::{GlobalTransform, Transform},
 };
 
-use crate::{pipeline::trace::TraceSettings, VOXEL};
+use crate::{graph::Voxel, pipeline::trace::TraceSettings};
 
 #[derive(Bundle)]
 pub struct VoxelCameraBundle {
@@ -28,7 +28,7 @@ pub struct VoxelCameraBundle {
 impl Default for VoxelCameraBundle {
     fn default() -> Self {
         Self {
-            camera_render_graph: CameraRenderGraph::new(VOXEL),
+            camera_render_graph: CameraRenderGraph::new(Voxel),
             tonemapping: Tonemapping::ReinhardLuminance,
             camera: Camera {
                 hdr: true,

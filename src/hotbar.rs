@@ -32,7 +32,7 @@ pub fn server_receive_replica(
     for client_id in server.clients_id() {
         while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerStates) {
             let replicated_hand: PlayerHand = bincode::deserialize(&message).unwrap();
-            let is_local_player = client_id == ClientId::from_raw(transport.client_id());
+            let is_local_player = client_id == transport.client_id();
             if is_local_player {
                 continue;
             }
@@ -66,7 +66,7 @@ pub fn client_receive_replica(
     while let Some(message) = client.receive_message(ServerChannel::PlayerStates) {
         let players: HashMap<ClientId, PlayerHand> = bincode::deserialize(&message).unwrap();
         for (player_id, replicated_hand) in players.into_iter() {
-            let is_local_player = player_id == ClientId::from_raw(transport.client_id());
+            let is_local_player = player_id == transport.client_id();
             if let Some(player_entity) = lobby.players.get(&player_id) {
                 if !is_local_player {
                     if let Ok(mut hand) = query_hand.get_mut(*player_entity) {
@@ -82,7 +82,7 @@ pub fn hotbar(
     mut contexts: EguiContexts,
     mut hand_query: Query<(&mut PlayerHand, &LocalPlayer)>,
     blueprints: Res<Blueprints>,
-    mut mouse: ResMut<Input<MouseButton>>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
 ) {
     let Ok((mut hand, _)) = hand_query.get_single_mut() else {
         egui::Window::new("Hotbar")

@@ -398,7 +398,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         center_in_grid -= vec3f(f32(voxel_uniforms.chunk_size)) / 2.0;
     }
 
-    let camera_inverse = view.inverse_view_proj;
+    let camera_inverse = view.world_from_view;
     let pos1 = camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
     let dir1 = camera_inverse * vec4(clip_space.x, clip_space.y, 0.01, 1.0);
     let pos = pos1.xyz / pos1.w;

@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.12.0"
-bytemuck = "1.14.0"
+bevy = "0.14"
+bytemuck = "1.16"
 dot_vox = "5.1.1"
 
 mcrs_universe = { path = "../mcrs_universe" }

@@ -20,7 +20,7 @@ pub fn ui(mut commands: Commands) {
                     height: Val::Px(5.0),
                     ..default()
                 },
-                background_color: Color::rgba(0.1, 0.1, 0.1, 0.3).into(),
+                background_color: Color::srgba(0.1, 0.1, 0.1, 0.3).into(),
                 ..default()
             });
         });

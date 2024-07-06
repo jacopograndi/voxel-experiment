@@ -63,14 +63,12 @@ pub fn server_update_system(
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
-                let is_local_player = if let Some(local_id) = transport
-                    .as_ref()
-                    .map(|t| ClientId::from_raw(t.client_id()))
-                {
-                    local_id == *client_id
-                } else {
-                    true
-                };
+                let is_local_player =
+                    if let Some(local_id) = transport.as_ref().map(|t| t.client_id()) {
+                        local_id == *client_id
+                    } else {
+                        true
+                    };
 
                 if is_local_player {
                     debug!(target: "net_server", "Connected to the server (our id = {})", client_id);
@@ -117,14 +115,12 @@ pub fn server_update_system(
                 server.broadcast_message(ServerChannel::ServerMessages, message);
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
-                let is_local_player = if let Some(local_id) = transport
-                    .as_ref()
-                    .map(|t| ClientId::from_raw(t.client_id()))
-                {
-                    local_id == *client_id
-                } else {
-                    true
-                };
+                let is_local_player =
+                    if let Some(local_id) = transport.as_ref().map(|t| t.client_id()) {
+                        local_id == *client_id
+                    } else {
+                        true
+                    };
 
                 if is_local_player {
                     debug!(target: "net_server", "Disconnected from the server: {}", reason);

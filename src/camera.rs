@@ -70,7 +70,7 @@ pub fn initial_grab_cursor(mut primary_window: Query<&mut Window, With<PrimaryWi
 
 /// Grabs/ungrabs mouse cursor
 pub fn cursor_grab(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut primary_window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     if let Ok(mut window) = primary_window.get_single_mut() {

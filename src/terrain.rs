@@ -44,7 +44,7 @@ pub fn terrain_editing(
                 if let Some(hit) = cast_ray(
                     RayFinite {
                         position: tr.translation(),
-                        direction: tr.forward(),
+                        direction: tr.forward().as_vec3(),
                         reach: 4.5,
                     },
                     &universe,

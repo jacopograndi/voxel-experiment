@@ -43,7 +43,7 @@ pub enum UiSet {
     Overlay,
 }
 
-fn main() {
+fn main() -> AppExit {
     let mut app = App::new(); // Instantiate Bevy App
 
     app.configure_sets(
@@ -116,7 +116,7 @@ fn add_client(app: &mut App) {
                 .chain()
                 .in_set(FixedNetSet::Send),
         )
-            .run_if(client_connected()),
+            .run_if(client_connected),
     );
 }
 

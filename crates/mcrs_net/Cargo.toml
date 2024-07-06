@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.12.0"
-renet = { version = "0.0.14", features = ["serde"] }
-bevy_renet = { version = "0.0.10", features = ["serde"] }
-serde = "1.0.193"
+bevy = "0.14"
+renet = { git = "https://github.com/jacopograndi/renet-bevy-0.14", features = [
+    "serde",
+] }
+bevy_renet = { git = "https://github.com/jacopograndi/renet-bevy-0.14", features = [
+    "serde",
+] }
+serde = "1"
 bincode = "1.3.3"
-bytemuck = "1.14.0"
+bytemuck = "1.16"
 
 mcrs_universe = { path = "../mcrs_universe" }
 mcrs_physics = { path = "../mcrs_physics" }

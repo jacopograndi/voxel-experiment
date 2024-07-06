@@ -58,7 +58,7 @@ pub fn client_sync_players(
         let server_message = bincode::deserialize(&message).unwrap();
         match server_message {
             ServerMessages::PlayerConnected { id } => {
-                let is_local_player = id == ClientId::from_raw(transport.client_id());
+                let is_local_player = id == transport.client_id();
 
                 if is_local_player {
                     debug!(target: "net_client", "Connected to the server");
@@ -94,7 +94,7 @@ pub fn client_sync_players(
     while let Some(message) = client.receive_message(ServerChannel::PlayerTransform) {
         let players: HashMap<ClientId, PlayerState> = bincode::deserialize(&message).unwrap();
         for (player_id, playerstate) in players.iter() {
-            let is_local_player = *player_id == ClientId::from_raw(transport.client_id());
+            let is_local_player = *player_id == transport.client_id();
             if let Some(player_entity) = lobby.players.get(player_id) {
                 if let Ok((_, _, children)) = query.get(*player_entity) {
                     let camera_entity = children.iter().next().unwrap(); // todo find camera

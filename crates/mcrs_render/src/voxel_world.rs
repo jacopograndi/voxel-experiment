@@ -22,11 +22,11 @@ pub struct VoxelWorldPlugin;
 impl Plugin for VoxelWorldPlugin {
     fn build(&self, _app: &mut App) {}
     fn finish(&self, app: &mut App) {
-        let settings = app.world.get_resource::<RenderSettings>().unwrap();
+        let settings = app.world().get_resource::<RenderSettings>().unwrap();
 
         let render_app = app.get_sub_app(RenderApp).unwrap();
-        let render_device = render_app.world.resource::<RenderDevice>();
-        let render_queue = render_app.world.resource::<RenderQueue>();
+        let render_device = render_app.world().resource::<RenderDevice>();
+        let render_queue = render_app.world().resource::<RenderQueue>();
 
         let buffer_size = CHUNK_VOLUME * 4;
         let chunk_size = CHUNK_SIDE as u32;
@@ -64,42 +64,41 @@ impl Plugin for VoxelWorldPlugin {
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
 
-        let bind_group_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("voxelization bind group layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(VoxelUniforms::SHADER_SIZE.into()),
-                        },
-                        count: None,
+        let bind_group_layout = render_device.create_bind_group_layout(
+            "voxelization bind group layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(VoxelUniforms::SHADER_SIZE.into()),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(0),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: BufferSize::new(0),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT | ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(0),
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        );
 
         let bind_group = render_device.create_bind_group(
             None,
@@ -243,7 +242,7 @@ fn prepare_chunks(
     let Ok((view, ..)) = view_query.get_single() else {
         return;
     };
-    let cam_pos = view.transform.translation();
+    let cam_pos = view.world_from_view.translation();
 
     let chunk_center = Vec3::splat(CHUNK_SIDE as f32 / 2.);
     let visible_chunks: HashSet<IVec3> = universe
@@ -315,7 +314,7 @@ fn write_chunks(
     let Ok((view, ..)) = view_query.get_single() else {
         return;
     };
-    let cam_pos = view.transform.translation();
+    let cam_pos = view.world_from_view.translation();
 
     let chunk_side = voxel_uniforms.chunk_size;
     let chunk_volume = chunk_side * chunk_side * chunk_side;

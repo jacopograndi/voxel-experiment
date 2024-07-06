@@ -26,10 +26,10 @@ pub enum InputSet {
 
 pub fn player_input(
     mut player_input_buffer: ResMut<PlayerInputBuffer>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     query_transform: Query<&Transform>,
     query_camera: Query<(Entity, &Camera, &Parent)>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
 ) {
     let mut input = PlayerInputBuffer::default();
     if let Ok((entity, _, parent)) = query_camera.get_single() {
@@ -44,16 +44,16 @@ pub fn player_input(
     }
 
     let mut delta = Vec3::ZERO;
-    if keys.pressed(KeyCode::W) {
+    if keys.pressed(KeyCode::KeyW) {
         delta += Vec3::X;
     }
-    if keys.pressed(KeyCode::S) {
+    if keys.pressed(KeyCode::KeyS) {
         delta -= Vec3::X;
     }
-    if keys.pressed(KeyCode::A) {
+    if keys.pressed(KeyCode::KeyA) {
         delta += Vec3::Z;
     }
-    if keys.pressed(KeyCode::D) {
+    if keys.pressed(KeyCode::KeyD) {
         delta -= Vec3::Z;
     }
     delta = delta.normalize_or_zero();

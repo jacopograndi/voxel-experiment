@@ -5,14 +5,23 @@ pub mod pipeline;
 pub mod plugin;
 pub mod settings;
 pub mod voxel_world;
+
 pub mod graph {
-    pub const NAME: &'static str = "voxel";
-    pub mod node {
-        pub const TRACE: &str = "trace";
-        pub const TONEMAPPING: &str = "tonemapping";
-        pub const FXAA: &str = "fxaa";
-        pub const UPSCALING: &str = "upscaling";
-        pub const STREAM: &str = "stream";
+    use bevy::render::render_graph::{RenderLabel, RenderSubGraph};
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
+    pub struct Voxel;
+
+    pub mod input {
+        pub const VIEW_ENTITY: &str = "view_entity";
+    }
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+    pub enum NodeVoxel {
+        Trace,
+        Tonemapping,
+        Fxaa,
+        Upscaling,
+        Stream,
     }
 }
-pub const VOXEL: &str = graph::NAME;

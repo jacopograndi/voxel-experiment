@@ -1,6 +1,6 @@
 use crate::{
     boxes_world::BoxesWorldPlugin,
-    graph,
+    graph::{NodeVoxel, Voxel},
     pipeline::{
         compute::ComputeResourcesPlugin,
         stream::StreamNode,
@@ -8,7 +8,6 @@ use crate::{
     },
     settings::RenderGraphSettings,
     voxel_world::VoxelWorldPlugin,
-    VOXEL,
 };
 use bevy::{
     core_pipeline::{fxaa::FxaaNode, tonemapping::TonemappingNode, upscaling::UpscalingNode},
@@ -18,7 +17,10 @@ use bevy::{
         render_graph::{RenderGraph, RenderGraphApp, RunGraphOnViewNode, ViewNodeRunner},
         Extract, RenderApp,
     },
-    ui::{draw_ui_graph, UiPassNode},
+    ui::{
+        graph::{NodeUi, SubGraphUi},
+        UiPassNode,
+    },
 };
 
 pub struct McrsVoxelRenderPlugin;
@@ -33,33 +35,40 @@ impl Plugin for McrsVoxelRenderPlugin {
             .add_plugins(TracePlugin)
             .add_plugins(ComputeResourcesPlugin);
 
-        let render_app = match app.get_sub_app_mut(RenderApp) {
-            Ok(render_app) => render_app,
-            Err(_) => return,
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
+            error!("The render subapp doesn't exist.");
+            return;
         };
 
-        use graph::node::*;
+        // Voxel render graph, substituting the core3d graph
         render_app
-            .add_render_sub_graph(VOXEL)
-            .add_render_graph_node::<ViewNodeRunner<StreamNode>>(VOXEL, STREAM)
-            .add_render_graph_node::<ViewNodeRunner<TraceNode>>(VOXEL, TRACE)
-            .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(VOXEL, TONEMAPPING)
-            .add_render_graph_node::<ViewNodeRunner<FxaaNode>>(VOXEL, FXAA)
-            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(VOXEL, UPSCALING)
-            .add_render_graph_edges(VOXEL, &[STREAM, TRACE, TONEMAPPING, FXAA, UPSCALING]);
-
-        let ui_pass_node = UiPassNode::new(&mut render_app.world);
-        let mut ui_graph = RenderGraph::default();
-        ui_graph.add_node(draw_ui_graph::node::UI_PASS, ui_pass_node);
-        let mut graph = render_app.world.resource_mut::<RenderGraph>();
-        if let Some(graph_voxel) = graph.get_sub_graph_mut(VOXEL) {
-            graph_voxel.add_sub_graph(draw_ui_graph::NAME, ui_graph);
-            graph_voxel.add_node(
-                draw_ui_graph::node::UI_PASS,
-                RunGraphOnViewNode::new(draw_ui_graph::NAME),
+            .add_render_sub_graph(Voxel)
+            .add_render_graph_node::<ViewNodeRunner<StreamNode>>(Voxel, NodeVoxel::Stream)
+            .add_render_graph_node::<ViewNodeRunner<TraceNode>>(Voxel, NodeVoxel::Trace)
+            .add_render_graph_node::<ViewNodeRunner<TonemappingNode>>(Voxel, NodeVoxel::Tonemapping)
+            .add_render_graph_node::<ViewNodeRunner<FxaaNode>>(Voxel, NodeVoxel::Fxaa)
+            .add_render_graph_node::<ViewNodeRunner<UpscalingNode>>(Voxel, NodeVoxel::Upscaling)
+            .add_render_graph_edges(
+                Voxel,
+                (
+                    NodeVoxel::Stream,
+                    NodeVoxel::Trace,
+                    NodeVoxel::Tonemapping,
+                    NodeVoxel::Fxaa,
+                    NodeVoxel::Upscaling,
+                ),
             );
-            graph_voxel.add_node_edge(FXAA, draw_ui_graph::node::UI_PASS);
-            graph_voxel.add_node_edge(draw_ui_graph::node::UI_PASS, UPSCALING);
+
+        let ui_pass_node = UiPassNode::new(render_app.world_mut());
+        let mut ui_graph = RenderGraph::default();
+        ui_graph.add_node(NodeUi::UiPass, ui_pass_node);
+        let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
+
+        if let Some(graph_voxel) = graph.get_sub_graph_mut(Voxel) {
+            graph_voxel.add_sub_graph(SubGraphUi, ui_graph);
+            graph_voxel.add_node(NodeUi::UiPass, RunGraphOnViewNode::new(SubGraphUi));
+            graph_voxel.add_node_edge(NodeVoxel::Fxaa, NodeUi::UiPass);
+            graph_voxel.add_node_edge(NodeUi::UiPass, NodeVoxel::Upscaling);
         }
 
         render_app
