@@ -40,7 +40,7 @@ impl Plugin for TracePlugin {
         // setup custom render pipeline
         app.sub_app_mut(RenderApp)
             .init_resource::<TracePipelineData>()
-            .add_systems(Render, prepare_uniforms.in_set(RenderSet::Prepare));
+            .add_systems(Render, prepare_uniforms.in_set(RenderSet::PrepareResources));
     }
 }
 
@@ -95,9 +95,11 @@ fn prepare_uniforms(
     global_buffer: Res<GlobalsBuffer>,
 ) {
     let Some(view_uniforms_binding) = view_uniforms.uniforms.binding() else {
+        warn!("Voxel trace view uniform missing");
         return;
     };
     let Some(global_buffer_binding) = global_buffer.buffer.binding() else {
+        warn!("Voxel trace global buffer binding missing");
         return;
     };
     for (entity, settings) in query.iter() {

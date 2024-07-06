@@ -3,7 +3,7 @@ use bevy::{
     ecs::bundle::Bundle,
     prelude::default,
     render::{
-        camera::{Camera, CameraRenderGraph, Projection},
+        camera::{Camera, CameraMainTextureUsages, CameraRenderGraph, Projection},
         primitives::Frustum,
         view::VisibleEntities,
     },
@@ -24,6 +24,7 @@ pub struct VoxelCameraBundle {
     pub camera_3d: Camera3d,
     pub tonemapping: Tonemapping,
     pub trace_settings: TraceSettings,
+    pub main_texture_usages: CameraMainTextureUsages,
 }
 impl Default for VoxelCameraBundle {
     fn default() -> Self {
@@ -41,6 +42,7 @@ impl Default for VoxelCameraBundle {
             global_transform: default(),
             camera_3d: default(),
             trace_settings: default(),
+            main_texture_usages: default(),
         }
     }
 }

@@ -113,9 +113,10 @@ impl ViewNode for StreamNode {
             )),
         );
 
-        let stream_pipeline = match pipeline_cache.get_compute_pipeline(pipelines.stream_pipeline) {
-            Some(pipeline) => pipeline,
-            None => return Ok(()),
+        let Some(stream_pipeline) = pipeline_cache.get_compute_pipeline(pipelines.stream_pipeline)
+        else {
+            warn!("The voxel stream pipeline is missing.");
+            return Ok(());
         };
 
         {
