@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{HasNameId, MAX_LIGHT};
 
+/// 1 cubic meter ingame
 #[repr(C)]
 #[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
 pub struct Block {
-    // 1 cubic meter ingame
     pub id: BlockId,
     pub properties: FlagBank,
     // for now i'm using light0 as torchlight and light1 as sunlight
@@ -45,6 +45,7 @@ impl Block {
     }
 }
 
+/// Specification of the properties of a block.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct BlockBlueprint {
     pub name: String,
@@ -63,25 +64,30 @@ impl HasNameId<BlockId> for BlockBlueprint {
     }
 }
 impl BlockBlueprint {
+    /// True if the block emits light
     pub fn is_light_source(&self) -> bool {
         self.light_level > 0
     }
 }
 
+/// Logical block Id.
+/// For now, it's also the offset in the 3d texture buffer.
 #[repr(C)]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Copy, Deref, DerefMut, Pod, Zeroable)]
-pub struct BlockId(u8); // Logical block ID. Also offset in 3d texture buffer
+pub struct BlockId(u8);
 impl From<u8> for BlockId {
     fn from(v: u8) -> Self {
         BlockId(v)
     }
 }
+
+// Tell serde to only serialize the inner number
 impl Serialize for BlockId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        self.0.serialize(serializer) // Only serialize the number, not the type
+        self.0.serialize(serializer)
     }
 }
 impl<'de> Deserialize<'de> for BlockId {
@@ -93,9 +99,9 @@ impl<'de> Deserialize<'de> for BlockId {
     }
 }
 
+/// Bit index of each block flag in human readable form
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumIter)]
 pub enum BlockFlag {
-    // Bit index of each block flag in human readable form
     Collidable,
     Opaque,
     Flag3,
@@ -192,11 +198,25 @@ impl<'de> Deserialize<'de> for FlagBank {
     where
         D: serde::Deserializer<'de>,
     {
-        Deserialize::deserialize(deserializer).map(|flagbank_vec: Vec<BlockFlag>| flagbank_vec.into())
+        Deserialize::deserialize(deserializer)
+            .map(|flagbank_vec: Vec<BlockFlag>| flagbank_vec.into())
     }
 }
 
-// TODO remove this. Awful. Why two lights. Why
+/// j: This is a performance optimization.
+/// The block's light level is max(torch, sun).
+///
+/// Sunlight propagates differently: when it travels down it isn't dimmed.
+/// It comes from the top of the topmost loaded chunk.
+/// (we use a heightmap to do it faster when blocks are modified)
+/// Torchlight is dimmed every time it travels regardless of direction.
+///
+/// If we were to have a single light type, we couldn't support the day-night cycle.
+/// During night, sunlight is set to zero. During the day, sunlight is set to max.
+/// During transitions it's interpolated.
+/// If sunlight == torchlight, every time the day's light level changes
+/// every block's light must be recalculated, and that's very slow.
+/// If sunlight != torchlight, we do it only when a chunk is generated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LightType {
     Torch,

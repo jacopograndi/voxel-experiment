@@ -1,21 +1,17 @@
-use super::NetworkMode;
+use super::{
+    connection_config, Lobby, NetPlayer, NetworkMode, PlayerState, ServerChannel, ServerMessages,
+    PORT, PROTOCOL_ID,
+};
+use crate::{LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
+use bevy::{prelude::*, utils::HashMap};
+use bevy_renet::{
+    netcode::{ClientAuthentication, NetcodeClientTransport},
+    renet::{ClientId, RenetClient},
+};
+use mcrs_universe::{chunk::Chunk, universe::Universe};
 use std::{
     net::{ToSocketAddrs, UdpSocket},
     time::SystemTime,
-};
-
-use bevy::{prelude::*, utils::HashMap};
-use mcrs_universe::{chunk::Chunk, universe::Universe};
-use renet::{
-    transport::{ClientAuthentication, NetcodeClientTransport},
-    ClientId, RenetClient,
-};
-
-use crate::{LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
-
-use super::{
-    connection_config, Lobby, NetPlayer, PlayerState, ServerChannel, ServerMessages, PORT,
-    PROTOCOL_ID,
 };
 
 pub fn new_renet_client(addr: &str) -> (RenetClient, NetcodeClientTransport) {
@@ -70,7 +66,7 @@ pub fn client_sync_players(
                 if matches!(settings.network_mode, NetworkMode::Client) {
                     let player_entity = commands
                         .spawn((
-                            SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
+                            Transform::from_translation(spawn_point),
                             NewPlayerSpawned,
                             NetPlayer { id },
                         ))

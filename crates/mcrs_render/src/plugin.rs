@@ -27,7 +27,6 @@ pub struct McrsVoxelRenderPlugin;
 
 impl Plugin for McrsVoxelRenderPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Msaa::Off);
         app.insert_resource(RenderGraphSettings::default())
             .add_plugins(ExtractResourcePlugin::<RenderGraphSettings>::default())
             .add_plugins(VoxelWorldPlugin)

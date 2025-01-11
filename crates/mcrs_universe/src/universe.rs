@@ -4,15 +4,16 @@ use crate::{block::Block, chunk::Chunk, CHUNK_SIDE, CHUNK_VOLUME};
 
 use bevy::{prelude::*, utils::HashMap};
 
+/// Contains the loaded chunk
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
-    // Game resource for the game world. Mutations go to -> `RenderUniverse` -> gpyu buffer
     pub chunks: HashMap<IVec3, Chunk>,
-    pub heightfield: HashMap<IVec2, i32>, // Highest block which still receives sunlight
+    /// Keeps track of the highest (y) block for every point xz.
+    pub heightfield: HashMap<IVec2, i32>,
 }
 
 impl Universe {
-    // maybe useful to lock everything when operating on all blocks
+    // Useful to lock everything when operating on all blocks
     pub fn lock_write(
         &mut self,
     ) -> impl Iterator<Item = (IVec3, RwLockWriteGuard<[Block; CHUNK_VOLUME]>)> {

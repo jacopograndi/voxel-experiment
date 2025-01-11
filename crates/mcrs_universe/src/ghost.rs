@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::HasNameId;
 
+// j: todo: remove this, use rasterization.
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct GhostBlueprint {
     pub name: String,

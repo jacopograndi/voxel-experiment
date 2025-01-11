@@ -44,7 +44,7 @@ pub enum UiSet {
 }
 
 fn main() -> AppExit {
-    let mut app = App::new(); // Instantiate Bevy App
+    let mut app = App::new();
 
     app.configure_sets(
         FixedUpdate,

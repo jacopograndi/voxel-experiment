@@ -3,10 +3,9 @@ pub mod plugin;
 pub mod server;
 
 use std::{collections::HashMap, time::Duration};
-
 use bevy::{prelude::*, utils::HashSet};
 use mcrs_universe::CHUNK_VOLUME;
-use renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
+use bevy_renet::renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
 use serde::{Deserialize, Serialize};
 
 const PROTOCOL_ID: u64 = 7;

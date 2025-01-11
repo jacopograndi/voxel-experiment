@@ -44,25 +44,25 @@ pub fn spawn_player(
             .with_children(|parent| {
                 let mut camera_pivot = parent.spawn(CameraController::default());
                 if local_player.is_some() {
-                    camera_pivot.insert(VoxelCameraBundle {
-                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                        projection: Projection::Perspective(PerspectiveProjection {
-                            fov: 1.57,
-                            ..default()
-                        }),
-                        ..default()
-                    });
-                } else {
-                    camera_pivot.insert(SpatialBundle {
-                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                        ..default()
-                    });
-                    if let Some(loaded_textures) = loaded_textures.as_ref() {
-                        parent.spawn((
-                            SpatialBundle::from_transform(Transform {
-                                scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
+                    camera_pivot.insert((
+                        VoxelCameraBundle {
+                            transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                            projection: Projection::Perspective(PerspectiveProjection {
+                                fov: 1.57,
                                 ..default()
                             }),
+                            ..default()
+                        },
+                        Msaa::Off,
+                    ));
+                } else {
+                    camera_pivot.insert(Transform::from_xyz(0.0, 0.5, 0.0));
+                    if let Some(loaded_textures) = loaded_textures.as_ref() {
+                        parent.spawn((
+                            Transform {
+                                scale: Vec3::new(16.0, 32.0, 8.0) / 16.0,
+                                ..default()
+                            },
                             Ghost {
                                 vox_texture_index: loaded_textures
                                     .ghosts_id

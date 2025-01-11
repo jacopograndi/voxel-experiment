@@ -41,7 +41,7 @@ pub fn camera_controller_movement(
         for ev in mouse_motion.read() {
             let (mut yaw, _, _) = parent_tr.rotation.to_euler(EulerRot::YXZ);
             let (_, mut pitch, _) = camera_tr.rotation.to_euler(EulerRot::YXZ);
-            match window.cursor.grab_mode {
+            match window.cursor_options.grab_mode {
                 CursorGrabMode::None => (),
                 _ => {
                     // Using smallest of height or width ensures equal vertical and horizontal sensitivity
@@ -83,14 +83,14 @@ pub fn cursor_grab(
 }
 
 fn toggle_grab_cursor(window: &mut Window) {
-    match window.cursor.grab_mode {
+    match window.cursor_options.grab_mode {
         CursorGrabMode::None => {
-            window.cursor.grab_mode = CursorGrabMode::Confined;
-            window.cursor.visible = false;
+            window.cursor_options.grab_mode = CursorGrabMode::Confined;
+            window.cursor_options.visible = false;
         }
         _ => {
-            window.cursor.grab_mode = CursorGrabMode::None;
-            window.cursor.visible = true;
+            window.cursor_options.grab_mode = CursorGrabMode::None;
+            window.cursor_options.visible = true;
         }
     }
 }

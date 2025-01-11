@@ -4,6 +4,7 @@ use std::{
 };
 
 use bevy::{
+    ecs::entity::EntityHashMap,
     prelude::*,
     render::{
         camera::ExtractedCamera,
@@ -17,8 +18,9 @@ use bevy::{
         view::ExtractedView,
         Extract, Render, RenderApp, RenderSet,
     },
-    utils::{EntityHashMap, HashMap},
+    utils::HashMap,
 };
+
 use mcrs_universe::{block::BlockId, ghost::GhostId, Blueprints};
 
 use crate::{block_texture::BlockTexture, plugin::RenderSettings, voxel_world::VoxelUniforms};
@@ -155,7 +157,7 @@ pub struct PodTexturedBox {
 
 #[derive(Resource, Default)]
 pub struct ExtractedTexturedBoxes {
-    pub boxes: EntityHashMap<Entity, ExtractedTexturedBox>,
+    pub boxes: EntityHashMap<ExtractedTexturedBox>,
 }
 
 #[derive(Debug, Clone)]

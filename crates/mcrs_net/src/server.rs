@@ -1,30 +1,23 @@
-use std::{
-    net::{SocketAddr, UdpSocket},
-    time::SystemTime,
+use super::{
+    connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
 };
-
-use bevy::{
-    prelude::*,
-    utils::{HashMap, HashSet},
-};
-use bevy_renet::renet::{
-    transport::{ServerAuthentication, ServerConfig},
-    RenetServer, ServerEvent,
-};
-use mcrs_physics::intersect::get_chunks_in_sphere;
-use mcrs_universe::{universe::Universe, CHUNK_VOLUME};
-use renet::{
-    transport::{NetcodeClientTransport, NetcodeServerTransport},
-    ClientId,
-};
-
 use crate::{
     LocalPlayer, NetPlayer, NetSettings, NetworkMode, NewPlayerSpawned, ServerChannel,
     ServerMessages,
 };
-
-use super::{
-    connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
+use bevy::{
+    prelude::*,
+    utils::{HashMap, HashSet},
+};
+use bevy_renet::{
+    netcode::{NetcodeClientTransport, NetcodeServerTransport, ServerAuthentication, ServerConfig},
+    renet::{ClientId, RenetServer, ServerEvent},
+};
+use mcrs_physics::intersect::get_chunks_in_sphere;
+use mcrs_universe::{universe::Universe, CHUNK_VOLUME};
+use std::{
+    net::{SocketAddr, UdpSocket},
+    time::SystemTime,
 };
 
 pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
@@ -79,7 +72,7 @@ pub fn server_update_system(
                 let spawn_point = Vec3::new(0.0, 5.0, 0.0);
                 let player_entity = commands
                     .spawn((
-                        SpatialBundle::from_transform(Transform::from_translation(spawn_point)),
+                        Transform::from_translation(spawn_point),
                         NewPlayerSpawned,
                         NetPlayer { id: *client_id },
                     ))

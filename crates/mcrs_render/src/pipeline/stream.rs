@@ -79,6 +79,7 @@ impl FromWorld for Pipeline {
             shader_defs: vec![],
             entry_point: Cow::from("copy"),
             push_constant_ranges: vec![],
+            zero_initialize_workgroup_memory: false,
         });
         Pipeline {
             stream_pipeline,

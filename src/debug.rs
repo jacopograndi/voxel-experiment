@@ -22,7 +22,7 @@ impl Plugin for DebugDiagnosticPlugin {
 }
 
 pub fn debug_diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real>>) {
-    let delta_seconds = time.delta_seconds_f64();
+    let delta_seconds = time.delta_secs_f64();
     if delta_seconds == 0.0 {
         return;
     }
