@@ -2,7 +2,7 @@ use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
-    utils::HashMap,
+    utils::{HashMap, HashSet},
 };
 use block_mesh::{
     ndshape::{ConstShape, ConstShape3u32},
@@ -10,7 +10,7 @@ use block_mesh::{
     RIGHT_HANDED_Y_UP_CONFIG,
 };
 use mcrs_universe::{
-    block::{BlockFlag, BlockId},
+    block::BlockFlag,
     chunk::{Chunk, ChunkVersion},
     universe::Universe,
     Blueprints, CHUNK_SIDE, MAX_LIGHT,
@@ -19,6 +19,7 @@ use mcrs_universe::{
 #[derive(Resource, Default)]
 pub struct ChunkEntities {
     pub map: HashMap<IVec3, ChunkEntity>,
+    pub to_update: HashSet<IVec3>,
 }
 
 #[derive(Component)]
@@ -43,6 +44,18 @@ pub fn load_texture(mut texture_handle: ResMut<TextureHandles>, asset_server: Re
     texture_handle.blocks = asset_server.load("textures/blocks.png");
 }
 
+fn adjacent() -> impl Iterator<Item = IVec3> {
+    [
+        IVec3::new(1, 0, 0),
+        IVec3::new(-1, 0, 0),
+        IVec3::new(0, 1, 0),
+        IVec3::new(0, -1, 0),
+        IVec3::new(0, 0, 1),
+        IVec3::new(0, 0, -1),
+    ]
+    .into_iter()
+}
+
 /// Creates a mesh for every chunk that is in universe
 /// When a chunk is modified, a new mesh is created
 pub fn sync_chunk_meshes(
@@ -59,76 +72,46 @@ pub fn sync_chunk_meshes(
     // For each chunk that is in universe, check that it is instanced
     for (chunk_pos, chunk) in universe.chunks.iter() {
         if let Some(chunk_entity) = chunk_entities.map.get(chunk_pos) {
-            if chunk_entity.version == chunk.version {
-                continue;
-            } else {
+            if chunk_entity.version != chunk.version {
                 info!(
                     "despawned chunk mesh at {}, obsolete (mesh: {:?}, chunk: {:?})",
                     chunk_pos, chunk_entity.version, chunk.version
                 );
                 commands.entity(chunk_entity.entity).despawn_recursive();
+            } else {
+                continue;
             }
         }
 
-        let mut all_adjacents_exist = true;
-        for x in -1..=1 {
-            for y in -1..=1 {
-                for z in -1..=1 {
-                    if universe
-                        .chunks
-                        .get(&(chunk_pos + IVec3::new(x, y, z) * CHUNK_SIDE as i32))
-                        .is_none()
-                    {
-                        all_adjacents_exist = false;
-                    }
-                }
-            }
-        }
-        if !all_adjacents_exist {
+        if adjacent().any(|dir| {
+            universe
+                .chunks
+                .get(&(chunk_pos + dir * CHUNK_SIDE as i32))
+                .is_none()
+        }) {
             continue;
         }
 
-        let mut entity_commands =
-            commands.spawn((Transform::from_translation(chunk_pos.as_vec3()),));
-        if let Some(mut raw_mesh) = generate_chunk_mesh(chunk_pos, &bp, &universe) {
-            info!("spawned chunk mesh at {}", chunk_pos);
-            let mut indices = Vec::with_capacity(raw_mesh.indices.len() / 3);
-            for i in 0..raw_mesh.indices.len() / 3 {
-                indices.push([
-                    raw_mesh.indices[i * 3],
-                    raw_mesh.indices[i * 3 + 1],
-                    raw_mesh.indices[i * 3 + 2],
-                ])
-            }
-            let mut render_mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            );
-            for uv in raw_mesh.uvs.iter_mut() {
-                for c in uv.iter_mut() {
-                    *c *= UV_SCALE;
-                }
-            }
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, raw_mesh.vertices);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, raw_mesh.normals);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, raw_mesh.uvs);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, raw_mesh.colors);
-            render_mesh.insert_indices(Indices::U32(raw_mesh.indices));
-            entity_commands.insert((
-                Mesh3d(meshes.add(render_mesh)),
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    perceptual_roughness: 0.9,
-                    base_color_texture: Some(handles.blocks.clone_weak()),
-                    ..default()
-                })),
-            ));
-        } else {
-            info!("spawned empty chunk at {}", chunk_pos);
-        }
+        let entity = create_chunk_entity(
+            chunk_pos,
+            &mut commands,
+            &mut materials,
+            &mut meshes,
+            &universe,
+            &bp,
+            &handles,
+        );
+
         chunk_entities.map.insert(
             chunk_pos.clone(),
-            ChunkEntity::new(entity_commands.id(), chunk.version.clone()),
+            ChunkEntity::new(entity, chunk.version.clone()),
         );
+
+        for dir in adjacent() {
+            chunk_entities
+                .to_update
+                .insert(chunk_pos + dir * CHUNK_SIDE as i32);
+        }
 
         remeshed_chunks += 1;
         if remeshed_chunks >= MAX_CHUNK_REMESH_PER_FRAME {
@@ -177,6 +160,54 @@ pub struct ChunkMesh {
     pub colors: Vec<[f32; 4]>,
 }
 
+pub fn create_chunk_entity(
+    chunk_pos: &IVec3,
+    commands: &mut Commands,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+    universe: &Universe,
+    bp: &Blueprints,
+    handles: &TextureHandles,
+) -> Entity {
+    let mut entity_commands = commands.spawn((Transform::from_translation(chunk_pos.as_vec3()),));
+    if let Some(mut raw_mesh) = generate_chunk_mesh(chunk_pos, &bp, &universe) {
+        info!("spawned chunk mesh at {}", chunk_pos);
+        let mut indices = Vec::with_capacity(raw_mesh.indices.len() / 3);
+        for i in 0..raw_mesh.indices.len() / 3 {
+            indices.push([
+                raw_mesh.indices[i * 3],
+                raw_mesh.indices[i * 3 + 1],
+                raw_mesh.indices[i * 3 + 2],
+            ])
+        }
+        let mut render_mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        for uv in raw_mesh.uvs.iter_mut() {
+            for c in uv.iter_mut() {
+                *c *= UV_SCALE;
+            }
+        }
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, raw_mesh.vertices);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, raw_mesh.normals);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, raw_mesh.uvs);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, raw_mesh.colors);
+        render_mesh.insert_indices(Indices::U32(raw_mesh.indices));
+        entity_commands.insert((
+            Mesh3d(meshes.add(render_mesh)),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                perceptual_roughness: 0.9,
+                base_color_texture: Some(handles.blocks.clone_weak()),
+                ..default()
+            })),
+        ));
+    } else {
+        info!("spawned empty chunk at {}", chunk_pos);
+    }
+    entity_commands.id()
+}
+
 pub fn generate_chunk_mesh(
     chunk_pos: &IVec3,
     bp: &Blueprints,
@@ -195,19 +226,16 @@ pub fn generate_chunk_mesh(
         let [x, y, z] = SampleShape::delinearize(i);
         // apply a boundary of one block around the chunk
         let pos = IVec3::new(x as i32, y as i32, z as i32) - IVec3::splat(1);
-        let block = if Chunk::contains(pos) {
-            chunk_ref[Chunk::xyz2idx(pos) as usize]
+        if Chunk::contains(pos) {
+            let block = chunk_ref[Chunk::xyz2idx(pos) as usize];
+            if block.properties.check(BlockFlag::Opaque) {
+                empty = false;
+                samples[i as usize] = GridVoxel::Full;
+            }
         } else {
-            universe
-                .read_chunk_block(&(pos + chunk_pos))
-                .expect("adjacent chunks should exist")
+            // always generate the faces at the boundary
+            samples[i as usize] = GridVoxel::Empty;
         };
-        if block.id == BlockId::from(0) {
-            // air has id 0
-        } else {
-            empty = false;
-            samples[i as usize] = GridVoxel::Full;
-        }
     }
     if empty {
         return None;
