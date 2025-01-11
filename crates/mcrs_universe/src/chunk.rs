@@ -2,18 +2,15 @@ use bevy::prelude::*;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::{
-    block::{Block, BlockBlueprint, LightType},
+    block::{Block, LightType},
     CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME,
 };
 
 /// Cube of Blocks with side length of `CHUNK_SIDE`
 #[derive(Debug, Clone)]
 pub struct Chunk {
-    _blocks: Arc<RwLock<[Block; CHUNK_VOLUME]>>,
-
-    // todo: move these to render and replication code
-    pub dirty_render: bool,
-    pub dirty_replication: bool,
+    pointer: ChunkPointer,
+    pub version: ChunkVersion,
 }
 
 impl Chunk {
@@ -22,40 +19,32 @@ impl Chunk {
     }
 
     pub fn get_ref(&self) -> RwLockReadGuard<[Block; CHUNK_VOLUME]> {
-        self._blocks.read().unwrap()
+        self.pointer.get_ref()
     }
 
     pub fn get_mut(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
-        self._blocks.write().unwrap()
+        self.pointer.get_mut()
     }
 
     pub fn empty() -> Self {
         Self {
-            _blocks: Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME])),
-            dirty_render: false,
-            dirty_replication: false,
+            pointer: ChunkPointer(Arc::new(RwLock::new([Block::default(); CHUNK_VOLUME]))),
+            version: ChunkVersion::new(),
         }
     }
 
-    pub fn filled(block_info: &BlockBlueprint) -> Self {
-        let block = Block::new(block_info);
-        Self {
-            _blocks: Arc::new(RwLock::new([block; CHUNK_VOLUME])),
-            dirty_render: false,
-            dirty_replication: false,
-        }
+    pub fn set_block(&mut self, xyz: IVec3, block: Block) {
+        self.pointer.get_mut()[Self::xyz2idx(xyz)] = block;
+        self.version.update();
     }
 
-    pub fn set_block(&self, xyz: IVec3, block: Block) {
-        self._blocks.write().unwrap()[Self::xyz2idx(xyz)] = block;
-    }
-
-    pub fn set_block_light(&self, xyz: IVec3, light_type: LightType, v: u8) {
-        self._blocks.write().unwrap()[Self::xyz2idx(xyz)].set_light(light_type, v);
+    pub fn set_block_light(&mut self, xyz: IVec3, light_type: LightType, v: u8) {
+        self.pointer.get_mut()[Self::xyz2idx(xyz)].set_light(light_type, v);
+        self.version.update();
     }
 
     pub fn read_block(&self, xyz: IVec3) -> Block {
-        self._blocks.read().unwrap()[Self::xyz2idx(xyz)]
+        self.pointer.get_ref()[Self::xyz2idx(xyz)]
     }
 
     pub fn xyz2idx(xyz: IVec3) -> usize {
@@ -69,6 +58,38 @@ impl Chunk {
             y: (layer % CHUNK_SIDE) as i32,
             z: (index % CHUNK_SIDE) as i32,
         }
+    }
+
+    pub fn contains(xyz: IVec3) -> bool {
+        (0..CHUNK_SIDE as i32).contains(&xyz.x)
+            && (0..CHUNK_SIDE as i32).contains(&xyz.y)
+            && (0..CHUNK_SIDE as i32).contains(&xyz.z)
+    }
+}
+
+/// Points to an array of Blocks in a thread-safe way
+#[derive(Debug, Clone)]
+pub struct ChunkPointer(Arc<RwLock<[Block; CHUNK_VOLUME]>>);
+impl ChunkPointer {
+    fn get_ref(&self) -> RwLockReadGuard<[Block; CHUNK_VOLUME]> {
+        self.0.read().unwrap()
+    }
+    fn get_mut(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
+        self.0.write().unwrap()
+    }
+}
+
+/// Used to tell apart a chunk from a chunk that has been modified
+/// Every system that uses chunks keeps their version of the chunk and listens to chunk
+/// version changes (renderer sends triangles/data to the gpu, replication sends data to clients)
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ChunkVersion(u64);
+impl ChunkVersion {
+    pub fn new() -> Self {
+        Self(0)
+    }
+    pub fn update(&mut self) {
+        self.0 += 1;
     }
 }
 

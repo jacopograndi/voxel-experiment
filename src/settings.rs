@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use clap::Parser;
 use mcrs_net::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
-use mcrs_render::plugin::{RenderSettings, DEFAULT_VIEW_DISTANCE};
+use mcrs_render::{
+    settings::{RenderMode, DEFAULT_VIEW_DISTANCE, RenderSettings},
+};
 
 const DEFAULT_TICKS_PER_SECOND: u32 = 64;
 
@@ -16,6 +18,9 @@ pub struct Args {
 
     #[arg(short, long)]
     pub view_distance: Option<u32>,
+
+    #[arg(short, long)]
+    pub render_mode: Option<String>,
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -24,6 +29,7 @@ pub struct McrsSettings {
     pub view_distance_blocks: u32,
     pub server_address: String,
     pub network_mode: NetworkMode,
+    pub render_mode: RenderMode,
 }
 
 impl Default for McrsSettings {
@@ -33,6 +39,7 @@ impl Default for McrsSettings {
             view_distance_blocks: DEFAULT_VIEW_DISTANCE,
             server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
             network_mode: NetworkMode::ClientAndServer,
+            render_mode: RenderMode::default(),
         }
     }
 }
@@ -45,6 +52,7 @@ impl From<Args> for McrsSettings {
                 .address_server
                 .unwrap_or(DEFAULT_NETWORK_ADDRESS.to_string()),
             network_mode: args.network_mode.into(),
+            render_mode: args.render_mode.into(),
             ..Default::default()
         }
     }
@@ -64,6 +72,7 @@ impl From<McrsSettings> for RenderSettings {
     fn from(settings: McrsSettings) -> Self {
         Self {
             view_distance_blocks: settings.view_distance_blocks,
+            render_mode: settings.render_mode,
         }
     }
 }

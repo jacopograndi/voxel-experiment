@@ -18,8 +18,7 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
     let mut highest = i32::MIN;
     for pos in chunks.iter() {
         let chunk = universe.chunks.get_mut(pos).unwrap();
-        chunk.dirty_render = true;
-        chunk.dirty_replication = true;
+        chunk.version.update();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
                 let mut sunlight = MAX_LIGHT;
@@ -70,7 +69,7 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
     // find new light sources
     let mut torches: Vec<IVec3> = vec![];
     for pos in chunks.iter() {
-        let chunk = universe.chunks.get(pos).unwrap();
+        let chunk = universe.chunks.get_mut(pos).unwrap();
         for xyz in Chunk::iter() {
             let id = chunk.read_block(xyz).id;
             if info.blocks.get(&id).is_light_source() {

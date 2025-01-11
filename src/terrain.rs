@@ -1,16 +1,16 @@
 use crate::chemistry::lighting::*;
 use bevy::{prelude::*, utils::HashSet};
+use mcrs_net::LocalPlayer;
 use mcrs_physics::{
-    character::{CameraController, CharacterController},
+    character::CameraController,
     intersect::get_chunks_in_sphere,
     raycast::{cast_ray, RayFinite},
 };
 use mcrs_universe::{
-    block::BlockFlag,
-    block::{Block, LightType},
+    block::{Block, BlockFlag, LightType},
     chunk::Chunk,
     universe::Universe,
-    Blueprints,
+    Blueprints, CHUNK_VOLUME,
 };
 
 use crate::{PlayerInput, PlayerInputBuffer};
@@ -18,6 +18,17 @@ use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
 
 use crate::{hotbar::PlayerHand, settings::McrsSettings};
 
+const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
+const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
+const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
+
+// todo: rewrite this from modifying directly the blocks to generating edit commands
+// (like "block at (4,5,5) becomes air")
+// that are executed at the end of the frame along with all other commands.
+// i think it would be useful to do so because:
+// - we then have a single point where the terrain is modified
+// - we can generate block updates for edited blocks to update lighting, water and other chemistry
+// - we can apply only a fixed amount of edits per frame to reduce lag (for smooth explosions)
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
@@ -154,65 +165,166 @@ pub fn terrain_editing(
     }
 }
 
-fn gen_chunk(pos: IVec3, info: &Blueprints) -> Chunk {
-    let noise = RidgedMulti::<OpenSimplex>::default().set_seed(23);
-
-    let air = Block::new(info.blocks.get_named("Air"));
-    let stone = Block::new(info.blocks.get_named("Stone"));
-    let dirt = Block::new(info.blocks.get_named("Dirt"));
-
-    let chunk = Chunk::empty();
-    {
-        let mut chunk_mut = chunk.get_mut();
-        for (i, xyz) in Chunk::iter().enumerate() {
-            let mut sample = noise.get(((pos + xyz).as_dvec3() * 0.01).to_array());
-            sample = (sample + 1.0) * 0.5;
-            sample = sample.clamp(0.0, 1.0);
-            if sample >= 1.0 {
-                sample = 0.999999;
-            }
-            assert!(
-                (0.0..1.0).contains(&sample),
-                "sample {} not in 0.0..1.0",
-                sample
-            );
-            let block = if sample > 0.9 {
-                dirt
-            } else if sample > 0.5 {
-                air
-            } else {
-                stone
-            };
-            chunk_mut[i] = block;
-        }
-    }
-    chunk
+#[derive(Default)]
+pub struct PartialGenerationState {
+    chunk: Option<Chunk>,
+    pos: IVec3,
+    current_block: usize,
+    queued: HashSet<IVec3>,
 }
 
 pub fn terrain_generation(
     mut universe: ResMut<Universe>,
-    player_query: Query<(&CharacterController, &Transform)>,
-    info: Res<Blueprints>,
+    bp: Res<Blueprints>,
+    players: Query<(&Transform, &LocalPlayer)>,
+    mut part: Local<PartialGenerationState>,
+    mut generator: Local<Option<GeneratorSponge>>,
     settings: Res<McrsSettings>,
 ) {
-    let players_pos = player_query
+    let players_pos = players
         .iter()
-        .map(|(_, tr)| tr.translation)
+        .map(|(tr, _)| tr.translation)
         .collect::<Vec<Vec3>>();
 
-    let mut added = HashSet::<IVec3>::new();
-    for player_pos in players_pos.iter() {
-        let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
-        for chunk_pos in chunks.iter() {
-            if let None = universe.chunks.get(chunk_pos) {
-                let chunk = gen_chunk(*chunk_pos, &*info);
-                universe.chunks.insert(*chunk_pos, chunk);
-                added.insert(*chunk_pos);
+    // queue new chunks to be generated
+    if part.queued.is_empty() {
+        for player_pos in players_pos.iter() {
+            let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
+            for chunk_pos in chunks.iter() {
+                if let None = universe.chunks.get(chunk_pos) {
+                    part.queued.insert(chunk_pos.clone());
+                }
             }
         }
     }
 
-    if !added.is_empty() {
-        recalc_lights(&mut universe, added.into_iter().collect(), &*info);
+    // initialize the block generator
+    if generator.is_none() {
+        *generator = Some(GeneratorSponge::new(23));
+    }
+    let Some(generator) = generator.as_ref() else {
+        return;
+    };
+
+    // this is a rough estimate for when the world around the player is empty
+    // and is used to speed up the generation of the initial chunks
+    // todo: use a better estimator after having implemented chunk unloading
+    //       or use a better system
+    let is_low = universe.chunks.len() < BLOCK_GENERATION_LOW_THRESHOLD;
+    let max_block_generation = if is_low {
+        MAX_BLOCK_GENERATION_PER_FRAME * BLOCK_GENERATION_LOW_MULTIPLIER
+    } else {
+        MAX_BLOCK_GENERATION_PER_FRAME
+    };
+
+    let mut added_chunks = HashSet::new();
+    let mut generated_blocks = 0;
+
+    for _ in 0..10 {
+        // get a chunk from the queue and start generating it
+        if part.chunk.is_none() {
+            let Some(selected) = part.queued.iter().next() else {
+                return;
+            };
+            let selected = selected.clone();
+            part.queued.remove(&selected);
+            part.chunk = Some(Chunk::empty());
+            part.pos = selected;
+            part.current_block = 0;
+            info!("generating chunk at {}", selected);
+        }
+
+        let mut generated_blocks_chunk = 0;
+
+        // generate up to a chunk
+        if let Some(chunk) = &part.chunk {
+            let mut chunk_mut = chunk.get_mut();
+            let bound =
+                (part.current_block + (max_block_generation - generated_blocks)).min(CHUNK_VOLUME);
+            for i in part.current_block..bound {
+                chunk_mut[i] = generator.gen_block(part.pos + Chunk::idx2xyz(i), &bp);
+            }
+            let count = bound - part.current_block;
+            generated_blocks_chunk = count;
+            generated_blocks += count;
+            info!(
+                "generated {} blocks for the chunk at {}, {} left",
+                count, part.pos, part.current_block
+            );
+        }
+        if generated_blocks_chunk > 0 {
+            part.current_block += generated_blocks_chunk;
+        }
+
+        // add the chunk to universe if finished
+        if part.current_block == CHUNK_VOLUME {
+            if let Some(chunk) = part.chunk.take() {
+                part.chunk = None;
+                part.current_block = 0;
+                universe.chunks.insert(part.pos, chunk);
+                added_chunks.insert(part.pos);
+            }
+        }
+
+        if generated_blocks >= max_block_generation {
+            break;
+        }
+    }
+
+    if generated_blocks > 0 {
+        info!("generated {} blocks this pass", generated_blocks);
+        recalc_lights(&mut universe, added_chunks.into_iter().collect(), &bp);
+    }
+}
+
+pub struct GeneratorSponge {
+    terrain_noise: RidgedMulti<OpenSimplex>,
+}
+
+impl GeneratorSponge {
+    fn new(seed: u32) -> Self {
+        Self {
+            terrain_noise: RidgedMulti::<OpenSimplex>::default().set_seed(seed),
+        }
+    }
+
+    fn sample_terrain(&self, pos: IVec3) -> f64 {
+        let mut sample = self.terrain_noise.get((pos.as_dvec3() * 0.01).to_array());
+        sample = (sample + 1.0) * 0.5;
+        sample = sample.clamp(0.0, 1.0);
+        if sample >= 1.0 {
+            sample = 0.999999;
+        }
+        assert!(
+            (0.0..1.0).contains(&sample),
+            "sample {} not in 0.0..1.0",
+            sample
+        );
+        sample
+    }
+
+    fn gen_block(&self, pos: IVec3, bp: &Blueprints) -> Block {
+        let sample = self.sample_terrain(pos);
+
+        let weigth: f64 = if pos.y > 0 {
+            let amt = (pos.y as f64 / 64.0).min(1.0);
+            0.5 - 0.5 * amt
+        } else if pos.y > -64 {
+            let y = pos.y + 64;
+            let amt = (y as f64 / 64.0).min(1.0);
+            0.8 - 0.3 * amt
+        } else {
+            0.8
+        };
+
+        let block_bp = if sample >= weigth {
+            bp.blocks.get_named("Air")
+        } else if pos.y > -32 {
+            bp.blocks.get_named("Dirt")
+        } else {
+            bp.blocks.get_named("Stone")
+        };
+
+        Block::new(block_bp)
     }
 }

@@ -6,16 +6,18 @@ use mcrs_physics::character::{
 use mcrs_render::{
     boxes_world::{Ghost, LoadedVoxTextures},
     camera::VoxelCameraBundle,
+    settings::RenderMode,
 };
 use mcrs_universe::Blueprints;
 
-use crate::{hotbar::PlayerHand, PlayerInputBuffer};
+use crate::{hotbar::PlayerHand, settings::McrsSettings, PlayerInputBuffer};
 
 pub fn spawn_player(
     mut commands: Commands,
     query: Query<(Entity, &NewPlayerSpawned, Option<&LocalPlayer>)>,
     loaded_textures: Option<Res<LoadedVoxTextures>>,
     info: Res<Blueprints>,
+    settings: Res<McrsSettings>,
 ) {
     for (player_entity, _, local_player) in query.iter() {
         commands
@@ -42,21 +44,68 @@ pub fn spawn_player(
                 PlayerHand { block_id: None },
             ))
             .with_children(|parent| {
-                let mut camera_pivot = parent.spawn(CameraController::default());
+                let mut camera_pivot = parent.spawn((
+                    CameraController::default(),
+                    Transform::from_xyz(0.0, 0.5, 0.0),
+                ));
                 if local_player.is_some() {
-                    camera_pivot.insert((
-                        VoxelCameraBundle {
-                            transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                            projection: Projection::Perspective(PerspectiveProjection {
-                                fov: 1.57,
-                                ..default()
-                            }),
-                            ..default()
-                        },
-                        Msaa::Off,
-                    ));
+                    let projection = Projection::Perspective(PerspectiveProjection {
+                        fov: 1.57,
+                        ..default()
+                    });
+                    match settings.render_mode {
+                        RenderMode::RasterizeOnly => {
+                            camera_pivot.with_children(|pivot| {
+                                pivot.spawn((projection, Camera3d::default(), Msaa::Off));
+                            });
+                        }
+                        RenderMode::RaytraceOnly => {
+                            camera_pivot.with_children(|pivot| {
+                                pivot.spawn((
+                                    VoxelCameraBundle {
+                                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                                        projection,
+                                        ..default()
+                                    },
+                                    Msaa::Off,
+                                ));
+                            });
+                        }
+                        RenderMode::RaytraceThenRasterize => {
+                            camera_pivot.with_children(|pivot| {
+                                pivot.spawn((
+                                    VoxelCameraBundle {
+                                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                                        projection: projection.clone(),
+                                        camera: Camera {
+                                            order: 0,
+                                            ..default()
+                                        },
+                                        ..default()
+                                    },
+                                    Msaa::Off,
+                                ));
+                                pivot.spawn((
+                                    projection,
+                                    Camera {
+                                        order: 1,
+                                        clear_color: ClearColorConfig::None,
+                                        ..default()
+                                    },
+                                    Camera3d {
+                                        // todo: enable this to load the voxel's camera depth buffer
+                                        //depth_load_op: bevy::core_pipeline::core_3d::Camera3dDepthLoadOp::Load,
+                                        ..default()
+                                    },
+                                    Msaa::Off,
+                                ));
+                                todo!(
+                                    "very low fps, probabily due to mcrs_render that is not made for two cameras/view targets"
+                                );
+                            });
+                        }
+                    }
                 } else {
-                    camera_pivot.insert(Transform::from_xyz(0.0, 0.5, 0.0));
                     if let Some(loaded_textures) = loaded_textures.as_ref() {
                         parent.spawn((
                             Transform {

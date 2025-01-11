@@ -1,6 +1,7 @@
 pub mod block_texture;
 pub mod boxes_world;
 pub mod camera;
+pub mod chunk_mesh;
 pub mod pipeline;
 pub mod plugin;
 pub mod settings;

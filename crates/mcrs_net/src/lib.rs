@@ -2,11 +2,11 @@ pub mod client;
 pub mod plugin;
 pub mod server;
 
-use std::{collections::HashMap, time::Duration};
 use bevy::{prelude::*, utils::HashSet};
-use mcrs_universe::CHUNK_VOLUME;
 use bevy_renet::renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
+use mcrs_universe::CHUNK_VOLUME;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, time::Duration};
 
 const PROTOCOL_ID: u64 = 7;
 pub const DEFAULT_NETWORK_ADDRESS: &str = "127.0.0.1";

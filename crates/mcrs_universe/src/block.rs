@@ -5,7 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use mcrs_macros::EnumIter;
 use serde::{Deserialize, Serialize};
 
-use crate::{HasNameId, MAX_LIGHT};
+use crate::{is_default, HasNameId, MAX_LIGHT};
 
 /// 1 cubic meter ingame
 #[repr(C)]
@@ -47,12 +47,22 @@ impl Block {
 
 /// Specification of the properties of a block.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct BlockBlueprint {
     pub name: String,
     pub id: BlockId,
     pub flags: FlagBank,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub light_level: u8,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub voxel_texture_path: String,
+
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub block_texture_offset: Vec<u32>,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub drop_item_id: BlockId,
 }
 impl HasNameId<BlockId> for BlockBlueprint {

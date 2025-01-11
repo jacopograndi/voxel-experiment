@@ -14,7 +14,7 @@ use bevy_renet::{
     renet::{ClientId, RenetServer, ServerEvent},
 };
 use mcrs_physics::intersect::get_chunks_in_sphere;
-use mcrs_universe::{universe::Universe, CHUNK_VOLUME};
+use mcrs_universe::{chunk::ChunkVersion, universe::Universe, CHUNK_VOLUME};
 use std::{
     net::{SocketAddr, UdpSocket},
     time::SystemTime,
@@ -159,15 +159,20 @@ pub fn server_sync_players(
 
 pub fn server_sync_universe(
     mut server: ResMut<RenetServer>,
-    mut universe: ResMut<Universe>,
+    universe: Res<Universe>,
     mut chunk_replication: ResMut<ChunkReplication>,
+    mut replicated_chunks: Local<HashMap<IVec3, ChunkVersion>>,
 ) {
+    // todo: maybe make this observer pattern more general, it's the same in render and net
     let mut changed_chunks = HashSet::<IVec3>::new();
-    for (pos, chunk) in universe.chunks.iter_mut() {
-        if chunk.dirty_replication {
-            chunk.dirty_replication = false;
-            changed_chunks.insert(*pos);
+    for (chunk_pos, chunk) in universe.chunks.iter() {
+        if let Some(version) = replicated_chunks.get(chunk_pos) {
+            if version == &chunk.version {
+                continue;
+            }
         }
+        replicated_chunks.insert(*chunk_pos, chunk.version.clone());
+        changed_chunks.insert(*chunk_pos);
     }
 
     for (_, chunks) in chunk_replication.requested_chunks.iter_mut() {

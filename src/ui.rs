@@ -11,8 +11,8 @@ pub fn ui(mut commands: Commands) {
             ..default()
         })
         .with_children(|parent| {
-            parent.spawn(
-                (Node {
+            parent.spawn((
+                Node {
                     width: Val::Px(5.0),
                     height: Val::Px(5.0),
                     ..default()

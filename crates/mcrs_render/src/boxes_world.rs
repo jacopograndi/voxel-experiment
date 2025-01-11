@@ -23,7 +23,7 @@ use bevy::{
 
 use mcrs_universe::{block::BlockId, ghost::GhostId, Blueprints};
 
-use crate::{block_texture::BlockTexture, plugin::RenderSettings, voxel_world::VoxelUniforms};
+use crate::{block_texture::BlockTexture, settings::RenderSettings, voxel_world::VoxelUniforms};
 
 const MAX_BOXES: usize = 10000;
 const MAX_VOX_TEXTURE_BYTES: usize = 100000000;

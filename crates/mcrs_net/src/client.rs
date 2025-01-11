@@ -118,7 +118,7 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
         debug!(target: "net_client", "{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
             if let Some(chunk) = universe.chunks.get_mut(pos) {
-                chunk.dirty_render = true;
+                chunk.version.update();
                 let mut write = chunk.get_mut();
                 let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
                 bytes.copy_from_slice(chunk_bytes.as_slice());

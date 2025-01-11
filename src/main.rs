@@ -9,7 +9,7 @@ use mcrs_net::{
     NetSettings, NetworkMode,
 };
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
-use mcrs_render::plugin::{McrsVoxelRenderPlugin, RenderSettings};
+use mcrs_render::{plugin::McrsVoxelRenderPlugin, settings::RenderSettings};
 use mcrs_universe::McrsUniversePlugin;
 
 mod camera;
@@ -56,12 +56,9 @@ fn main() -> AppExit {
         )
             .chain(),
     );
-
     app.configure_sets(Update, (UiSet::Overlay, InputSet::Gather).chain());
 
-    app.add_plugins(McrsUniversePlugin);
-    app.init_resource::<PlayerInputBuffer>();
-
+    // todo: encapsulate in a settings plugin?
     let settings: McrsSettings = Args::parse().into();
     app.insert_resource(Time::<Fixed>::from_seconds(
         1f64 / settings.ticks_per_second as f64,
@@ -69,6 +66,9 @@ fn main() -> AppExit {
     app.insert_resource::<NetSettings>(settings.clone().into());
     app.insert_resource::<RenderSettings>(settings.clone().into());
     app.insert_resource(settings.clone());
+
+    app.add_plugins(McrsUniversePlugin);
+    app.init_resource::<PlayerInputBuffer>();
 
     match settings.network_mode {
         NetworkMode::Client => {
@@ -105,6 +105,7 @@ fn add_client(app: &mut App) {
         McrsNetClientPlugin,
         McrsCameraPlugin,
     ));
+            println!("lol");
     app.add_systems(Startup, ui);
     app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
     app.add_systems(Update, player_input.in_set(InputSet::Gather));

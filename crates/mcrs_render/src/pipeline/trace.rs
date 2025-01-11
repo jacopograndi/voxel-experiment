@@ -2,6 +2,7 @@ use crate::{boxes_world::BoxesData, settings::RenderGraphSettings, voxel_world::
 use bevy::{
     asset::load_internal_asset,
     core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+    image::BevyDefault,
     prelude::*,
     render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
@@ -50,7 +51,7 @@ struct TracePipelineData {
     trace_bind_group_layout: BindGroupLayout,
 }
 
-#[derive(Component, Clone, ExtractComponent)]
+#[derive(Component, Reflect, Clone, ExtractComponent)]
 pub struct TraceSettings {
     pub show_ray_steps: bool,
     pub indirect_lighting: bool,
@@ -188,7 +189,7 @@ impl FromWorld for TracePipelineData {
                 shader_defs: Vec::new(),
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
-                    format: ViewTarget::TEXTURE_FORMAT_HDR,
+                    format: TextureFormat::bevy_default(),
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
@@ -244,19 +245,9 @@ impl ViewNode for TraceNode {
                 None => return Ok(()),
             };
 
-        let post_process = target.post_process_write();
-        let destination = post_process.destination;
-
         let destination_descriptor = RenderPassDescriptor {
             label: Some("trace pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: destination,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Load,
-                    store: StoreOp::Store,
-                },
-            })],
+            color_attachments: &[Some(target.get_color_attachment())],
             ..default()
         };
 

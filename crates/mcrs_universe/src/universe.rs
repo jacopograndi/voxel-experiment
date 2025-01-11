@@ -40,13 +40,9 @@ impl Universe {
         let (chunk_pos, inner_pos) = self.pos_to_chunk_and_inner(pos);
         if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set_block(inner_pos, block);
-            chunk.dirty_render = true;
-            chunk.dirty_replication = true;
         } else {
             let mut chunk = Chunk::empty();
             chunk.set_block(inner_pos, block);
-            chunk.dirty_render = true;
-            chunk.dirty_replication = true;
             self.chunks.insert(chunk_pos, chunk);
         }
     }

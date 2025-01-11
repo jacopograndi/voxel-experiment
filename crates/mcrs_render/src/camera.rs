@@ -12,6 +12,7 @@ use bevy::{
 
 use crate::{graph::Voxel, pipeline::trace::TraceSettings};
 
+// todo: maybe convert to required component like a `Camera3d`
 #[derive(Bundle)]
 pub struct VoxelCameraBundle {
     pub camera: Camera,
@@ -32,7 +33,6 @@ impl Default for VoxelCameraBundle {
             camera_render_graph: CameraRenderGraph::new(Voxel),
             tonemapping: Tonemapping::ReinhardLuminance,
             camera: Camera {
-                hdr: true,
                 ..default()
             },
             projection: default(),

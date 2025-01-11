@@ -15,7 +15,7 @@ use mcrs_universe::chunk::Chunk;
 use mcrs_universe::universe::Universe;
 use mcrs_universe::{CHUNK_SIDE, CHUNK_VOLUME};
 
-use crate::plugin::RenderSettings;
+use crate::settings::RenderSettings;
 
 pub struct VoxelWorldPlugin;
 
@@ -120,6 +120,7 @@ impl Plugin for VoxelWorldPlugin {
 
         app.sub_app_mut(RenderApp)
             .insert_resource(Universe::default())
+            .insert_resource(ChunkTracking::default())
             .insert_resource(VoxelData {
                 uniform_buffer,
                 chunks,
@@ -144,12 +145,43 @@ impl Plugin for VoxelWorldPlugin {
     }
 }
 
-pub fn extract_universe(mut main_world: ResMut<MainWorld>, mut render_universe: ResMut<Universe>) {
-    if let Some(mut main_universe) = main_world.get_resource_mut::<Universe>() {
-        *render_universe = main_universe.clone();
-        for (_pos, chunk) in main_universe.chunks.iter_mut() {
-            (*chunk).dirty_render = false;
+#[derive(Resource, Default)]
+pub struct ChunkTracking {
+    added: Vec<IVec3>,
+    modified: Vec<IVec3>,
+    removed: Vec<IVec3>,
+}
+
+pub fn extract_universe(
+    main_world: Res<MainWorld>,
+    mut render_universe: ResMut<Universe>,
+    mut chunk_tracking: ResMut<ChunkTracking>,
+) {
+    let Some(universe) = main_world.get_resource::<Universe>() else {
+        panic!("no universe resource");
+    };
+
+    chunk_tracking.added.clear();
+    chunk_tracking.modified.clear();
+    chunk_tracking.removed.clear();
+
+    for (chunk_pos, main_chunk) in universe.chunks.iter() {
+        if let Some(render_chunk) = render_universe.chunks.get(chunk_pos) {
+            if render_chunk.version == main_chunk.version {
+                continue;
+            } else {
+                chunk_tracking.modified.push(*chunk_pos);
+            }
+        } else {
+            chunk_tracking.added.push(*chunk_pos);
         }
+        render_universe
+            .chunks
+            .insert(*chunk_pos, main_chunk.clone());
+    }
+
+    for (chunk_pos, _) in render_universe.chunks.iter() {
+        chunk_tracking.removed.push(*chunk_pos);
     }
 }
 
@@ -238,6 +270,7 @@ fn prepare_chunks(
     mut render_chunk_map: ResMut<RenderChunkMap>,
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
     settings: Res<RenderSettings>,
+    chunk_tracking: Res<ChunkTracking>,
 ) {
     let Ok((view, ..)) = view_query.get_single() else {
         return;
@@ -272,12 +305,12 @@ fn prepare_chunks(
     let to_be_rendered: HashSet<IVec3> = universe
         .chunks
         .iter()
-        .filter_map(|(pos, chunk)| {
+        .filter_map(|(pos, _)| {
             if visible_chunks.contains(pos) {
                 if !render_chunk_map.buffer_alloc.is_allocated(pos) {
                     Some(*pos)
                 } else {
-                    if chunk.dirty_render {
+                    if chunk_tracking.added.contains(pos) || chunk_tracking.modified.contains(pos) {
                         Some(*pos)
                     } else {
                         None

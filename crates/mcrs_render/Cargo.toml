@@ -8,4 +8,7 @@ bevy = "0.15"
 bytemuck = "1.16"
 dot_vox = "5.1.1"
 
+# todo: remove this and implement manually
+block-mesh = "0.2"
+
 mcrs_universe = { path = "../mcrs_universe" }

@@ -100,3 +100,10 @@ impl<
         self.name2id.get(name)
     }
 }
+
+/// Used to tell serde to not serialize default fields.
+/// In combination with marking fields as default results in serde not serializing default fields
+/// and setting as the default value fields if during deserialization the field is not present.
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}

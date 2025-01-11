@@ -1,3 +1,8 @@
+use super::{client::*, ChunkReplication};
+use crate::{
+    server::{new_renet_server, server_sync_players, server_sync_universe, server_update_system},
+    Lobby, NetSettings,
+};
 use bevy::prelude::*;
 use bevy_renet::{
     client_connected,
@@ -5,11 +10,6 @@ use bevy_renet::{
     renet::RenetServer,
     RenetClientPlugin, RenetServerPlugin,
 };
-use crate::{
-    server::{new_renet_server, server_sync_players, server_sync_universe, server_update_system},
-    Lobby, NetSettings,
-};
-use super::{client::*, ChunkReplication};
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum FixedNetSet {
