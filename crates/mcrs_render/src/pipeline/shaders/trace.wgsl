@@ -399,13 +399,16 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     let camera_inverse = view.world_from_clip;
-    let pos1 = camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
-    let dir1 = camera_inverse * vec4(clip_space.x, clip_space.y, 0.99, 1.0);
-    let pos = pos1.xyz / pos1.w;
-    let dir = normalize(dir1.xyz / dir1.w - pos);
+
+    let clip_far = camera_inverse * vec4(clip_space.x, clip_space.y, 1.0, 1.0);
+    let clip_near = camera_inverse * vec4(clip_space.x, clip_space.y, 0.1, 1.0);
+    let world_far = clip_far.xyz / clip_far.w;
+    let world_near = clip_near.xyz / clip_near.w;
+    let dir = normalize(world_far - world_near);
+
     var constrained_pos = view.world_position % chunk_size + center_in_grid;
-    var ray = Ray(constrained_pos, dir);
-    var unconstrained_ray = Ray(pos, dir);
+    var ray = Ray(constrained_pos, -dir);
+    var unconstrained_ray = Ray(view.world_position, dir);
 
     let hit = shoot_ray(ray, 0u);
 
