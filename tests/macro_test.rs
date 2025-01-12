@@ -2,7 +2,7 @@ use mcrs_universe::block::{BlockFlag, FlagBank};
 
 #[test]
 fn test_macro_print() {
-    println!("All macro variants: ");	
+    println!("All macro variants: ");
     for v in BlockFlag::iter() {
         println!("    - {:?}", v);
     }

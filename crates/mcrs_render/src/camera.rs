@@ -32,9 +32,7 @@ impl Default for VoxelCameraBundle {
         Self {
             camera_render_graph: CameraRenderGraph::new(Voxel),
             tonemapping: Tonemapping::ReinhardLuminance,
-            camera: Camera {
-                ..default()
-            },
+            camera: Camera { ..default() },
             projection: default(),
             visible_entities: default(),
             frustum: default(),

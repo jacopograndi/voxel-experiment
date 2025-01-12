@@ -3,10 +3,7 @@ use bevy::{
     prelude::*,
 };
 use bevy_egui::{egui, EguiContexts};
-use mcrs_universe::{
-    universe::{self, Universe},
-    Blueprints,
-};
+use mcrs_universe::{universe::Universe, Blueprints};
 
 pub const DIAGNOSTIC_FPS: DiagnosticPath = DiagnosticPath::const_new("game/fps");
 pub const DIAGNOSTIC_FRAME_TIME: DiagnosticPath = DiagnosticPath::const_new("game/frame_time");
