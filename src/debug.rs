@@ -3,6 +3,10 @@ use bevy::{
     prelude::*,
 };
 use bevy_egui::{egui, EguiContexts};
+use mcrs_universe::{
+    universe::{self, Universe},
+    Blueprints,
+};
 
 pub const DIAGNOSTIC_FPS: DiagnosticPath = DiagnosticPath::const_new("game/fps");
 pub const DIAGNOSTIC_FRAME_TIME: DiagnosticPath = DiagnosticPath::const_new("game/frame_time");
@@ -87,4 +91,52 @@ pub fn debug_diagnostic_ui(mut contexts: EguiContexts, diagnostics: Res<Diagnost
         }
         ui.separator()
     });
+}
+
+pub struct WidgetBlockDebug<'a> {
+    pub pos: IVec3,
+    pub universe: &'a Universe,
+    pub bp: &'a Blueprints,
+}
+
+impl<'a> WidgetBlockDebug<'a> {
+    pub fn new(pos: IVec3, universe: &'a Universe, bp: &'a Blueprints) -> Self {
+        Self { pos, universe, bp }
+    }
+}
+
+impl<'a> egui::Widget for WidgetBlockDebug<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        ui.group(|ui| {
+            if let Some(block) = self.universe.read_chunk_block(&self.pos) {
+                egui::Grid::new("Block").striped(true).show(ui, |ui| {
+                    let block_bp = self.bp.blocks.get(&block.id);
+                    ui.label("Position");
+                    ui.add(egui::Label::new(format!("{}", self.pos)));
+                    ui.end_row();
+
+                    ui.label("Type");
+                    ui.label(format!("{}", block_bp.name));
+                    ui.end_row();
+
+                    ui.label("Id");
+                    ui.label(format!("{:?}", block_bp.id));
+                    ui.end_row();
+
+                    ui.label("Brightness");
+                    ui.label(format!("{}", block_bp.light_level));
+                    ui.end_row();
+
+                    ui.label("Lighting (torch)");
+                    ui.label(format!("{}", block.light0));
+                    ui.end_row();
+
+                    ui.label("Lighting (sun)");
+                    ui.label(format!("{}", block.light1));
+                    ui.end_row();
+                });
+            }
+        })
+        .response
+    }
 }

@@ -105,10 +105,10 @@ fn add_client(app: &mut App) {
         McrsNetClientPlugin,
         McrsCameraPlugin,
     ));
-            println!("lol");
     app.add_systems(Startup, ui);
     app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
     app.add_systems(Update, player_input.in_set(InputSet::Gather));
+    app.add_systems(Update, terrain_editing.after(InputSet::Gather));
     app.add_systems(
         FixedUpdate,
         (
@@ -125,9 +125,7 @@ fn add_server(app: &mut App) {
     app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin));
     app.add_systems(
         FixedUpdate,
-        (terrain_generation, terrain_editing)
-            .chain()
-            .in_set(FixedMainSet::Terrain),
+        terrain_generation.in_set(FixedMainSet::Terrain),
     );
     app.add_systems(
         FixedUpdate,

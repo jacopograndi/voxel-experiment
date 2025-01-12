@@ -1,5 +1,6 @@
-use crate::chemistry::lighting::*;
+use crate::{chemistry::lighting::*, debug::WidgetBlockDebug};
 use bevy::{prelude::*, utils::HashSet};
+use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
 use mcrs_physics::{
     character::CameraController,
@@ -33,12 +34,63 @@ pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
     mut universe: ResMut<Universe>,
-    blueprints: Res<Blueprints>,
+    bp: Res<Blueprints>,
+    mut gizmos: Gizmos,
+    mut contexts: EguiContexts,
+    mut show_red_cube: Local<bool>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
         let Ok((mut input, hand)) = player_query.get_mut(parent.get()) else {
             continue;
         };
+
+        // show debug info
+        if let Some(hit) = cast_ray(
+            RayFinite {
+                position: tr.translation(),
+                direction: tr.forward().as_vec3(),
+                reach: 4.5,
+            },
+            &universe,
+        ) {
+            let intersection = hit.final_position();
+
+            egui::Window::new("Player Raycast Hit").show(contexts.ctx_mut(), |ui| {
+                ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
+                if *show_red_cube {
+                    ui.add(WidgetBlockDebug::new(
+                        hit.grid_pos + hit.normal(),
+                        &universe,
+                        &bp,
+                    ));
+                }
+                ui.checkbox(&mut show_red_cube, "show the facing cube in red");
+            });
+
+            gizmos.cuboid(
+                Transform::from_translation(intersection).with_scale(Vec3::splat(0.01)),
+                Color::BLACK,
+            );
+
+            let center_pos = hit.grid_pos.as_vec3() + Vec3::splat(0.5);
+            gizmos.cuboid(
+                Transform::from_translation(center_pos).with_scale(Vec3::splat(1.001)),
+                Color::BLACK,
+            );
+
+            if *show_red_cube {
+                gizmos.cuboid(
+                    Transform::from_translation(center_pos + hit.normal().as_vec3())
+                        .with_scale(Vec3::splat(1.001)),
+                    Color::srgb(1.0, 0.0, 0.0),
+                );
+                gizmos.arrow(
+                    intersection,
+                    intersection + hit.normal().as_vec3() * 0.5,
+                    Color::srgb(1.0, 0.0, 0.0),
+                );
+            }
+        }
 
         #[derive(PartialEq)]
         enum Act {
@@ -70,17 +122,14 @@ pub fn terrain_editing(
                             let mut light_torches = vec![];
 
                             if let Some(block) = universe.read_chunk_block(&pos) {
-                                if blueprints.blocks.get(&block.id).is_light_source() {
+                                if bp.blocks.get(&block.id).is_light_source() {
                                     let new =
                                         propagate_darkness(&mut universe, pos, LightType::Torch);
                                     propagate_light(&mut universe, new, LightType::Torch)
                                 }
                             }
 
-                            universe.set_chunk_block(
-                                &pos,
-                                Block::new(blueprints.blocks.get_named("Air")),
-                            );
+                            universe.set_chunk_block(&pos, Block::new(bp.blocks.get_named("Air")));
 
                             let planar = IVec2::new(pos.x, pos.z);
                             if let Some(height) = universe.heightfield.get(&planar) {
@@ -135,7 +184,7 @@ pub fn terrain_editing(
                                 continue;
                             };
 
-                            let blueprint = blueprints.blocks.get(&block_id);
+                            let blueprint = bp.blocks.get(&block_id);
                             universe.set_chunk_block(&pos, Block::new(blueprint));
 
                             propagate_light(&mut universe, vec![pos], LightType::Torch);

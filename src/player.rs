@@ -99,9 +99,11 @@ pub fn spawn_player(
                                     },
                                     Msaa::Off,
                                 ));
+                                /*
                                 todo!(
                                     "very low fps, probabily due to mcrs_render that is not made for two cameras/view targets"
                                 );
+                                */
                             });
                         }
                     }

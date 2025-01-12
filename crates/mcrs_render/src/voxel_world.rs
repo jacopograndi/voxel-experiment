@@ -272,7 +272,7 @@ fn prepare_chunks(
     settings: Res<RenderSettings>,
     chunk_tracking: Res<ChunkTracking>,
 ) {
-    let Ok((view, ..)) = view_query.get_single() else {
+    let Some((view, ..)) = view_query.iter().find(|(_, cam)| cam.order == 0) else {
         return;
     };
     let cam_pos = view.world_from_view.translation();
@@ -344,7 +344,7 @@ fn write_chunks(
     mut render_chunk_map: ResMut<RenderChunkMap>,
     view_query: Query<(&ExtractedView, &ExtractedCamera)>,
 ) {
-    let Ok((view, ..)) = view_query.get_single() else {
+    let Some((view, ..)) = view_query.iter().find(|(_, cam)| cam.order == 0) else {
         return;
     };
     let cam_pos = view.world_from_view.translation();
