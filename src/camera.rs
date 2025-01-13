@@ -33,11 +33,14 @@ pub fn camera_controller_movement(
         if query_local.get(parent.get()).is_err() {
             continue;
         }
-        let Ok((_character, mut parent_tr, _character_controller)) =
+        let Ok((_character, mut parent_tr, character_controller)) =
             character_query.get_mut(parent.get())
         else {
             continue;
         };
+        if !character_controller.is_active {
+            continue;
+        }
         for ev in mouse_motion.read() {
             let (mut yaw, _, _) = parent_tr.rotation.to_euler(EulerRot::YXZ);
             let (_, mut pitch, _) = camera_tr.rotation.to_euler(EulerRot::YXZ);

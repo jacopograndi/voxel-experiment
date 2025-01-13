@@ -12,6 +12,67 @@ use mcrs_universe::Blueprints;
 
 use crate::{hotbar::PlayerHand, settings::McrsSettings, PlayerInputBuffer};
 
+pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
+    let projection = Projection::Perspective(PerspectiveProjection {
+        fov: 1.57,
+        ..default()
+    });
+    match settings.render_mode {
+        RenderMode::RasterizeOnly => {
+            camera_pivot.with_children(|pivot| {
+                pivot.spawn((projection, Camera3d::default(), Msaa::Off));
+            });
+        }
+        RenderMode::RaytraceOnly => {
+            camera_pivot.with_children(|pivot| {
+                pivot.spawn((
+                    VoxelCameraBundle {
+                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                        projection,
+                        ..default()
+                    },
+                    Msaa::Off,
+                ));
+            });
+        }
+        RenderMode::RaytraceThenRasterize => {
+            camera_pivot.with_children(|pivot| {
+                pivot.spawn((
+                    VoxelCameraBundle {
+                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                        projection: projection.clone(),
+                        camera: Camera {
+                            order: 0,
+                            ..default()
+                        },
+                        ..default()
+                    },
+                    Msaa::Off,
+                ));
+                pivot.spawn((
+                    projection,
+                    Camera {
+                        order: 1,
+                        clear_color: ClearColorConfig::None,
+                        ..default()
+                    },
+                    Camera3d {
+                        // todo: enable this to load the voxel's camera depth buffer
+                        //depth_load_op: bevy::core_pipeline::core_3d::Camera3dDepthLoadOp::Load,
+                        ..default()
+                    },
+                    Msaa::Off,
+                ));
+                /*
+                todo!(
+                    "very low fps, probabily due to mcrs_render that is not made for two cameras/view targets"
+                );
+                */
+            });
+        }
+    }
+}
+
 pub fn spawn_player(
     mut commands: Commands,
     query: Query<(Entity, &NewPlayerSpawned, Option<&LocalPlayer>)>,
@@ -44,69 +105,12 @@ pub fn spawn_player(
                 PlayerHand { block_id: None },
             ))
             .with_children(|parent| {
-                let mut camera_pivot = parent.spawn((
+                let camera_pivot = parent.spawn((
                     CameraController::default(),
                     Transform::from_xyz(0.0, 0.5, 0.0),
                 ));
                 if local_player.is_some() {
-                    let projection = Projection::Perspective(PerspectiveProjection {
-                        fov: 1.57,
-                        ..default()
-                    });
-                    match settings.render_mode {
-                        RenderMode::RasterizeOnly => {
-                            camera_pivot.with_children(|pivot| {
-                                pivot.spawn((projection, Camera3d::default(), Msaa::Off));
-                            });
-                        }
-                        RenderMode::RaytraceOnly => {
-                            camera_pivot.with_children(|pivot| {
-                                pivot.spawn((
-                                    VoxelCameraBundle {
-                                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                        projection,
-                                        ..default()
-                                    },
-                                    Msaa::Off,
-                                ));
-                            });
-                        }
-                        RenderMode::RaytraceThenRasterize => {
-                            camera_pivot.with_children(|pivot| {
-                                pivot.spawn((
-                                    VoxelCameraBundle {
-                                        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                                        projection: projection.clone(),
-                                        camera: Camera {
-                                            order: 0,
-                                            ..default()
-                                        },
-                                        ..default()
-                                    },
-                                    Msaa::Off,
-                                ));
-                                pivot.spawn((
-                                    projection,
-                                    Camera {
-                                        order: 1,
-                                        clear_color: ClearColorConfig::None,
-                                        ..default()
-                                    },
-                                    Camera3d {
-                                        // todo: enable this to load the voxel's camera depth buffer
-                                        //depth_load_op: bevy::core_pipeline::core_3d::Camera3dDepthLoadOp::Load,
-                                        ..default()
-                                    },
-                                    Msaa::Off,
-                                ));
-                                /*
-                                todo!(
-                                    "very low fps, probabily due to mcrs_render that is not made for two cameras/view targets"
-                                );
-                                */
-                            });
-                        }
-                    }
+                    spawn_camera(camera_pivot, &settings);
                 } else {
                     if let Some(loaded_textures) = loaded_textures.as_ref() {
                         parent.spawn((

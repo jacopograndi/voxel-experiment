@@ -22,10 +22,21 @@ pub struct Friction {
     pub ground: Vec3,
 }
 
-#[derive(Component, Debug, Clone, Default)]
+#[derive(Component, Debug, Clone)]
 pub struct CharacterController {
     pub acceleration: Vec3,
     pub jumping: bool,
+    pub is_active: bool,
+}
+
+impl Default for CharacterController {
+    fn default() -> Self {
+        Self {
+            acceleration: Vec3::default(),
+            jumping: false,
+            is_active: true,
+        }
+    }
 }
 
 #[derive(Component, Debug, Clone)]
@@ -65,6 +76,10 @@ pub fn character_controller_movement(
     universe: Res<Universe>,
 ) {
     for (character, controller, mut tr, mut vel, friction) in character_query.iter_mut() {
+        if !controller.is_active {
+            continue;
+        }
+
         let (chunk_pos, _) = universe.pos_to_chunk_and_inner(&tr.translation.as_ivec3());
         let waiting_for_loading = universe.chunks.get(&chunk_pos).is_none();
         if waiting_for_loading {
