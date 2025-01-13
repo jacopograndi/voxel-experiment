@@ -23,6 +23,7 @@ impl Chunk {
     }
 
     pub fn get_mut(&self) -> RwLockWriteGuard<[Block; CHUNK_VOLUME]> {
+        // todo: maybe update version here too
         self.pointer.get_mut()
     }
 

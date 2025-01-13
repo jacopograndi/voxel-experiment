@@ -30,7 +30,7 @@ use hotbar::{
 use input::*;
 use player::spawn_player;
 use settings::{Args, McrsSettings};
-use terrain::{terrain_editing, terrain_generation};
+use terrain::{apply_terrain_changes, terrain_editing, terrain_generation, UniverseChanges};
 use ui::ui;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
@@ -69,6 +69,7 @@ fn main() -> AppExit {
 
     app.add_plugins(McrsUniversePlugin);
     app.init_resource::<PlayerInputBuffer>();
+    app.init_resource::<UniverseChanges>();
 
     match settings.network_mode {
         NetworkMode::Client => {
@@ -125,7 +126,9 @@ fn add_server(app: &mut App) {
     app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin));
     app.add_systems(
         FixedUpdate,
-        terrain_generation.in_set(FixedMainSet::Terrain),
+        ((terrain_generation, apply_terrain_changes)
+            .chain()
+            .in_set(FixedMainSet::Terrain),),
     );
     app.add_systems(
         FixedUpdate,

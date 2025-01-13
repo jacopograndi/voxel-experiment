@@ -23,21 +23,118 @@ const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
 const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
 
-// todo: rewrite this from modifying directly the blocks to generating edit commands
-// (like "block at (4,5,5) becomes air")
-// that are executed at the end of the frame along with all other commands.
-// i think it would be useful to do so because:
-// - we then have a single point where the terrain is modified
-// - we can generate block updates for edited blocks to update lighting, water and other chemistry
-// - we can apply only a fixed amount of edits per frame to reduce lag (for smooth explosions)
+#[derive(Debug, Clone)]
+pub enum UniverseChange {
+    Add { pos: IVec3, block: Block },
+    Remove { pos: IVec3 },
+}
+
+#[derive(Resource, Default, Clone, Debug)]
+pub struct UniverseChanges {
+    pub queue: Vec<UniverseChange>,
+}
+
+pub fn apply_terrain_changes(
+    mut universe: ResMut<Universe>,
+    mut changes: ResMut<UniverseChanges>,
+    bp: Res<Blueprints>,
+) {
+    for change in changes.queue.iter() {
+        match change {
+            UniverseChange::Remove { pos } => {
+                debug!(target: "terrain_editing", "removed block at {}", pos);
+
+                let mut light_suns = vec![];
+                let mut light_torches = vec![];
+
+                if let Some(block) = universe.read_chunk_block(&pos) {
+                    if bp.blocks.get(&block.id).is_light_source() {
+                        let new = propagate_darkness(&mut universe, *pos, LightType::Torch);
+                        propagate_light(&mut universe, new, LightType::Torch)
+                    }
+                }
+
+                universe.set_chunk_block(&pos, Block::new(bp.blocks.get_named("Air")));
+
+                let planar = IVec2::new(pos.x, pos.z);
+                if let Some(height) = universe.heightfield.get(&planar) {
+                    if pos.y == *height {
+                        // recalculate the highest sunlit point
+                        let mut beam = pos.y - 100;
+                        for y in 0..=100 {
+                            let h = pos.y - y;
+                            let sample = IVec3::new(pos.x, h, pos.z);
+                            if let Some(voxel) = universe.read_chunk_block(&sample) {
+                                if voxel.properties.check(BlockFlag::Opaque) {
+                                    beam = h;
+                                    break;
+                                } else {
+                                    light_suns.push(sample);
+
+                                    let mut lit = voxel.clone();
+                                    lit.set_light(LightType::Sun, 15);
+                                    universe.set_chunk_block(&sample, lit);
+                                }
+                            }
+                        }
+                        universe.heightfield.insert(planar, beam);
+                    }
+                }
+
+                for dir in DIRS.iter() {
+                    let sample = pos + *dir;
+                    if let Some(voxel) = universe.read_chunk_block(&sample) {
+                        if !voxel.properties.check(BlockFlag::Opaque) {
+                            if voxel.get_light(LightType::Sun) > 1 {
+                                light_suns.push(sample);
+                            }
+                            if voxel.get_light(LightType::Torch) > 1 {
+                                light_torches.push(sample);
+                            }
+                        }
+                    }
+                }
+
+                propagate_light(&mut universe, light_suns, LightType::Sun);
+                propagate_light(&mut universe, light_torches, LightType::Torch);
+            }
+            UniverseChange::Add { pos, block } => {
+                debug!(target: "terrain_editing", "placed block at {}", pos);
+                let mut dark_suns = vec![];
+                universe.set_chunk_block(&pos, *block);
+                propagate_light(&mut universe, vec![*pos], LightType::Torch);
+
+                let planar = IVec2::new(pos.x, pos.z);
+                if let Some(height) = universe.heightfield.get(&planar) {
+                    if pos.y > *height {
+                        // recalculate the highest sunlit point
+                        for y in (*height)..pos.y {
+                            let sample = IVec3::new(pos.x, y, pos.z);
+                            dark_suns.push(sample);
+                        }
+                        universe.heightfield.insert(planar, pos.y);
+                    }
+                }
+
+                for sun in dark_suns {
+                    let new = propagate_darkness(&mut universe, sun, LightType::Sun);
+                    propagate_light(&mut universe, new, LightType::Sun)
+                }
+            }
+        }
+    }
+    changes.queue.clear()
+}
+
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
-    mut universe: ResMut<Universe>,
+    universe: Res<Universe>,
     bp: Res<Blueprints>,
     mut gizmos: Gizmos,
     mut contexts: EguiContexts,
     mut show_red_cube: Local<bool>,
+    mut changes: ResMut<UniverseChanges>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
         let Ok((mut input, hand)) = player_query.get_mut(parent.get()) else {
@@ -53,6 +150,25 @@ pub fn terrain_editing(
             },
             &universe,
         ) {
+            for input in input.buffer.iter() {
+                match input {
+                    PlayerInput::Placing(true) => {
+                        if let Some(block_id) = hand.block_id {
+                            changes.queue.push(UniverseChange::Add {
+                                pos: hit.grid_pos + hit.normal(),
+                                block: Block::new(bp.blocks.get(&block_id)),
+                            });
+                        }
+                    }
+                    PlayerInput::Mining(true) => {
+                        changes
+                            .queue
+                            .push(UniverseChange::Remove { pos: hit.grid_pos });
+                    }
+                    _ => {}
+                };
+            }
+
             let intersection = hit.final_position();
 
             egui::Window::new("Player Raycast Hit").show(contexts.ctx_mut(), |ui| {
@@ -89,125 +205,6 @@ pub fn terrain_editing(
                     intersection + hit.normal().as_vec3() * 0.5,
                     Color::srgb(1.0, 0.0, 0.0),
                 );
-            }
-        }
-
-        #[derive(PartialEq)]
-        enum Act {
-            PlaceBlock,
-            RemoveBlock,
-        }
-        for input in input.buffer.iter() {
-            let act = match input {
-                PlayerInput::Placing(true) => Some(Act::PlaceBlock),
-                PlayerInput::Mining(true) => Some(Act::RemoveBlock),
-                _ => None,
-            };
-            if let Some(act) = act {
-                if let Some(hit) = cast_ray(
-                    RayFinite {
-                        position: tr.translation(),
-                        direction: tr.forward().as_vec3(),
-                        reach: 4.5,
-                    },
-                    &universe,
-                ) {
-                    match act {
-                        Act::RemoveBlock => {
-                            let pos = hit.grid_pos;
-
-                            debug!(target: "terrain_editing", "removed block at {}", pos);
-
-                            let mut light_suns = vec![];
-                            let mut light_torches = vec![];
-
-                            if let Some(block) = universe.read_chunk_block(&pos) {
-                                if bp.blocks.get(&block.id).is_light_source() {
-                                    let new =
-                                        propagate_darkness(&mut universe, pos, LightType::Torch);
-                                    propagate_light(&mut universe, new, LightType::Torch)
-                                }
-                            }
-
-                            universe.set_chunk_block(&pos, Block::new(bp.blocks.get_named("Air")));
-
-                            let planar = IVec2::new(pos.x, pos.z);
-                            if let Some(height) = universe.heightfield.get(&planar) {
-                                if pos.y == *height {
-                                    // recalculate the highest sunlit point
-                                    let mut beam = pos.y - 100;
-                                    for y in 0..=100 {
-                                        let h = pos.y - y;
-                                        let sample = IVec3::new(pos.x, h, pos.z);
-                                        if let Some(voxel) = universe.read_chunk_block(&sample) {
-                                            if voxel.properties.check(BlockFlag::Opaque) {
-                                                beam = h;
-                                                break;
-                                            } else {
-                                                light_suns.push(sample);
-
-                                                let mut lit = voxel.clone();
-                                                lit.set_light(LightType::Sun, 15);
-                                                universe.set_chunk_block(&sample, lit);
-                                            }
-                                        }
-                                    }
-                                    universe.heightfield.insert(planar, beam);
-                                }
-                            }
-
-                            for dir in DIRS.iter() {
-                                let sample = pos + *dir;
-                                if let Some(voxel) = universe.read_chunk_block(&sample) {
-                                    if !voxel.properties.check(BlockFlag::Opaque) {
-                                        if voxel.get_light(LightType::Sun) > 1 {
-                                            light_suns.push(sample);
-                                        }
-                                        if voxel.get_light(LightType::Torch) > 1 {
-                                            light_torches.push(sample);
-                                        }
-                                    }
-                                }
-                            }
-
-                            propagate_light(&mut universe, light_suns, LightType::Sun);
-                            propagate_light(&mut universe, light_torches, LightType::Torch);
-                        }
-                        Act::PlaceBlock => {
-                            let pos = hit.grid_pos + hit.normal();
-
-                            debug!(target: "terrain_editing", "placed block at {}", pos);
-
-                            let mut dark_suns = vec![];
-
-                            let Some(block_id) = hand.block_id else {
-                                continue;
-                            };
-
-                            let blueprint = bp.blocks.get(&block_id);
-                            universe.set_chunk_block(&pos, Block::new(blueprint));
-
-                            propagate_light(&mut universe, vec![pos], LightType::Torch);
-
-                            let planar = IVec2::new(pos.x, pos.z);
-                            if let Some(height) = universe.heightfield.get(&planar) {
-                                if pos.y > *height {
-                                    // recalculate the highest sunlit point
-                                    for y in (*height)..pos.y {
-                                        let sample = IVec3::new(pos.x, y, pos.z);
-                                        dark_suns.push(sample);
-                                    }
-                                    universe.heightfield.insert(planar, pos.y);
-                                }
-                            }
-
-                            for sun in dark_suns {
-                                let new = propagate_darkness(&mut universe, sun, LightType::Sun);
-                                propagate_light(&mut universe, new, LightType::Sun)
-                            }
-                        }
-                    };
-                }
             }
         }
         input.buffer.clear();

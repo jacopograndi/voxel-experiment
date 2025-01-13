@@ -65,6 +65,12 @@ pub fn character_controller_movement(
     universe: Res<Universe>,
 ) {
     for (character, controller, mut tr, mut vel, friction) in character_query.iter_mut() {
+        let (chunk_pos, _) = universe.pos_to_chunk_and_inner(&tr.translation.as_ivec3());
+        let waiting_for_loading = universe.chunks.get(&chunk_pos).is_none();
+        if waiting_for_loading {
+            continue;
+        }
+
         let acc = controller.acceleration.x * tr.forward() + controller.acceleration.z * tr.left();
         if is_grounded(character, &tr, &universe) {
             if controller.jumping {
