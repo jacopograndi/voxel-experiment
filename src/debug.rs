@@ -12,7 +12,10 @@ use mcrs_physics::{
 };
 use mcrs_universe::{universe::Universe, Blueprints};
 
-use crate::{player::spawn_camera, settings::McrsSettings};
+use crate::{
+    player::spawn_camera, settings::McrsSettings, CreateLevelEvent, Level, LoadLevelEvent,
+    QuitLevelEvent, SaveLevelEvent,
+};
 
 pub const DIAGNOSTIC_FPS: DiagnosticPath = DiagnosticPath::const_new("game/fps");
 pub const DIAGNOSTIC_FRAME_TIME: DiagnosticPath = DiagnosticPath::const_new("game/frame_time");
@@ -34,6 +37,7 @@ impl Plugin for DebugDiagnosticPlugin {
             (
                 debug_diagnostic_system,
                 debug_diagnostic_ui,
+                debug_saveload_ui,
                 debug_options_ui,
                 debug_show_hitboxes,
                 debug_camera_toggle,
@@ -205,8 +209,56 @@ pub fn ui_button_shortcut(
     keys: &ButtonInput<KeyCode>,
     text: &str,
     key: KeyCode,
+    modifiers: &[KeyCode],
 ) -> bool {
-    ui.button(format!("{} [{:?}]", text, key)).clicked() || keys.just_pressed(key)
+    let modifier = modifiers.iter().any(|m| keys.pressed(*m)) || modifiers.is_empty();
+    ui.button(format!("{} [{:?}]", text, key)).clicked() || (keys.just_pressed(key) && modifier)
+}
+
+const SHIFT_MOD: &'static [KeyCode; 2] = &[KeyCode::ShiftLeft, KeyCode::ShiftRight];
+
+pub fn debug_saveload_ui(
+    mut contexts: EguiContexts,
+    keys: Res<ButtonInput<KeyCode>>,
+    level: Option<Res<Level>>,
+    mut create_event: EventWriter<CreateLevelEvent>,
+    mut load_event: EventWriter<LoadLevelEvent>,
+    mut save_event: EventWriter<SaveLevelEvent>,
+    mut quit_event: EventWriter<QuitLevelEvent>,
+    mut edit_level_name: Local<String>,
+) {
+    let ctx = contexts.ctx_mut();
+    egui::Window::new("Debug Level")
+        .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-5.0, 5.0))
+        .show(ctx, |ui| {
+            if let Some(level) = level {
+                ui.label(format!("Loaded level: {}", level.name));
+            } else {
+                ui.label("No loaded level");
+            }
+
+            ui.horizontal(|ui| {
+                ui.label("Level to Create/Load: ");
+                ui.text_edit_singleline(&mut *edit_level_name);
+            });
+
+            if ui_button_shortcut(ui, &keys, "Create Level", KeyCode::KeyN, SHIFT_MOD) {
+                create_event.send(CreateLevelEvent {
+                    level_name: edit_level_name.clone(),
+                });
+            }
+            if ui_button_shortcut(ui, &keys, "Load Level", KeyCode::KeyL, SHIFT_MOD) {
+                load_event.send(LoadLevelEvent {
+                    level_name: edit_level_name.clone(),
+                });
+            }
+            if ui_button_shortcut(ui, &keys, "Save Level", KeyCode::KeyK, SHIFT_MOD) {
+                save_event.send(SaveLevelEvent);
+            }
+            if ui_button_shortcut(ui, &keys, "Quit Level", KeyCode::KeyO, SHIFT_MOD) {
+                quit_event.send(QuitLevelEvent);
+            }
+        });
 }
 
 pub fn debug_options_ui(
@@ -220,10 +272,10 @@ pub fn debug_options_ui(
     egui::Window::new("Debug Options")
         .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::new(5.0, -5.0))
         .show(ctx, |ui| {
-            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2) {
+            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2, &[]) {
                 *tickstep = TickStep::Step { step: true }
             }
-            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3) {
+            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3, &[]) {
                 *tickstep = TickStep::Step { step: true }
             }
 
@@ -343,7 +395,9 @@ pub fn debug_show_hitboxes(
     if debug_options.show_hitboxes {
         for (_, character_tr, character, vel) in local_characters.iter() {
             gizmos.cuboid(
-                character_tr.with_rotation(Quat::IDENTITY).with_scale(character.size),
+                character_tr
+                    .with_rotation(Quat::IDENTITY)
+                    .with_scale(character.size),
                 Color::srgb(0.0, 0.8, 0.0),
             );
             gizmos.arrow(

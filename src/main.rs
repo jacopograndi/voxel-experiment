@@ -18,6 +18,7 @@ mod debug;
 mod hotbar;
 mod input;
 mod player;
+mod saveload;
 mod settings;
 mod terrain;
 mod ui;
@@ -29,6 +30,7 @@ use hotbar::{
 };
 use input::*;
 use player::spawn_player;
+use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::{apply_terrain_changes, terrain_editing, terrain_generation, UniverseChanges};
 use ui::ui;
@@ -36,6 +38,7 @@ use ui::ui;
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum FixedMainSet {
     Terrain,
+    SaveLoad,
 }
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
@@ -52,6 +55,7 @@ fn main() -> AppExit {
             FixedNetSet::Receive,
             FixedPhysicsSet::Tick,
             FixedMainSet::Terrain,
+            FixedMainSet::SaveLoad,
             FixedNetSet::Send,
         )
             .chain(),
@@ -123,13 +127,7 @@ fn add_client(app: &mut App) {
 }
 
 fn add_server(app: &mut App) {
-    app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin));
-    app.add_systems(
-        FixedUpdate,
-        ((terrain_generation, apply_terrain_changes)
-            .chain()
-            .in_set(FixedMainSet::Terrain),),
-    );
+    app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.add_systems(
         FixedUpdate,
         (
@@ -140,6 +138,9 @@ fn add_server(app: &mut App) {
             )
                 .chain()
                 .in_set(FixedNetSet::Receive),
+            (terrain_generation, apply_terrain_changes)
+                .chain()
+                .in_set(FixedMainSet::Terrain),
             server_send_replica.in_set(FixedNetSet::Send),
         ),
     );

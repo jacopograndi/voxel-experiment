@@ -38,8 +38,6 @@ world/
         r.<x>.<z>.dat
 ```
 
-yaa man da isser
-
 
 # Our data model
 
