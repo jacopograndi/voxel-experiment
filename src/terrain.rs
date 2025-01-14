@@ -171,17 +171,19 @@ pub fn terrain_editing(
 
             let intersection = hit.final_position();
 
-            egui::Window::new("Player Raycast Hit").show(contexts.ctx_mut(), |ui| {
-                ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
-                if *show_red_cube {
-                    ui.add(WidgetBlockDebug::new(
-                        hit.grid_pos + hit.normal(),
-                        &universe,
-                        &bp,
-                    ));
-                }
-                ui.checkbox(&mut show_red_cube, "show the facing cube in red");
-            });
+            egui::Window::new("Player Raycast Hit")
+                .anchor(egui::Align2::LEFT_CENTER, egui::Vec2::new(5.0, 0.0))
+                .show(contexts.ctx_mut(), |ui| {
+                    ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
+                    if *show_red_cube {
+                        ui.add(WidgetBlockDebug::new(
+                            hit.grid_pos + hit.normal(),
+                            &universe,
+                            &bp,
+                        ));
+                    }
+                    ui.checkbox(&mut show_red_cube, "Show the facing cube in red");
+                });
 
             gizmos.cuboid(
                 Transform::from_translation(intersection).with_scale(Vec3::splat(0.01)),

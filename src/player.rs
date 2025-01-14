@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use mcrs_net::{LocalPlayer, NewPlayerSpawned};
 use mcrs_physics::character::{
@@ -91,6 +93,7 @@ pub fn spawn_player(
                     air_speed: 0.001,
                     ground_speed: 0.03,
                     jump_strenght: 0.2,
+                    jump_cooldown: Duration::from_millis(200),
                 },
                 CharacterController {
                     acceleration: Vec3::splat(0.0),

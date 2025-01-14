@@ -6,7 +6,10 @@ use bevy::{
 };
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
-use mcrs_physics::character::{CameraController, Character, CharacterController, Velocity};
+use mcrs_physics::{
+    character::{CameraController, Character, CharacterController, Velocity},
+    TickStep,
+};
 use mcrs_universe::{universe::Universe, Blueprints};
 
 use crate::{player::spawn_camera, settings::McrsSettings};
@@ -24,11 +27,15 @@ impl Plugin for DebugDiagnosticPlugin {
                 .with_suffix("ms"),
         )
         .register_diagnostic(Diagnostic::new(DIAGNOSTIC_FPS).with_max_history_length(1000))
+        .add_event::<DebugCameraEvent>()
+        .insert_resource(DebugOptions::default())
         .add_systems(
             Update,
             (
                 debug_diagnostic_system,
                 debug_diagnostic_ui,
+                debug_options_ui,
+                debug_show_hitboxes,
                 debug_camera_toggle,
                 debug_camera_movement,
             ),
@@ -46,42 +53,17 @@ pub fn debug_diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real
 }
 
 pub fn debug_diagnostic_ui(mut contexts: EguiContexts, diagnostics: Res<DiagnosticsStore>) {
-    egui::Window::new("Debug menu").show(contexts.ctx_mut(), |ui| {
-        if let Some(value) = diagnostics
-            .get(&DIAGNOSTIC_FPS)
-            .and_then(|fps| fps.smoothed())
-        {
-            ui.label(format!("fps: {value:>4.2}"));
-            use egui_plot::{Line, PlotPoints};
-            let n = 1000;
-            let line_points: PlotPoints = if let Some(diag) = diagnostics.get(&DIAGNOSTIC_FPS) {
-                diag.values()
-                    .take(n)
-                    .enumerate()
-                    .map(|(i, v)| [i as f64, *v])
-                    .collect()
-            } else {
-                PlotPoints::default()
-            };
-            let line = Line::new(line_points).fill(0.0);
-            egui_plot::Plot::new("fps")
-                .include_y(0.0)
-                .height(70.0)
-                .show_axes([false, true])
-                .show(ui, |plot_ui| plot_ui.line(line))
-                .response;
-        } else {
-            ui.label("no fps data");
-        }
-        if let Some(value) = diagnostics
-            .get(&DIAGNOSTIC_FRAME_TIME)
-            .and_then(|ms| ms.value())
-        {
-            ui.label(format!("time: {value:>4.2} ms"));
-            use egui_plot::{Line, PlotPoints};
-            let n = 1000;
-            let line_points: PlotPoints =
-                if let Some(diag) = diagnostics.get(&DIAGNOSTIC_FRAME_TIME) {
+    egui::Window::new("Debug Diagnostics")
+        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::splat(5.0))
+        .show(contexts.ctx_mut(), |ui| {
+            if let Some(value) = diagnostics
+                .get(&DIAGNOSTIC_FPS)
+                .and_then(|fps| fps.smoothed())
+            {
+                ui.label(format!("fps: {value:>4.2}"));
+                use egui_plot::{Line, PlotPoints};
+                let n = 1000;
+                let line_points: PlotPoints = if let Some(diag) = diagnostics.get(&DIAGNOSTIC_FPS) {
                     diag.values()
                         .take(n)
                         .enumerate()
@@ -90,18 +72,45 @@ pub fn debug_diagnostic_ui(mut contexts: EguiContexts, diagnostics: Res<Diagnost
                 } else {
                     PlotPoints::default()
                 };
-            let line = Line::new(line_points).fill(0.0);
-            egui_plot::Plot::new("frame time")
-                .include_y(0.0)
-                .height(70.0)
-                .show_axes([false, true])
-                .show(ui, |plot_ui| plot_ui.line(line))
-                .response;
-        } else {
-            ui.label("no frame time data");
-        }
-        ui.separator()
-    });
+                let line = Line::new(line_points).fill(0.0);
+                egui_plot::Plot::new("fps")
+                    .include_y(0.0)
+                    .height(70.0)
+                    .show_axes([false, true])
+                    .show(ui, |plot_ui| plot_ui.line(line))
+                    .response;
+            } else {
+                ui.label("no fps data");
+            }
+            if let Some(value) = diagnostics
+                .get(&DIAGNOSTIC_FRAME_TIME)
+                .and_then(|ms| ms.value())
+            {
+                ui.label(format!("time: {value:>4.2} ms"));
+                use egui_plot::{Line, PlotPoints};
+                let n = 1000;
+                let line_points: PlotPoints =
+                    if let Some(diag) = diagnostics.get(&DIAGNOSTIC_FRAME_TIME) {
+                        diag.values()
+                            .take(n)
+                            .enumerate()
+                            .map(|(i, v)| [i as f64, *v])
+                            .collect()
+                    } else {
+                        PlotPoints::default()
+                    };
+                let line = Line::new(line_points).fill(0.0);
+                egui_plot::Plot::new("frame time")
+                    .include_y(0.0)
+                    .height(70.0)
+                    .show_axes([false, true])
+                    .show(ui, |plot_ui| plot_ui.line(line))
+                    .response;
+            } else {
+                ui.label("no frame time data");
+            }
+            ui.separator()
+        });
 }
 
 pub struct WidgetBlockDebug<'a> {
@@ -152,68 +161,189 @@ impl<'a> egui::Widget for WidgetBlockDebug<'a> {
     }
 }
 
+#[derive(Event)]
+pub struct DebugCameraEvent {
+    active: bool,
+    has_character_control: bool,
+}
+
+#[derive(Resource)]
+pub struct DebugOptions {
+    show_hitboxes: bool,
+    debug_camera_active: bool,
+    debug_camera_has_character_control: bool,
+}
+
+impl Default for DebugOptions {
+    fn default() -> Self {
+        Self {
+            show_hitboxes: false,
+            debug_camera_active: false,
+            debug_camera_has_character_control: false,
+        }
+    }
+}
+
+pub fn ui_toggle_shortcut(
+    ui: &mut egui::Ui,
+    keys: &ButtonInput<KeyCode>,
+    value: &mut bool,
+    text: &str,
+    key: KeyCode,
+) -> bool {
+    if keys.just_pressed(key) {
+        *value = !*value;
+    }
+
+    ui.checkbox(value, format!("{} [{:?}]", text, key))
+        .clicked()
+        || keys.just_pressed(key)
+}
+
+pub fn ui_button_shortcut(
+    ui: &mut egui::Ui,
+    keys: &ButtonInput<KeyCode>,
+    text: &str,
+    key: KeyCode,
+) -> bool {
+    ui.button(format!("{} [{:?}]", text, key)).clicked() || keys.just_pressed(key)
+}
+
+pub fn debug_options_ui(
+    mut contexts: EguiContexts,
+    mut debug_options: ResMut<DebugOptions>,
+    mut debug_camera_event: EventWriter<DebugCameraEvent>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut tickstep: ResMut<TickStep>,
+) {
+    let ctx = contexts.ctx_mut();
+    egui::Window::new("Debug Options")
+        .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::new(5.0, -5.0))
+        .show(ctx, |ui| {
+            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2) {
+                *tickstep = TickStep::Step { step: true }
+            }
+            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3) {
+                *tickstep = TickStep::Step { step: true }
+            }
+
+            ui_toggle_shortcut(
+                ui,
+                &keys,
+                &mut debug_options.show_hitboxes,
+                "Show Hitboxes",
+                KeyCode::F4,
+            );
+
+            if ui_toggle_shortcut(
+                ui,
+                &keys,
+                &mut debug_options.debug_camera_active,
+                "Debug Cam",
+                KeyCode::F5,
+            ) {
+                debug_camera_event.send(DebugCameraEvent {
+                    active: debug_options.debug_camera_active,
+                    has_character_control: debug_options.debug_camera_has_character_control,
+                });
+            }
+
+            if ui_toggle_shortcut(
+                ui,
+                &keys,
+                &mut debug_options.debug_camera_has_character_control,
+                "Toggle Camera Control",
+                KeyCode::F6,
+            ) {
+                debug_camera_event.send(DebugCameraEvent {
+                    active: debug_options.debug_camera_active,
+                    has_character_control: debug_options.debug_camera_has_character_control,
+                });
+            }
+        });
+}
+
 #[derive(Component)]
 pub struct DebugCamera {
     speed: f32,
     controller: CameraController,
 }
 
+pub fn set_active_controller_cameras(
+    camera_pivot_query: &Query<(&GlobalTransform, &CameraController)>,
+    all_cameras: &mut Query<(&mut Camera, &Parent)>,
+    is_active: bool,
+) {
+    all_cameras.iter_mut().for_each(|(mut cam, parent)| {
+        if camera_pivot_query.get(parent.get()).is_ok() {
+            cam.is_active = is_active
+        }
+    });
+}
+
+pub fn set_active_character(
+    local_character_controllers: &mut Query<(&LocalPlayer, &mut CharacterController)>,
+    is_active: bool,
+) {
+    local_character_controllers
+        .iter_mut()
+        .for_each(|(_, mut contr)| contr.is_active = is_active);
+}
+
 pub fn debug_camera_toggle(
     mut commands: Commands,
     camera_pivot_query: Query<(&GlobalTransform, &CameraController)>,
     debug_camera_query: Query<(Entity, &DebugCamera)>,
-    mut all_cameras: Query<&mut Camera>,
+    mut all_cameras: Query<(&mut Camera, &Parent)>,
     mut local_character_controllers: Query<(&LocalPlayer, &mut CharacterController)>,
-    keys: Res<ButtonInput<KeyCode>>,
     settings: Res<McrsSettings>,
+    mut debug_camera_event: EventReader<DebugCameraEvent>,
 ) {
-    if keys.just_pressed(KeyCode::Tab) {
+    for event in debug_camera_event.read() {
         if let Ok((debug_cam, _)) = debug_camera_query.get_single() {
-            commands.entity(debug_cam).despawn_recursive();
-            all_cameras
-                .iter_mut()
-                .for_each(|mut cam| cam.is_active = true);
-            local_character_controllers
-                .iter_mut()
-                .for_each(|(_, mut contr)| contr.is_active = true);
+            if !event.active {
+                commands.entity(debug_cam).despawn_recursive();
+
+                set_active_controller_cameras(&camera_pivot_query, &mut all_cameras, true);
+            }
         } else {
-            let Ok((tr, controller)) = camera_pivot_query.get_single() else {
-                warn!("No player character");
-                return;
-            };
-            all_cameras
-                .iter_mut()
-                .for_each(|mut cam| cam.is_active = false);
-            local_character_controllers
-                .iter_mut()
-                .for_each(|(_, mut contr)| contr.is_active = false);
-            let camera_pivot = commands.spawn((
-                DebugCamera {
-                    speed: 0.01,
-                    controller: controller.clone(),
-                },
-                tr.compute_transform(),
-            ));
-            spawn_camera(camera_pivot, &settings);
+            if event.active {
+                let Ok((tr, controller)) = camera_pivot_query.get_single() else {
+                    warn!("No player character");
+                    return;
+                };
+                let camera_pivot = commands.spawn((
+                    DebugCamera {
+                        speed: 0.01,
+                        controller: controller.clone(),
+                    },
+                    tr.compute_transform(),
+                ));
+                spawn_camera(camera_pivot, &settings);
+
+                set_active_controller_cameras(&camera_pivot_query, &mut all_cameras, false);
+            }
         }
+
+        set_active_character(
+            &mut local_character_controllers,
+            event.has_character_control,
+        );
     }
 }
 
-pub fn debug_camera_movement(
-    mut camera_query: Query<(&DebugCamera, &mut Transform)>,
-    mut mouse_motion: EventReader<MouseMotion>,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
-    keys: Res<ButtonInput<KeyCode>>,
+pub fn debug_show_hitboxes(
     local_characters: Query<
         (&LocalPlayer, &Transform, &Character, &Velocity),
         Without<DebugCamera>,
     >,
     mut gizmos: Gizmos,
+    debug_options: Res<DebugOptions>,
 ) {
-    if !camera_query.is_empty() {
+    if debug_options.show_hitboxes {
         for (_, character_tr, character, vel) in local_characters.iter() {
             gizmos.cuboid(
-                character_tr.with_scale(character.size),
+                character_tr.with_rotation(Quat::IDENTITY).with_scale(character.size),
                 Color::srgb(0.0, 0.8, 0.0),
             );
             gizmos.arrow(
@@ -223,10 +353,22 @@ pub fn debug_camera_movement(
             );
         }
     }
+}
 
+pub fn debug_camera_movement(
+    mut camera_query: Query<(&DebugCamera, &mut Transform)>,
+    mut mouse_motion: EventReader<MouseMotion>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    debug_options: Res<DebugOptions>,
+) {
     let Ok(window) = primary_window.get_single() else {
         return;
     };
+
+    if debug_options.debug_camera_has_character_control {
+        return;
+    }
 
     for (debug_cam, mut tr) in camera_query.iter_mut() {
         for ev in mouse_motion.read() {
