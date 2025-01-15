@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use mcrs_physics::TickStep;
+use mcrs_universe::universe::Universe;
 
-use crate::FixedMainSet;
+use crate::{terrain::UniverseChanges, FixedMainSet};
 
 pub struct SaveLoadPlugin;
 
@@ -24,6 +26,10 @@ pub struct Level {
     pub name: String,
 }
 
+/// Every entity owned by the level must be marked with this component
+#[derive(Component, Debug, Clone)]
+pub struct LevelOwned;
+
 #[derive(Event, Debug, Clone)]
 pub struct CreateLevelEvent {
     pub level_name: String,
@@ -44,6 +50,7 @@ pub fn create_level(
     event_reader: EventReader<CreateLevelEvent>,
     mut commands: Commands,
     existing_level: Option<Res<Level>>,
+    mut tickstep: ResMut<TickStep>,
 ) {
     let Some(event) = get_single_event(event_reader) else {
         return;
@@ -57,6 +64,8 @@ pub fn create_level(
     commands.insert_resource(Level {
         name: event.level_name,
     });
+
+    *tickstep = TickStep::Tick;
 }
 
 pub fn load_level(event_reader: EventReader<LoadLevelEvent>) {
@@ -83,6 +92,10 @@ pub fn quit_level(
     event_reader: EventReader<QuitLevelEvent>,
     mut commands: Commands,
     existing_level: Option<Res<Level>>,
+    mut universe: ResMut<Universe>,
+    mut universe_changes: ResMut<UniverseChanges>,
+    mut tickstep: ResMut<TickStep>,
+    level_owned_query: Query<(Entity, &LevelOwned)>,
 ) {
     let Some(_) = get_single_event(event_reader) else {
         return;
@@ -94,7 +107,14 @@ pub fn quit_level(
     }
 
     commands.remove_resource::<Level>();
-    // also destroy universe as well as all game entities?
+    universe.chunks.clear();
+    universe.heightfield.clear();
+    universe_changes.queue.clear();
+    *tickstep = TickStep::STOP;
+
+    for (entity, _) in level_owned_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
 }
 
 /// Helper function to run only one level operation per type per tick.

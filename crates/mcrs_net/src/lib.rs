@@ -186,5 +186,6 @@ struct PlayerState {
 }
 
 // todo: consider using an event instead of a marker component
+// definitely use an event, the marker component isn't destroyed when quitting the level
 #[derive(Debug, Clone, Component)]
 pub struct NewPlayerSpawned;

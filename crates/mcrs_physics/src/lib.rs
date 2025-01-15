@@ -22,6 +22,10 @@ pub enum TickStep {
     Step { step: bool },
 }
 
+impl TickStep {
+    pub const STOP: Self = TickStep::Step { step: false };
+}
+
 pub fn run_if_tickstep(tickstep: Res<TickStep>) -> bool {
     match *tickstep {
         TickStep::Tick => true,

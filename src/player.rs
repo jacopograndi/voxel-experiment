@@ -12,7 +12,7 @@ use mcrs_render::{
 };
 use mcrs_universe::Blueprints;
 
-use crate::{hotbar::PlayerHand, settings::McrsSettings, PlayerInputBuffer};
+use crate::{hotbar::PlayerHand, settings::McrsSettings, LevelOwned, PlayerInputBuffer};
 
 pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
     let projection = Projection::Perspective(PerspectiveProjection {
@@ -87,6 +87,7 @@ pub fn spawn_player(
             .entity(player_entity)
             .remove::<NewPlayerSpawned>()
             .insert((
+                LevelOwned,
                 PlayerInputBuffer::default(),
                 Character {
                     size: Vec3::new(0.5, 1.8, 0.5),

@@ -1,4 +1,4 @@
-use crate::{chemistry::lighting::*, debug::WidgetBlockDebug};
+use crate::{chemistry::lighting::*, debug::WidgetBlockDebug, Level};
 use bevy::{prelude::*, utils::HashSet};
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
@@ -228,7 +228,13 @@ pub fn terrain_generation(
     mut part: Local<PartialGenerationState>,
     mut generator: Local<Option<GeneratorSponge>>,
     settings: Res<McrsSettings>,
+    level: Option<Res<Level>>,
 ) {
+    if level.is_none() {
+        *part = PartialGenerationState::default();
+        return;
+    }
+
     let players_pos = players
         .iter()
         .map(|(tr, _)| tr.translation)

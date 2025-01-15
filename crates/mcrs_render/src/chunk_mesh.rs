@@ -120,10 +120,17 @@ pub fn sync_chunk_meshes(
     }
 
     // For each chunk that is instanced and not in universe, despawn
+    let mut to_remove = vec![];
     for (chunk_pos, chunk_entity) in chunk_entities.map.iter() {
         if let None = universe.chunks.get(chunk_pos) {
             info!("despawned chunk mesh at {}", chunk_pos);
             commands.entity(chunk_entity.entity).despawn_recursive();
+            to_remove.push(chunk_pos.clone());
+        }
+    }
+    if !to_remove.is_empty() {
+        for key in &to_remove {
+            chunk_entities.map.remove(key);
         }
     }
 }
