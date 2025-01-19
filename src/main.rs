@@ -30,6 +30,7 @@ use hotbar::{
 };
 use input::*;
 use player::spawn_player;
+use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::{apply_terrain_changes, terrain_editing, terrain_generation, UniverseChanges};
@@ -72,7 +73,6 @@ fn main() -> AppExit {
     app.insert_resource(settings.clone());
 
     app.add_plugins(McrsUniversePlugin);
-    app.init_resource::<PlayerInputBuffer>();
     app.init_resource::<UniverseChanges>();
 
     match settings.network_mode {
@@ -112,15 +112,18 @@ fn add_client(app: &mut App) {
     ));
     app.add_systems(Startup, ui);
     app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
-    app.add_systems(Update, player_input.in_set(InputSet::Gather));
+    app.add_systems(
+        Update,
+        (player_input, move_local_players)
+            .chain()
+            .in_set(InputSet::Gather),
+    );
     app.add_systems(Update, terrain_editing.after(InputSet::Gather));
     app.add_systems(
         FixedUpdate,
         (
             client_receive_replica.in_set(FixedNetSet::Receive),
-            (client_send_input, client_send_replica)
-                .chain()
-                .in_set(FixedNetSet::Send),
+            client_send_replica.chain().in_set(FixedNetSet::Send),
         )
             .run_if(client_connected),
     );
@@ -131,17 +134,16 @@ fn add_server(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-            (
-                server_receive_replica,
-                server_receive_input,
-                server_move_players,
-            )
+            server_receive_replica
+                .run_if(resource_exists::<RenetServer>)
                 .chain()
                 .in_set(FixedNetSet::Receive),
             (terrain_generation, apply_terrain_changes)
                 .chain()
                 .in_set(FixedMainSet::Terrain),
-            server_send_replica.in_set(FixedNetSet::Send),
+            server_send_replica
+                .in_set(FixedNetSet::Send)
+                .run_if(resource_exists::<RenetServer>),
         ),
     );
 }

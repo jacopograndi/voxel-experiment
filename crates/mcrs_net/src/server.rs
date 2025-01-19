@@ -20,6 +20,13 @@ use std::{
     time::SystemTime,
 };
 
+pub fn open_server(mut commands: Commands, settings: Option<Res<NetSettings>>) {
+    let server_address = settings.map_or("127.0.0.1".to_string(), |s| s.server_address.clone());
+    let (server, transport) = new_renet_server(&server_address);
+    commands.insert_resource(server);
+    commands.insert_resource(transport);
+}
+
 pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
     let bind_addr: SocketAddr = ("0.0.0.0:".to_string() + &PORT.to_string())
         .parse()

@@ -13,8 +13,8 @@ use mcrs_physics::{
 use mcrs_universe::{universe::Universe, Blueprints};
 
 use crate::{
-    player::spawn_camera, settings::McrsSettings, CreateLevelEvent, Level, LoadLevelEvent,
-    QuitLevelEvent, SaveLevelEvent,
+    player::spawn_camera, settings::McrsSettings, CloseLevelEvent, Level, OpenLevelEvent,
+    SaveLevelEvent,
 };
 
 pub const DIAGNOSTIC_FPS: DiagnosticPath = DiagnosticPath::const_new("game/fps");
@@ -212,7 +212,9 @@ pub fn ui_button_shortcut(
     modifiers: &[KeyCode],
 ) -> bool {
     let modifier = modifiers.iter().any(|m| keys.pressed(*m)) || modifiers.is_empty();
-    ui.button(format!("{} [{:?}]", text, key)).clicked() || (keys.just_pressed(key) && modifier)
+    ui.button(format!("{} {:?} [{:?}]", text, modifiers, key))
+        .clicked()
+        || (keys.just_pressed(key) && modifier)
 }
 
 const SHIFT_MOD: &'static [KeyCode; 2] = &[KeyCode::ShiftLeft, KeyCode::ShiftRight];
@@ -221,12 +223,17 @@ pub fn debug_saveload_ui(
     mut contexts: EguiContexts,
     keys: Res<ButtonInput<KeyCode>>,
     level: Option<Res<Level>>,
-    mut create_event: EventWriter<CreateLevelEvent>,
-    mut load_event: EventWriter<LoadLevelEvent>,
+    mut open_event: EventWriter<OpenLevelEvent>,
+    mut close_event: EventWriter<CloseLevelEvent>,
     mut save_event: EventWriter<SaveLevelEvent>,
-    mut quit_event: EventWriter<QuitLevelEvent>,
-    mut edit_level_name: Local<String>,
+    mut edit_level_name: Local<Option<String>>,
+    settings: Res<McrsSettings>,
 ) {
+    let Some(edit_level_name) = edit_level_name.as_mut() else {
+        *edit_level_name = Some(settings.open_level_name.clone());
+        return;
+    };
+
     let ctx = contexts.ctx_mut();
     egui::Window::new("Debug Level")
         .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-5.0, 5.0))
@@ -239,24 +246,19 @@ pub fn debug_saveload_ui(
 
             ui.horizontal(|ui| {
                 ui.label("Level to Create/Load: ");
-                ui.text_edit_singleline(&mut *edit_level_name);
+                ui.text_edit_singleline(edit_level_name);
             });
 
-            if ui_button_shortcut(ui, &keys, "Create Level", KeyCode::KeyN, SHIFT_MOD) {
-                create_event.send(CreateLevelEvent {
+            if ui_button_shortcut(ui, &keys, "Open Level", KeyCode::KeyO, SHIFT_MOD) {
+                open_event.send(OpenLevelEvent {
                     level_name: edit_level_name.clone(),
                 });
             }
-            if ui_button_shortcut(ui, &keys, "Load Level", KeyCode::KeyL, SHIFT_MOD) {
-                load_event.send(LoadLevelEvent {
-                    level_name: edit_level_name.clone(),
-                });
-            }
-            if ui_button_shortcut(ui, &keys, "Save Level", KeyCode::KeyK, SHIFT_MOD) {
+            if ui_button_shortcut(ui, &keys, "Save Level", KeyCode::KeyI, SHIFT_MOD) {
                 save_event.send(SaveLevelEvent);
             }
-            if ui_button_shortcut(ui, &keys, "Quit Level", KeyCode::KeyO, SHIFT_MOD) {
-                quit_event.send(QuitLevelEvent);
+            if ui_button_shortcut(ui, &keys, "Quit Level", KeyCode::KeyP, SHIFT_MOD) {
+                close_event.send(CloseLevelEvent);
             }
         });
 }

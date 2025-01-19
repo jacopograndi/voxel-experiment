@@ -1,7 +1,6 @@
 use bevy::prelude::*;
-use mcrs_net::{ClientChannel, Lobby, LocalPlayer};
+use mcrs_net::LocalPlayer;
 use mcrs_physics::character::{CameraController, CharacterController};
-use renet::{RenetClient, RenetServer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Component, Resource, Clone)]
@@ -14,7 +13,7 @@ pub enum PlayerInput {
     Mining(bool),
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Component, Resource, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Component, Clone)]
 pub struct PlayerInputBuffer {
     pub buffer: Vec<PlayerInput>,
 }
@@ -25,16 +24,14 @@ pub enum InputSet {
 }
 
 pub fn player_input(
-    mut player_input_buffer: ResMut<PlayerInputBuffer>,
     keys: Res<ButtonInput<KeyCode>>,
-    query_transform: Query<&Transform>,
-    query_camera: Query<(Entity, &Camera, &Parent)>,
+    mut query_local_player: Query<(&Transform, &mut PlayerInputBuffer), With<LocalPlayer>>,
+    query_camera: Query<(&Transform, &Parent), With<CameraController>>,
     mouse: Res<ButtonInput<MouseButton>>,
 ) {
     let mut input = PlayerInputBuffer::default();
-    if let Ok((entity, _, parent)) = query_camera.get_single() {
-        let tr_camera = query_transform.get(entity).unwrap();
-        let tr_body = query_transform.get(parent.get()).unwrap();
+    if let Ok((tr_camera, parent)) = query_camera.get_single() {
+        let (tr_body, _) = query_local_player.get(parent.get()).unwrap();
         input.buffer.push(PlayerInput::RotationCamera(
             tr_camera.rotation.to_euler(EulerRot::YXZ).1,
         ));
@@ -68,9 +65,13 @@ pub fn player_input(
         .buffer
         .push(PlayerInput::Mining(mouse.just_pressed(MouseButton::Left)));
 
-    player_input_buffer.buffer.append(&mut input.buffer);
+    for (_, mut player_input_buffer) in query_local_player.iter_mut() {
+        player_input_buffer.buffer.append(&mut input.buffer);
+    }
 }
 
+// Todo: when implementing replication don't send the local input buffers.
+/*
 pub fn client_send_input(
     mut res_player_input: ResMut<PlayerInputBuffer>,
     mut client: ResMut<RenetClient>,
@@ -97,8 +98,9 @@ pub fn server_receive_input(
         }
     }
 }
+*/
 
-pub fn server_move_players(
+pub fn move_local_players(
     mut query_player: Query<
         (
             Entity,

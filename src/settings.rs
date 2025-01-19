@@ -19,6 +19,9 @@ pub struct Args {
 
     #[arg(short, long)]
     pub render_mode: Option<String>,
+
+    #[arg(short, long)]
+    pub open_level_name: Option<String>,
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -28,6 +31,7 @@ pub struct McrsSettings {
     pub server_address: String,
     pub network_mode: NetworkMode,
     pub render_mode: RenderMode,
+    pub open_level_name: String,
 }
 
 impl Default for McrsSettings {
@@ -38,6 +42,7 @@ impl Default for McrsSettings {
             server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
             network_mode: NetworkMode::ClientAndServer,
             render_mode: RenderMode::default(),
+            open_level_name: format!("world"),
         }
     }
 }

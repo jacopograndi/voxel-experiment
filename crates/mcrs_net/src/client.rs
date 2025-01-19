@@ -14,6 +14,13 @@ use std::{
     time::SystemTime,
 };
 
+pub fn open_client(mut commands: Commands, settings: Option<Res<NetSettings>>) {
+    let server_address = settings.map_or("127.0.0.1".to_string(), |s| s.server_address.clone());
+    let (client, transport) = new_renet_client(&server_address);
+    commands.insert_resource(client);
+    commands.insert_resource(transport);
+}
+
 pub fn new_renet_client(addr: &str) -> (RenetClient, NetcodeClientTransport) {
     let addr_port = addr.to_string() + ":" + &PORT.to_string();
     let Ok(mut resolved_addrs) = addr_port.to_socket_addrs() else {

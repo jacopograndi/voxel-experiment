@@ -1,4 +1,4 @@
-use crate::{chemistry::lighting::*, debug::WidgetBlockDebug, Level};
+use crate::{chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, Level};
 use bevy::{prelude::*, utils::HashSet};
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
@@ -11,7 +11,7 @@ use mcrs_universe::{
     block::{Block, BlockFlag, LightType},
     chunk::Chunk,
     universe::Universe,
-    Blueprints, CHUNK_VOLUME,
+    Blueprints, CHUNK_SIDE, CHUNK_VOLUME,
 };
 
 use crate::{PlayerInput, PlayerInputBuffer};
@@ -59,7 +59,7 @@ pub fn apply_terrain_changes(
                 let planar = IVec2::new(pos.x, pos.z);
                 if let Some(height) = universe.heightfield.get(&planar) {
                     if pos.y == *height {
-                        // recalculate the highest sunlit point
+                        // Recalculate the highest sunlit point
                         let mut beam = pos.y - 100;
                         for y in 0..=100 {
                             let h = pos.y - y;
@@ -107,7 +107,7 @@ pub fn apply_terrain_changes(
                 let planar = IVec2::new(pos.x, pos.z);
                 if let Some(height) = universe.heightfield.get(&planar) {
                     if pos.y > *height {
-                        // recalculate the highest sunlit point
+                        // Recalculate the highest sunlit point
                         for y in (*height)..pos.y {
                             let sample = IVec3::new(pos.x, y, pos.z);
                             dark_suns.push(sample);
@@ -141,7 +141,7 @@ pub fn terrain_editing(
             continue;
         };
 
-        // show debug info
+        // Show debug info
         if let Some(hit) = cast_ray(
             RayFinite {
                 position: tr.translation(),
@@ -221,6 +221,16 @@ pub struct PartialGenerationState {
     queued: HashSet<IVec3>,
 }
 
+pub fn get_spawn_chunks() -> impl Iterator<Item = IVec3> {
+    (-1..=1)
+        .map(|z| {
+            (-1..=1)
+                .map(move |y| (-1..=1).map(move |x| IVec3::new(x, y, z) * CHUNK_SIDE as i32))
+                .flatten()
+        })
+        .flatten()
+}
+
 pub fn terrain_generation(
     mut universe: ResMut<Universe>,
     bp: Res<Blueprints>,
@@ -230,18 +240,26 @@ pub fn terrain_generation(
     settings: Res<McrsSettings>,
     level: Option<Res<Level>>,
 ) {
-    if level.is_none() {
+    let Some(level) = level else {
         *part = PartialGenerationState::default();
         return;
-    }
+    };
 
     let players_pos = players
         .iter()
         .map(|(tr, _)| tr.translation)
         .collect::<Vec<Vec3>>();
 
-    // queue new chunks to be generated
+    // Queue new chunks to be generated
     if part.queued.is_empty() {
+        // Check the spawn chunks
+        for chunk_pos in get_spawn_chunks() {
+            if let None = universe.chunks.get(&chunk_pos) {
+                part.queued.insert(chunk_pos.clone());
+            }
+        }
+
+        // Check near every player
         for player_pos in players_pos.iter() {
             let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
             for chunk_pos in chunks.iter() {
@@ -252,17 +270,17 @@ pub fn terrain_generation(
         }
     }
 
-    // initialize the block generator
+    // Initialize the block generator
     if generator.is_none() {
-        *generator = Some(GeneratorSponge::new(23));
+        *generator = Some(GeneratorSponge::new(level.seed));
     }
     let Some(generator) = generator.as_ref() else {
         return;
     };
 
-    // this is a rough estimate for when the world around the player is empty
+    // This is a rough estimate for when the world around the player is empty
     // and is used to speed up the generation of the initial chunks
-    // todo: use a better estimator after having implemented chunk unloading
+    // Todo: use a better estimator after having implemented chunk unloading
     //       or use a better system
     let is_low = universe.chunks.len() < BLOCK_GENERATION_LOW_THRESHOLD;
     let max_block_generation = if is_low {
@@ -272,10 +290,26 @@ pub fn terrain_generation(
     };
 
     let mut added_chunks = HashSet::new();
+
+    // Try to load chunks before generating them
+    // Todo: limit the number of loaded chunk per frame
+    let mut loaded_chunks = vec![];
+    for chunk_pos in part.queued.iter() {
+        if let Some(chunk) = get_chunk_from_save(chunk_pos, &level.name) {
+            universe.chunks.insert(*chunk_pos, chunk);
+            loaded_chunks.push(*chunk_pos);
+            added_chunks.insert(*chunk_pos);
+            info!("loaded chunk at {}", chunk_pos);
+        }
+    }
+    for loaded_chunk in loaded_chunks {
+        part.queued.remove(&loaded_chunk);
+    }
+
     let mut generated_blocks = 0;
 
     for _ in 0..10 {
-        // get a chunk from the queue and start generating it
+        // Get a chunk from the queue and start generating it
         if part.chunk.is_none() {
             let Some(selected) = part.queued.iter().next() else {
                 return;
@@ -290,7 +324,7 @@ pub fn terrain_generation(
 
         let mut generated_blocks_chunk = 0;
 
-        // generate up to a chunk
+        // Generate up to a chunk
         if let Some(chunk) = &part.chunk {
             let mut chunk_mut = chunk.get_mut();
             let bound =
@@ -310,7 +344,7 @@ pub fn terrain_generation(
             part.current_block += generated_blocks_chunk;
         }
 
-        // add the chunk to universe if finished
+        // Add the chunk to universe if finished
         if part.current_block == CHUNK_VOLUME {
             if let Some(chunk) = part.chunk.take() {
                 part.chunk = None;
