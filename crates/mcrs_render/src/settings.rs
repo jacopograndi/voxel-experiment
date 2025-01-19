@@ -41,7 +41,7 @@ impl RenderMode {
 
 impl Default for RenderMode {
     fn default() -> Self {
-        Self::RaytraceOnly
+        Self::RaytraceThenRasterize
     }
 }
 
