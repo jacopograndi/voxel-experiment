@@ -117,7 +117,6 @@ pub fn close_level(
     commands.remove_resource::<LevelReady>();
 
     universe.chunks.clear();
-    universe.heightfield.clear();
     universe_changes.queue.clear();
     *tickstep = TickStep::STOP;
 

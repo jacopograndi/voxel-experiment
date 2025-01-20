@@ -8,8 +8,6 @@ use bevy::{prelude::*, utils::HashMap};
 #[derive(Resource, Debug, Clone, Default)]
 pub struct Universe {
     pub chunks: HashMap<IVec3, Chunk>,
-    /// Keeps track of the highest (y) block for every point xz.
-    pub heightfield: HashMap<IVec2, i32>,
 }
 
 impl Universe {

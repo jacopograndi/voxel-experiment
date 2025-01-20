@@ -33,7 +33,7 @@ use player::spawn_player;
 use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};
-use terrain::{apply_terrain_changes, terrain_editing, terrain_generation, UniverseChanges};
+use terrain::*;
 use ui::ui;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
@@ -74,6 +74,7 @@ fn main() -> AppExit {
 
     app.add_plugins(McrsUniversePlugin);
     app.init_resource::<UniverseChanges>();
+    app.init_resource::<ChunkGenerationRequest>();
 
     match settings.network_mode {
         NetworkMode::Client => {
@@ -138,7 +139,7 @@ fn add_server(app: &mut App) {
                 .run_if(resource_exists::<RenetServer>)
                 .chain()
                 .in_set(FixedNetSet::Receive),
-            (terrain_generation, apply_terrain_changes)
+            (request_base_chunks, chunk_generation, apply_terrain_changes)
                 .chain()
                 .in_set(FixedMainSet::Terrain),
             server_send_replica

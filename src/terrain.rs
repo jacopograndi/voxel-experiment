@@ -1,5 +1,8 @@
-use crate::{chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, Level};
-use bevy::{prelude::*, utils::HashSet};
+use crate::{
+    chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, hotbar::PlayerHand,
+    settings::McrsSettings, Level, PlayerInput, PlayerInputBuffer,
+};
+use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
 use mcrs_physics::{
@@ -11,13 +14,9 @@ use mcrs_universe::{
     block::{Block, BlockFlag, LightType},
     chunk::Chunk,
     universe::Universe,
-    Blueprints, CHUNK_SIDE, CHUNK_VOLUME,
+    Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
-
-use crate::{PlayerInput, PlayerInputBuffer};
 use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
-
-use crate::{hotbar::PlayerHand, settings::McrsSettings};
 
 const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
@@ -56,6 +55,8 @@ pub fn apply_terrain_changes(
 
                 universe.set_chunk_block(&pos, Block::new(bp.blocks.get_named("Air")));
 
+                // Todo: sun beams
+                /*
                 let planar = IVec2::new(pos.x, pos.z);
                 if let Some(height) = universe.heightfield.get(&planar) {
                     if pos.y == *height {
@@ -80,6 +81,7 @@ pub fn apply_terrain_changes(
                         universe.heightfield.insert(planar, beam);
                     }
                 }
+                */
 
                 for dir in DIRS.iter() {
                     let sample = pos + *dir;
@@ -100,10 +102,12 @@ pub fn apply_terrain_changes(
             }
             UniverseChange::Add { pos, block } => {
                 debug!(target: "terrain_editing", "placed block at {}", pos);
-                let mut dark_suns = vec![];
                 universe.set_chunk_block(&pos, *block);
                 propagate_light(&mut universe, vec![*pos], LightType::Torch);
 
+                // Todo: sun beams
+                /*
+                let mut dark_suns = vec![];
                 let planar = IVec2::new(pos.x, pos.z);
                 if let Some(height) = universe.heightfield.get(&planar) {
                     if pos.y > *height {
@@ -120,6 +124,7 @@ pub fn apply_terrain_changes(
                     let new = propagate_darkness(&mut universe, sun, LightType::Sun);
                     propagate_light(&mut universe, new, LightType::Sun)
                 }
+                */
             }
         }
     }
@@ -213,12 +218,73 @@ pub fn terrain_editing(
     }
 }
 
-#[derive(Default)]
-pub struct PartialGenerationState {
-    chunk: Option<Chunk>,
-    pos: IVec3,
-    current_block: usize,
-    queued: HashSet<IVec3>,
+#[derive(Resource, Default)]
+pub struct ChunkGenerationRequest {
+    pub requested: HashMap<IVec3, ChunkGenerationState>,
+}
+
+impl ChunkGenerationRequest {
+    fn insert(&mut self, chunk_pos: IVec3) {
+        self.requested
+            .entry(chunk_pos)
+            .or_insert(ChunkGenerationState {
+                pos: chunk_pos,
+                ..Default::default()
+            });
+    }
+
+    fn get_for_pass<'a>(
+        &'a self,
+        pass: &'a GenerationPass,
+    ) -> impl Iterator<Item = (&'a IVec3, &'a ChunkGenerationState)> {
+        self.requested
+            .iter()
+            .filter(|(_, state)| state.pass == *pass)
+    }
+
+    fn get_for_pass_mut<'a>(
+        &'a mut self,
+        pass: &'a GenerationPass,
+    ) -> impl Iterator<Item = (&'a IVec3, &'a mut ChunkGenerationState)> {
+        self.requested
+            .iter_mut()
+            .filter(|(_, state)| state.pass == *pass)
+    }
+}
+
+#[derive(Default, PartialEq, Eq)]
+pub enum GenerationPass {
+    #[default]
+    /// The chunk is requesting for blocks to be generated
+    Blocks,
+    /// The chunk is requesting lighting to be recalculated
+    Lighting,
+    /// The chunk is waiting on the chunk above to be done before reverting to `Lighting`
+    WaitingForSunlight,
+    /// The chunk is ready to be added to the universe
+    Done,
+}
+
+pub struct ChunkGenerationState {
+    pub chunk: Option<Chunk>,
+    pub pos: IVec3,
+    pub current_block: usize,
+    pub pass: GenerationPass,
+    pub blocks_lowest: [i32; CHUNK_AREA],
+    pub blocks_beams: [i32; CHUNK_AREA],
+}
+
+impl Default for ChunkGenerationState {
+    fn default() -> Self {
+        Self {
+            chunk: None,
+            pos: IVec3::default(),
+            current_block: 0,
+            pass: GenerationPass::default(),
+            blocks_lowest: [0; CHUNK_AREA],
+            blocks_beams: [CHUNK_SIDE as i32 - 1; CHUNK_AREA],
+        }
+    }
 }
 
 pub fn get_spawn_chunks() -> impl Iterator<Item = IVec3> {
@@ -231,44 +297,49 @@ pub fn get_spawn_chunks() -> impl Iterator<Item = IVec3> {
         .flatten()
 }
 
-pub fn terrain_generation(
-    mut universe: ResMut<Universe>,
-    bp: Res<Blueprints>,
-    players: Query<(&Transform, &LocalPlayer)>,
-    mut part: Local<PartialGenerationState>,
-    mut generator: Local<Option<GeneratorSponge>>,
-    settings: Res<McrsSettings>,
-    level: Option<Res<Level>>,
-) {
-    let Some(level) = level else {
-        *part = PartialGenerationState::default();
-        return;
-    };
+pub fn get_sun_heightfield(_xz: IVec2) -> i32 {
+    128
+}
 
+pub fn request_base_chunks(
+    universe: Res<Universe>,
+    players: Query<(&Transform, &LocalPlayer)>,
+    mut request: ResMut<ChunkGenerationRequest>,
+    settings: Res<McrsSettings>,
+) {
     let players_pos = players
         .iter()
         .map(|(tr, _)| tr.translation)
         .collect::<Vec<Vec3>>();
 
-    // Queue new chunks to be generated
-    if part.queued.is_empty() {
-        // Check the spawn chunks
-        for chunk_pos in get_spawn_chunks() {
-            if let None = universe.chunks.get(&chunk_pos) {
-                part.queued.insert(chunk_pos.clone());
-            }
+    // Check the spawn chunks
+    for chunk_pos in get_spawn_chunks() {
+        if let None = universe.chunks.get(&chunk_pos) {
+            request.insert(chunk_pos.clone());
         }
+    }
 
-        // Check near every player
-        for player_pos in players_pos.iter() {
-            let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
-            for chunk_pos in chunks.iter() {
-                if let None = universe.chunks.get(chunk_pos) {
-                    part.queued.insert(chunk_pos.clone());
-                }
+    // Check near every player
+    for player_pos in players_pos.iter() {
+        let chunks = get_chunks_in_sphere(*player_pos, settings.view_distance_blocks as f32);
+        for chunk_pos in chunks.iter() {
+            if let None = universe.chunks.get(chunk_pos) {
+                request.insert(chunk_pos.clone());
             }
         }
     }
+}
+
+pub fn chunk_generation(
+    mut universe: ResMut<Universe>,
+    bp: Res<Blueprints>,
+    mut request: ResMut<ChunkGenerationRequest>,
+    mut generator: Local<Option<GeneratorSponge>>,
+    level: Option<Res<Level>>,
+) {
+    let Some(level) = level else {
+        return;
+    };
 
     // Initialize the block generator
     if generator.is_none() {
@@ -289,38 +360,33 @@ pub fn terrain_generation(
         MAX_BLOCK_GENERATION_PER_FRAME
     };
 
-    let mut added_chunks = HashSet::new();
-
     // Try to load chunks before generating them
     // Todo: limit the number of loaded chunk per frame
     let mut loaded_chunks = vec![];
-    for chunk_pos in part.queued.iter() {
+    for (chunk_pos, _) in request.get_for_pass(&GenerationPass::Blocks) {
         if let Some(chunk) = get_chunk_from_save(chunk_pos, &level.name) {
             universe.chunks.insert(*chunk_pos, chunk);
             loaded_chunks.push(*chunk_pos);
-            added_chunks.insert(*chunk_pos);
             info!("loaded chunk at {}", chunk_pos);
         }
     }
     for loaded_chunk in loaded_chunks {
-        part.queued.remove(&loaded_chunk);
+        request.requested.remove(&loaded_chunk);
     }
 
     let mut generated_blocks = 0;
 
     for _ in 0..10 {
-        // Get a chunk from the queue and start generating it
+        let Some((chunk_pos, part)) = request.get_for_pass_mut(&GenerationPass::Blocks).next()
+        else {
+            break;
+        };
+
         if part.chunk.is_none() {
-            let Some(selected) = part.queued.iter().next() else {
-                return;
-            };
-            let selected = selected.clone();
-            part.queued.remove(&selected);
             part.chunk = Some(Chunk::empty());
-            part.pos = selected;
-            part.current_block = 0;
-            info!("generating chunk at {}", selected);
         }
+
+        info!("generating chunk at {}", chunk_pos);
 
         let mut generated_blocks_chunk = 0;
 
@@ -344,14 +410,8 @@ pub fn terrain_generation(
             part.current_block += generated_blocks_chunk;
         }
 
-        // Add the chunk to universe if finished
         if part.current_block == CHUNK_VOLUME {
-            if let Some(chunk) = part.chunk.take() {
-                part.chunk = None;
-                part.current_block = 0;
-                universe.chunks.insert(part.pos, chunk);
-                added_chunks.insert(part.pos);
-            }
+            part.pass = GenerationPass::Lighting;
         }
 
         if generated_blocks >= max_block_generation {
@@ -359,10 +419,172 @@ pub fn terrain_generation(
         }
     }
 
-    if generated_blocks > 0 {
-        info!("generated {} blocks this pass", generated_blocks);
-        recalc_lights(&mut universe, added_chunks.into_iter().collect(), &bp);
+    let mut request_for_sunlight = vec![];
+
+    for _ in 0..10 {
+        let Some((chunk_pos, part)) = request.get_for_pass_mut(&GenerationPass::Lighting).next()
+        else {
+            break;
+        };
+
+        info!("trying to light chunk at {}", chunk_pos);
+
+        let Some(chunk) = &part.chunk else {
+            error!("the chunk has no blocks in it");
+            continue;
+        };
+
+        let is_sun =
+            |IVec3 { x, y, z }: IVec3| chunk_pos.y + y >= get_sun_heightfield(IVec2::new(x, z));
+
+        // Calculate sunbeams by raycasting up from the lowest blocks of the chunk.
+        // If any beam escapes the chunk, request the chunk above.
+        let mut chunk_mut = chunk.get_mut();
+        let mut any_beam_escaped = false;
+        for (x, z) in (0..CHUNK_SIDE as i32)
+            .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
+            .flatten()
+        {
+            let plane_index = (x + z * CHUNK_SIDE as i32) as usize;
+            for y in (0..CHUNK_SIDE as i32).rev() {
+                let xyz = IVec3::new(x, y, z);
+                let is_opaque = chunk_mut[Chunk::xyz2idx(xyz)]
+                    .properties
+                    .check(BlockFlag::Opaque);
+                if is_opaque {
+                    part.blocks_lowest[plane_index] = y;
+                    break;
+                }
+            }
+
+            for y in part.blocks_lowest[plane_index]..CHUNK_SIDE as i32 {
+                let xyz = IVec3::new(x, y, z);
+                let is_opaque = chunk_mut[Chunk::xyz2idx(xyz)]
+                    .properties
+                    .check(BlockFlag::Opaque)
+                    && y > part.blocks_lowest[plane_index];
+                if is_sun(xyz) || is_opaque {
+                    part.blocks_beams[plane_index] = y;
+                    break;
+                }
+            }
+
+            let is_escaped = part.blocks_beams[plane_index] == CHUNK_SIDE as i32 - 1;
+            if is_escaped && !is_sun(IVec3::new(x, CHUNK_SIDE as i32 - 1, z)) {
+                any_beam_escaped = true;
+            }
+        }
+
+        let above = chunk_pos + IVec3::Y * CHUNK_SIDE as i32;
+        let chunk_above = universe.chunks.get(&above);
+
+        if any_beam_escaped && chunk_above.is_none() {
+            request_for_sunlight.push(above);
+            part.pass = GenerationPass::WaitingForSunlight;
+            info!(
+                target: "terrain_generation",
+                "lighting for chunk {} is waiting for the chunk above", chunk_pos,
+            );
+            continue;
+        }
+
+        // Todo: Adjust sun beam cache
+
+        // Calculate the light for the first time
+        let mut sources_sun = vec![];
+        let mut sources_torch = vec![];
+
+        info!(
+            target: "terrain_generation",
+            "lighting chunk at {}", chunk_pos
+        );
+
+        for (x, z) in (0..CHUNK_SIDE as i32)
+            .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
+            .flatten()
+        {
+            let plane_index = (x + z * CHUNK_SIDE as i32) as usize;
+            let sun_beam = chunk_pos.y + part.blocks_beams[plane_index]
+                == get_sun_heightfield(IVec2::new(x, z));
+            let escaped_beam = part.blocks_beams[plane_index] == CHUNK_SIDE as i32 - 1;
+            let sun_light = if sun_beam {
+                println!(
+                    "l at {}, {} is max, {:?}, {:?}",
+                    x, z, part.blocks_beams[plane_index], part.blocks_lowest[plane_index]
+                );
+                MAX_LIGHT
+            } else if escaped_beam {
+                if let Some(block) =
+                    universe.read_chunk_block(&(chunk_pos + IVec3::new(x, CHUNK_SIDE as i32, z)))
+                {
+                    block.get_light(LightType::Sun)
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+            for y in part.blocks_lowest[plane_index]
+                ..=(part.blocks_beams[plane_index].min(CHUNK_SIDE as i32 - 1)) as i32
+            {
+                let xyz = IVec3::new(x, y, z);
+                chunk_mut[Chunk::xyz2idx(xyz)].set_light(LightType::Sun, sun_light);
+                sources_sun.push(xyz);
+            }
+        }
+
+        for xyz in Chunk::iter() {
+            let id = chunk_mut[Chunk::xyz2idx(xyz)].id;
+            let block_bp = bp.blocks.get(&id);
+            if block_bp.is_light_source() {
+                chunk_mut[Chunk::xyz2idx(xyz)].set_light(LightType::Torch, block_bp.light_level);
+                sources_torch.push(xyz);
+            }
+        }
+
+        // Todo: collect the leaked light into a queue of sources
+        //   This queue will be processed by another system
+        //   I could even add this initial sources to it and leave it at that
+        if !sources_torch.is_empty() {
+            let _leaked = propagate_light_chunk(&chunk_mut, sources_torch, LightType::Torch);
+        }
+        if !sources_sun.is_empty() {
+            let _leaked = propagate_light_chunk(&chunk_mut, sources_sun, LightType::Sun);
+        }
+
+        part.pass = GenerationPass::Done;
     }
+
+    for chunk_pos in request_for_sunlight {
+        request.insert(chunk_pos);
+    }
+
+    for (chunk_pos, part) in request.get_for_pass_mut(&GenerationPass::WaitingForSunlight) {
+        let above = chunk_pos + IVec3::Y * CHUNK_SIDE as i32;
+        if universe.chunks.get(&above).is_some() {
+            info!(
+                target: "terrain_generation",
+                "lighting for chunk {} resumed", chunk_pos,
+            );
+            part.pass = GenerationPass::Lighting;
+        }
+    }
+
+    request
+        .requested
+        .retain(|chunk_pos, state| match state.pass {
+            GenerationPass::Done => {
+                universe
+                    .chunks
+                    .insert(*chunk_pos, state.chunk.take().unwrap());
+                info!(
+                    target: "terrain_generation",
+                    "chunk generated at {}", chunk_pos
+                );
+                false
+            }
+            _ => true,
+        });
 }
 
 pub struct GeneratorSponge {

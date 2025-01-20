@@ -1,23 +1,32 @@
-use std::collections::VecDeque;
-
-use bevy::{prelude::*, utils::HashSet};
+use bevy::prelude::*;
 use mcrs_universe::{
-    block::BlockFlag,
-    block::{Block, LightType},
+    block::{Block, BlockFlag, LightType},
     chunk::Chunk,
     universe::Universe,
-    Blueprints, CHUNK_SIDE, MAX_LIGHT,
+    CHUNK_VOLUME,
 };
+use std::collections::VecDeque;
+use std::sync::RwLockWriteGuard;
 
-pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Blueprints) {
+/*
+pub fn recalc_lights(
+    universe: &mut Universe,
+    request: &mut ChunkGenerationRequest,
+    chunks: Vec<IVec3>,
+    bp: &Blueprints,
+) {
     debug!(target: "automata_lighting", chunks = ?chunks);
 
     // calculate sunlight beams
     let mut suns: Vec<IVec3> = vec![];
     let mut planars = HashSet::<IVec2>::new();
     let mut highest = i32::MIN;
-    for pos in chunks.iter() {
-        let chunk = universe.chunks.get_mut(pos).unwrap();
+    for chunk_pos in chunks.iter() {
+        let Some(chunk) = get_chunk_mut_at(universe, request, chunk_pos) else {
+            error!("lighting: the chunk at {} was missing", chunk_pos);
+            continue;
+        };
+
         chunk.version.update();
         for x in 0..CHUNK_SIDE {
             for z in 0..CHUNK_SIDE {
@@ -28,13 +37,13 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
                         sunlight = 0;
                     }
                     if sunlight > 0 {
-                        suns.push(*pos + xyz);
+                        suns.push(*chunk_pos + xyz);
                     }
                     chunk.set_block_light(xyz, LightType::Sun, sunlight);
                     chunk.set_block_light(xyz, LightType::Torch, 0);
-                    highest = highest.max(pos.y + y as i32);
+                    highest = highest.max(chunk_pos.y + y as i32);
                 }
-                let planar = IVec2::new(x as i32 + pos.x, z as i32 + pos.z);
+                let planar = IVec2::new(x as i32 + chunk_pos.x, z as i32 + chunk_pos.z);
                 planars.insert(planar);
             }
         }
@@ -72,9 +81,10 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
         let chunk = universe.chunks.get_mut(pos).unwrap();
         for xyz in Chunk::iter() {
             let id = chunk.read_block(xyz).id;
-            if info.blocks.get(&id).is_light_source() {
+            let block_bp = bp.blocks.get(&id);
+            if block_bp.is_light_source() {
                 torches.push(*pos + xyz);
-                chunk.set_block_light(xyz, LightType::Torch, 15);
+                chunk.set_block_light(xyz, LightType::Torch, block_bp.light_level);
             }
         }
     }
@@ -87,6 +97,7 @@ pub fn recalc_lights(universe: &mut Universe, chunks: Vec<IVec3>, info: &Bluepri
         propagate_light(universe, torches, LightType::Torch);
     }
 }
+*/
 
 pub const DIRS: [IVec3; 6] = [
     IVec3::X,
@@ -96,7 +107,7 @@ pub const DIRS: [IVec3; 6] = [
     IVec3::NEG_Y,
     IVec3::NEG_Z,
 ];
-const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+const MAX_LIGHTING_PROPAGATION: usize = 10000;
 
 pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
     let val = if let Some(voxel) = universe.read_chunk_block(&source) {
@@ -113,7 +124,7 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
 
     let mut new_lights: Vec<IVec3> = vec![];
     let mut frontier: VecDeque<IVec3> = [source].into();
-    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+    for iter in 0..MAX_LIGHTING_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
             for dir in DIRS.iter() {
                 let target = pos + *dir;
@@ -141,21 +152,51 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
     new_lights
 }
 
-pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
-    const DIRS: [IVec3; 6] = [
-        IVec3::X,
-        IVec3::Y,
-        IVec3::Z,
-        IVec3::NEG_X,
-        IVec3::NEG_Y,
-        IVec3::NEG_Z,
-    ];
-    const MAX_LIGHTITNG_PROPAGATION: usize = 100000000;
+// Todo: Modify so that the light that it operates only on one chunk.
+// Return the light sources leaving the chunk.
+// `sources` positions are relative to this chunk
+pub fn propagate_light_chunk(
+    chunk_mut: &RwLockWriteGuard<[Block; CHUNK_VOLUME]>,
+    sources: Vec<IVec3>,
+    lt: LightType,
+) -> Vec<(IVec3, u8)> {
+    debug!(target: "lighting_chunk", "{} sources of {lt} light", sources.len());
 
+    let mut leaking = vec![];
+
+    let mut frontier: VecDeque<IVec3> = sources.clone().into();
+    for iter in 0..MAX_LIGHTING_PROPAGATION {
+        if let Some(pos) = frontier.pop_front() {
+            let source = chunk_mut[Chunk::xyz2idx(pos)];
+            let light = source.get_light(lt);
+            for dir in DIRS.iter() {
+                let target = pos + *dir;
+                if Chunk::contains(&target) {
+                    let mut neighbor = chunk_mut[Chunk::xyz2idx(target)];
+                    if !neighbor.properties.check(BlockFlag::Opaque)
+                        && neighbor.get_light(lt) + 2 <= light
+                    {
+                        neighbor.set_light(lt, light - 1);
+                        frontier.push_back(target);
+                    }
+                } else {
+                    leaking.push((pos, light - 1));
+                }
+            }
+        } else {
+            debug!(target: "lighting_chunk", "{} iters for {lt} light", iter);
+            break;
+        }
+    }
+
+    leaking
+}
+
+pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
     debug!(target: "automata_lighting", "{} sources of {lt} light", sources.len());
 
     let mut frontier: VecDeque<IVec3> = sources.clone().into();
-    for iter in 0..MAX_LIGHTITNG_PROPAGATION {
+    for iter in 0..MAX_LIGHTING_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
             let Some(voxel) = universe.read_chunk_block(&pos) else {
                 continue;

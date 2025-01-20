@@ -233,7 +233,7 @@ pub fn generate_chunk_mesh(
         let [x, y, z] = SampleShape::delinearize(i);
         // apply a boundary of one block around the chunk
         let pos = IVec3::new(x as i32, y as i32, z as i32) - IVec3::splat(1);
-        if Chunk::contains(pos) {
+        if Chunk::contains(&pos) {
             let block = chunk_ref[Chunk::xyz2idx(pos) as usize];
             if block.properties.check(BlockFlag::Opaque) {
                 empty = false;

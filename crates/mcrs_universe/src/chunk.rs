@@ -61,7 +61,7 @@ impl Chunk {
         }
     }
 
-    pub fn contains(xyz: IVec3) -> bool {
+    pub fn contains(xyz: &IVec3) -> bool {
         (0..CHUNK_SIDE as i32).contains(&xyz.x)
             && (0..CHUNK_SIDE as i32).contains(&xyz.y)
             && (0..CHUNK_SIDE as i32).contains(&xyz.z)
