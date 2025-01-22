@@ -37,7 +37,7 @@ impl Block {
         }
     }
     pub fn set_light(&mut self, light_type: LightType, v: u8) {
-        assert!((0..=MAX_LIGHT).contains(&v));
+        assert!((0..=MAX_LIGHT).contains(&v), "brightness: {}", v);
         match light_type {
             LightType::Torch => self.light0 = v,
             LightType::Sun => self.light1 = v,
@@ -227,7 +227,7 @@ impl<'de> Deserialize<'de> for FlagBank {
 /// If sunlight == torchlight, every time the day's light level changes
 /// every block's light must be recalculated, and that's very slow.
 /// If sunlight != torchlight, we do it only when a chunk is generated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LightType {
     Torch,
     Sun,
