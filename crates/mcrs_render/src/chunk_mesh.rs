@@ -325,7 +325,7 @@ pub fn generate_chunk_mesh(
                     .read_chunk_block(&(chunk_pos + diagonal))
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
-                    ao += 0.3;
+                    ao += 0.1;
                 }
 
                 let diagonal = (xyz + normal * 0.5 + ortho).floor().as_ivec3();
@@ -333,7 +333,7 @@ pub fn generate_chunk_mesh(
                     .read_chunk_block(&(chunk_pos + diagonal))
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
-                    ao += 0.3;
+                    ao += 0.1;
                 }
 
                 let diagonal = (xyz + normal * 0.5 + dir).floor().as_ivec3();
@@ -342,7 +342,7 @@ pub fn generate_chunk_mesh(
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
                     if ao == 0.0 {
-                        ao += 0.3;
+                        ao += 0.1;
                     }
                 }
 
