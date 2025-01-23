@@ -53,6 +53,7 @@ pub struct UniverseChanges {
 pub fn apply_terrain_changes(
     mut universe: ResMut<Universe>,
     mut changes: ResMut<UniverseChanges>,
+    mut light_sources: ResMut<LightSources>,
     bp: Res<Blueprints>,
 ) {
     for change in changes.queue.iter() {
@@ -60,17 +61,40 @@ pub fn apply_terrain_changes(
             UniverseChange::Remove { pos } => {
                 debug!(target: "terrain_editing", "removed block at {}", pos);
 
-                let mut light_suns = vec![];
-                let mut light_torches = vec![];
-
                 if let Some(block) = universe.read_chunk_block(&pos) {
                     if bp.blocks.get(&block.id).is_light_source() {
-                        let new = propagate_darkness(&mut universe, *pos, LightType::Torch);
-                        propagate_light(&mut universe, new, LightType::Torch)
+                        let mut new_sources =
+                            propagate_darkness(&mut universe, &bp, *pos, LightType::Torch);
+                        light_sources
+                            .leaked_sources
+                            .entry(LightType::Torch)
+                            .or_default()
+                            .append(&mut new_sources);
                     }
                 }
 
                 universe.set_chunk_block(&pos, Block::new(bp.blocks.get_named("Air")));
+
+                for dir in DIRS.iter() {
+                    let sample = pos + *dir;
+                    if let Some(voxel) = universe.read_chunk_block(&sample) {
+                        if !voxel.properties.check(BlockFlag::Opaque) {
+                            for light_type in [LightType::Torch, LightType::Sun] {
+                                let brightness = voxel.get_light(light_type);
+                                if brightness > 1 {
+                                    light_sources
+                                        .leaked_sources
+                                        .entry(light_type)
+                                        .or_default()
+                                        .push(LightSource {
+                                            pos: sample,
+                                            brightness,
+                                        })
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Todo: sun beams
                 /*
@@ -98,29 +122,24 @@ pub fn apply_terrain_changes(
                         universe.heightfield.insert(planar, beam);
                     }
                 }
-                */
-
-                for dir in DIRS.iter() {
-                    let sample = pos + *dir;
-                    if let Some(voxel) = universe.read_chunk_block(&sample) {
-                        if !voxel.properties.check(BlockFlag::Opaque) {
-                            if voxel.get_light(LightType::Sun) > 1 {
-                                light_suns.push(sample);
-                            }
-                            if voxel.get_light(LightType::Torch) > 1 {
-                                light_torches.push(sample);
-                            }
-                        }
-                    }
-                }
 
                 propagate_light(&mut universe, light_suns, LightType::Sun);
                 propagate_light(&mut universe, light_torches, LightType::Torch);
+                */
             }
             UniverseChange::Add { pos, block } => {
                 debug!(target: "terrain_editing", "placed block at {}", pos);
                 universe.set_chunk_block(&pos, *block);
-                propagate_light(&mut universe, vec![*pos], LightType::Torch);
+
+                let block_bp = bp.blocks.get(&block.id);
+                light_sources
+                    .leaked_sources
+                    .entry(LightType::Torch)
+                    .or_default()
+                    .push(LightSource {
+                        pos: *pos,
+                        brightness: block_bp.light_level,
+                    });
 
                 // Todo: sun beams
                 /*
@@ -148,6 +167,27 @@ pub fn apply_terrain_changes(
     changes.queue.clear()
 }
 
+pub fn group_leaked_light_into_chunks(
+    universe: &Universe,
+    leaked: HashMap<LightType, Vec<LightSource>>,
+    light_sources: &mut LightSources,
+) {
+    for (light_type, sources) in leaked {
+        for source in sources {
+            let (chunk_pos_leaked, inner) = universe.pos_to_chunk_and_inner(&source.pos);
+            let chunked_sources_list_leaked =
+                light_sources.chunked_sources.entry(light_type).or_default();
+            let chunked_sources_leaked = chunked_sources_list_leaked
+                .entry(chunk_pos_leaked)
+                .or_default();
+            chunked_sources_leaked.sources.push(LightSource {
+                pos: inner,
+                brightness: source.brightness,
+            });
+        }
+    }
+}
+
 pub fn apply_lighting_sources(
     mut universe: ResMut<Universe>,
     mut light_sources: ResMut<LightSources>,
@@ -165,20 +205,30 @@ pub fn apply_lighting_sources(
         );
     }
 
-    let mut leaked = HashMap::<LightType, Vec<LightSource>>::new();
+    // Collect leaked light that has leaked outside of this function
+    let mut leaked_outside = HashMap::<LightType, Vec<LightSource>>::new();
+    for (light_type, mut sources) in light_sources.leaked_sources.iter_mut() {
+        leaked_outside
+            .entry(*light_type)
+            .or_default()
+            .append(&mut sources);
+    }
+    group_leaked_light_into_chunks(&universe, leaked_outside, &mut light_sources);
 
     // Propagate the light in loaded chunks and collect the leaked light
+    let mut leaked_inside = HashMap::<LightType, Vec<LightSource>>::new();
     let mut processed_chunks = vec![];
     for (light_type, chunked_sources_list) in light_sources.chunked_sources.iter() {
         for (chunk_pos, chunked_sources) in chunked_sources_list {
             if let Some(chunk) = universe.chunks.get_mut(chunk_pos) {
                 processed_chunks.push(*chunk_pos);
 
+                chunk.version.update();
                 let mut chunk_mut = chunk.get_mut();
                 let mut sources = vec![];
                 for source in chunked_sources.sources.iter() {
                     let block = &mut chunk_mut[Chunk::xyz2idx(source.pos)];
-                    if block.get_light(*light_type) < source.brightness
+                    if block.get_light(*light_type) <= source.brightness
                         && !block.properties.check(BlockFlag::Opaque)
                     {
                         block.set_light(*light_type, source.brightness);
@@ -191,7 +241,7 @@ pub fn apply_lighting_sources(
                     for source in leaked_from_chunk.iter_mut() {
                         source.pos += chunk_pos;
                     }
-                    leaked
+                    leaked_inside
                         .entry(*light_type)
                         .or_default()
                         .append(&mut leaked_from_chunk);
@@ -199,32 +249,12 @@ pub fn apply_lighting_sources(
             }
         }
     }
+    group_leaked_light_into_chunks(&universe, leaked_inside, &mut light_sources);
 
     // Remove chunks that have been lit
     for (_, chunked_sources_list) in light_sources.chunked_sources.iter_mut() {
         for chunk_pos in processed_chunks.iter() {
             chunked_sources_list.remove(chunk_pos);
-        }
-    }
-
-    // Collect leaked light that has leaked outside of this function
-    for (light_type, mut sources) in light_sources.leaked_sources.iter_mut() {
-        leaked.entry(*light_type).or_default().append(&mut sources);
-    }
-
-    // Move the leaked light into the chunked sources
-    for (light_type, sources) in leaked {
-        for source in sources {
-            let (chunk_pos_leaked, inner) = universe.pos_to_chunk_and_inner(&source.pos);
-            let chunked_sources_list_leaked =
-                light_sources.chunked_sources.entry(light_type).or_default();
-            let chunked_sources_leaked = chunked_sources_list_leaked
-                .entry(chunk_pos_leaked)
-                .or_default();
-            chunked_sources_leaked.sources.push(LightSource {
-                pos: inner,
-                brightness: source.brightness,
-            });
         }
     }
 }
@@ -538,7 +568,7 @@ pub fn chunk_generation(
 
         // Calculate sunbeams by raycasting up from the lowest blocks of the chunk.
         // If any beam escapes the chunk, request the chunk above.
-        let mut chunk_mut = chunk.get_mut();
+        let chunk_mut = chunk.get_ref();
         let mut any_beam_escaped = false;
         for (x, z) in (0..CHUNK_SIDE as i32)
             .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
@@ -590,8 +620,6 @@ pub fn chunk_generation(
         // Todo: Adjust sun beam cache
 
         // Calculate the light for the first time
-        let mut new_sources = HashMap::<LightType, Vec<IVec3>>::new();
-
         info!(
             target: "terrain_generation",
             "lighting chunk at {}", chunk_pos
@@ -622,8 +650,14 @@ pub fn chunk_generation(
                 ..=(part.blocks_beams[plane_index].min(CHUNK_SIDE as i32 - 1)) as i32
             {
                 let xyz = IVec3::new(x, y, z);
-                chunk_mut[Chunk::xyz2idx(xyz)].set_light(LightType::Sun, sun_light);
-                new_sources.entry(LightType::Sun).or_default().push(xyz);
+                light_sources
+                    .leaked_sources
+                    .entry(LightType::Sun)
+                    .or_default()
+                    .push(LightSource {
+                        pos: xyz + chunk_pos,
+                        brightness: sun_light,
+                    });
             }
         }
 
@@ -631,23 +665,14 @@ pub fn chunk_generation(
             let id = chunk_mut[Chunk::xyz2idx(xyz)].id;
             let block_bp = bp.blocks.get(&id);
             if block_bp.is_light_source() {
-                chunk_mut[Chunk::xyz2idx(xyz)].set_light(LightType::Torch, block_bp.light_level);
-                new_sources.entry(LightType::Torch).or_default().push(xyz);
-            }
-        }
-
-        for (light_type, sources) in new_sources {
-            if !sources.is_empty() {
-                let mut leaked_from_chunk =
-                    propagate_light_chunk(&mut chunk_mut, sources, light_type);
-                for source in leaked_from_chunk.iter_mut() {
-                    source.pos += chunk_pos;
-                }
                 light_sources
                     .leaked_sources
-                    .entry(light_type)
+                    .entry(LightType::Torch)
                     .or_default()
-                    .append(&mut leaked_from_chunk);
+                    .push(LightSource {
+                        pos: xyz + chunk_pos,
+                        brightness: block_bp.light_level,
+                    });
             }
         }
 

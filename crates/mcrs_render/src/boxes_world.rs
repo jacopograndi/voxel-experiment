@@ -1,8 +1,3 @@
-use std::{
-    fs,
-    sync::{Arc, RwLock},
-};
-
 use bevy::{
     ecs::entity::EntityHashMap,
     prelude::*,
@@ -20,9 +15,11 @@ use bevy::{
     },
     utils::HashMap,
 };
-
+use std::{
+    fs,
+    sync::{Arc, RwLock},
+};
 use mcrs_universe::{block::BlockId, ghost::GhostId, Blueprints};
-
 use crate::{block_texture::BlockTexture, settings::RenderSettings, voxel_world::VoxelUniforms};
 
 const MAX_BOXES: usize = 10000;

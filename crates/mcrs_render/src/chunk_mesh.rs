@@ -235,7 +235,7 @@ pub fn generate_chunk_mesh(
         let pos = IVec3::new(x as i32, y as i32, z as i32) - IVec3::splat(1);
         if Chunk::contains(&pos) {
             let block = chunk_ref[Chunk::xyz2idx(pos) as usize];
-            if block.properties.check(BlockFlag::Opaque) {
+            if block.properties.check(BlockFlag::Collidable) {
                 empty = false;
                 samples[i as usize] = GridVoxel::Full;
             }

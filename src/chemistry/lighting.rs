@@ -1,106 +1,16 @@
+use crate::LightSource;
 use bevy::prelude::*;
 use mcrs_universe::{
     block::{Block, BlockFlag, LightType},
     chunk::Chunk,
     universe::Universe,
-    CHUNK_VOLUME,
+    Blueprints, CHUNK_VOLUME,
 };
 use std::collections::VecDeque;
 use std::sync::RwLockWriteGuard;
 
-use crate::LightSource;
-
-/*
-pub fn recalc_lights(
-    universe: &mut Universe,
-    request: &mut ChunkGenerationRequest,
-    chunks: Vec<IVec3>,
-    bp: &Blueprints,
-) {
-    debug!(target: "automata_lighting", chunks = ?chunks);
-
-    // calculate sunlight beams
-    let mut suns: Vec<IVec3> = vec![];
-    let mut planars = HashSet::<IVec2>::new();
-    let mut highest = i32::MIN;
-    for chunk_pos in chunks.iter() {
-        let Some(chunk) = get_chunk_mut_at(universe, request, chunk_pos) else {
-            error!("lighting: the chunk at {} was missing", chunk_pos);
-            continue;
-        };
-
-        chunk.version.update();
-        for x in 0..CHUNK_SIDE {
-            for z in 0..CHUNK_SIDE {
-                let mut sunlight = MAX_LIGHT;
-                for y in (0..CHUNK_SIDE).rev() {
-                    let xyz = IVec3::new(x as i32, y as i32, z as i32);
-                    if chunk.read_block(xyz).properties.check(BlockFlag::Opaque) {
-                        sunlight = 0;
-                    }
-                    if sunlight > 0 {
-                        suns.push(*chunk_pos + xyz);
-                    }
-                    chunk.set_block_light(xyz, LightType::Sun, sunlight);
-                    chunk.set_block_light(xyz, LightType::Torch, 0);
-                    highest = highest.max(chunk_pos.y + y as i32);
-                }
-                let planar = IVec2::new(x as i32 + chunk_pos.x, z as i32 + chunk_pos.z);
-                planars.insert(planar);
-            }
-        }
-    }
-
-    for planar in planars.iter() {
-        let mut beam = 0;
-        let mut block_found = false;
-        for y in 0..1000 {
-            let h = highest - y;
-            let sample = IVec3::new(planar.x, h, planar.y);
-
-            if let Some(voxel) = universe.read_chunk_block(&sample) {
-                block_found = true;
-                if voxel.properties.check(BlockFlag::Opaque) {
-                    beam = h;
-                    break;
-                }
-            } else {
-                if block_found {
-                    break;
-                }
-            }
-        }
-        if let Some(height) = universe.heightfield.get_mut(planar) {
-            *height = (*height).min(beam);
-        } else {
-            universe.heightfield.insert(*planar, beam);
-        }
-    }
-
-    // find new light sources
-    let mut torches: Vec<IVec3> = vec![];
-    for pos in chunks.iter() {
-        let chunk = universe.chunks.get_mut(pos).unwrap();
-        for xyz in Chunk::iter() {
-            let id = chunk.read_block(xyz).id;
-            let block_bp = bp.blocks.get(&id);
-            if block_bp.is_light_source() {
-                torches.push(*pos + xyz);
-                chunk.set_block_light(xyz, LightType::Torch, block_bp.light_level);
-            }
-        }
-    }
-
-    if !suns.is_empty() {
-        propagate_light(universe, suns, LightType::Sun);
-    }
-
-    if !torches.is_empty() {
-        propagate_light(universe, torches, LightType::Torch);
-    }
-}
-*/
-
+const MAX_LIGHTING_PROPAGATION: usize = 1000000;
+const MAX_DARKNESS_PROPAGATION: usize = 100000;
 pub const DIRS: [IVec3; 6] = [
     IVec3::X,
     IVec3::Y,
@@ -109,9 +19,13 @@ pub const DIRS: [IVec3; 6] = [
     IVec3::NEG_Y,
     IVec3::NEG_Z,
 ];
-const MAX_LIGHTING_PROPAGATION: usize = 100000;
 
-pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType) -> Vec<IVec3> {
+pub fn propagate_darkness(
+    universe: &mut Universe,
+    bp: &Blueprints,
+    source: IVec3,
+    lt: LightType,
+) -> Vec<LightSource> {
     let val = if let Some(voxel) = universe.read_chunk_block(&source) {
         let val = voxel.get_light(lt);
         let mut dark = voxel.clone();
@@ -124,9 +38,9 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
 
     debug!(target: "automata_lighting", "1 source of {lt} darkness val:{val}");
 
-    let mut new_lights: Vec<IVec3> = vec![];
+    let mut new_lights: Vec<LightSource> = vec![];
     let mut frontier: VecDeque<IVec3> = [source].into();
-    for iter in 0..MAX_LIGHTING_PROPAGATION {
+    for iter in 0..MAX_DARKNESS_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
             for dir in DIRS.iter() {
                 let target = pos + *dir;
@@ -137,8 +51,18 @@ pub fn propagate_darkness(universe: &mut Universe, source: IVec3, lt: LightType)
                         let mut l = neighbor;
                         l.set_light(lt, 0);
                         unlit = Some(l);
+                        let target_bp = bp.blocks.get(&neighbor.id);
+                        if target_bp.is_light_source() {
+                            new_lights.push(LightSource {
+                                pos: target,
+                                brightness: target_bp.light_level,
+                            });
+                        }
                     } else if target_light >= val {
-                        new_lights.push(target);
+                        new_lights.push(LightSource {
+                            pos: target,
+                            brightness: target_light,
+                        });
                     }
                 }
                 if let Some(voxel) = unlit {
