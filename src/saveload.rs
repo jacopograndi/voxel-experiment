@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     settings::McrsSettings,
     terrain::{get_spawn_chunks, UniverseChanges},
-    FixedMainSet,
+    FixedMainSet, LightSources,
 };
 
 pub struct SaveLoadPlugin;
@@ -93,6 +93,9 @@ pub fn open_level(
     });
 
     *tickstep = TickStep::Tick;
+
+    // The player is spawned when the spawn chunks are ready
+    // The chunks are loaded when they are needed
 }
 
 pub fn close_level(
@@ -103,6 +106,7 @@ pub fn close_level(
     mut universe_changes: ResMut<UniverseChanges>,
     mut tickstep: ResMut<TickStep>,
     level_owned_query: Query<(Entity, &LevelOwned)>,
+    mut light_sources: ResMut<LightSources>,
 ) {
     let Some(_) = get_single_event(event_reader) else {
         return;
@@ -118,6 +122,8 @@ pub fn close_level(
 
     universe.chunks.clear();
     universe_changes.queue.clear();
+    light_sources.leaked_sources.clear();
+    light_sources.chunked_sources.clear();
     *tickstep = TickStep::STOP;
 
     for (entity, _) in level_owned_query.iter() {

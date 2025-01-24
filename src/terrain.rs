@@ -17,6 +17,7 @@ use mcrs_universe::{
     Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
 use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
+use std::ops::Range;
 
 const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
@@ -48,6 +49,21 @@ pub struct LightSources {
 #[derive(Resource, Default, Clone, Debug)]
 pub struct UniverseChanges {
     pub queue: Vec<UniverseChange>,
+}
+
+#[derive(Resource, Default, Clone, Debug)]
+pub struct SunBeams {
+    pub beams: HashMap<IVec2, Range<i32>>,
+}
+
+impl SunBeams {
+    pub fn extend_beam(&mut self, xz: &IVec2, beam: Range<i32>) {
+        let sun_height = get_sun_heightfield(*xz);
+        let sun_range = &mut self.beams.entry(*xz).or_insert(sun_height..sun_height);
+        sun_range.start = sun_range.start.min(beam.start);
+        sun_range.end = sun_range.start.max(beam.end);
+        // Todo: assert that the new beam is touching the old one
+    }
 }
 
 pub fn apply_terrain_changes(
@@ -463,6 +479,7 @@ pub fn chunk_generation(
     mut light_sources: ResMut<LightSources>,
     mut request: ResMut<ChunkGenerationRequest>,
     mut generator: Local<Option<GeneratorSponge>>,
+    mut sun_beams: ResMut<SunBeams>,
     level: Option<Res<Level>>,
 ) {
     let Some(level) = level else {
@@ -565,6 +582,7 @@ pub fn chunk_generation(
         let is_sun =
             |IVec3 { x, y, z }: IVec3| chunk_pos.y + y >= get_sun_heightfield(IVec2::new(x, z));
 
+        // Todo: this can be cached and done in a separate `GenerationPass`.
         // Calculate sunbeams by raycasting up from the lowest blocks of the chunk.
         // If any beam escapes the chunk, request the chunk above.
         let chunk_mut = chunk.get_ref();
@@ -616,8 +634,6 @@ pub fn chunk_generation(
             continue;
         }
 
-        // Todo: Adjust sun beam cache
-
         // Calculate the light for the first time
         info!(
             target: "terrain_generation",
@@ -629,8 +645,9 @@ pub fn chunk_generation(
             .flatten()
         {
             let plane_index = (x + z * CHUNK_SIDE as i32) as usize;
-            let sun_beam = chunk_pos.y + part.blocks_beams[plane_index]
-                == get_sun_heightfield(IVec2::new(x, z));
+            let beam_pos = IVec2::new(x, z) + chunk_pos.xz();
+            let sun_beam =
+                chunk_pos.y + part.blocks_beams[plane_index] == get_sun_heightfield(beam_pos);
             let escaped_beam = part.blocks_beams[plane_index] == CHUNK_SIDE as i32 - 1;
             let sun_light = if sun_beam {
                 MAX_LIGHT
@@ -645,6 +662,12 @@ pub fn chunk_generation(
             } else {
                 0
             };
+
+            if sun_light == MAX_LIGHT {
+                let sun_range = part.blocks_lowest[plane_index]..part.blocks_beams[plane_index];
+                sun_beams.extend_beam(&beam_pos, sun_range);
+            }
+
             for y in part.blocks_lowest[plane_index]
                 ..=(part.blocks_beams[plane_index].min(CHUNK_SIDE as i32 - 1)) as i32
             {
