@@ -1,3 +1,4 @@
+use crate::settings::RenderSettings;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::view::ExtractedView;
 use bevy::render::MainWorld;
@@ -14,7 +15,6 @@ use bevy::{
 use mcrs_universe::chunk::Chunk;
 use mcrs_universe::universe::Universe;
 use mcrs_universe::{CHUNK_SIDE, CHUNK_VOLUME};
-use crate::settings::RenderSettings;
 
 pub struct VoxelWorldPlugin;
 

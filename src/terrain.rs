@@ -249,14 +249,12 @@ pub fn apply_lighting_sources(
             }
         }
     }
-    group_leaked_light_into_chunks(&universe, leaked_inside, &mut light_sources);
-
-    // Remove chunks that have been lit
     for (_, chunked_sources_list) in light_sources.chunked_sources.iter_mut() {
         for chunk_pos in processed_chunks.iter() {
             chunked_sources_list.remove(chunk_pos);
         }
     }
+    group_leaked_light_into_chunks(&universe, leaked_inside, &mut light_sources);
 }
 
 pub fn terrain_editing(
@@ -458,6 +456,7 @@ pub fn request_base_chunks(
     }
 }
 
+// Todo: split this function
 pub fn chunk_generation(
     mut universe: ResMut<Universe>,
     bp: Res<Blueprints>,

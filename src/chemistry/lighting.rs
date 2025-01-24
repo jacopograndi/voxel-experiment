@@ -20,6 +20,52 @@ pub const DIRS: [IVec3; 6] = [
     IVec3::NEG_Z,
 ];
 
+/// Propagate the light from `sources` and return the light sources leaving the chunk.
+/// Both `sources` positions and the return leaked sources positions are relative to this chunk
+pub fn propagate_light_chunk(
+    chunk_mut: &mut RwLockWriteGuard<[Block; CHUNK_VOLUME]>,
+    sources: Vec<IVec3>,
+    lt: LightType,
+) -> Vec<LightSource> {
+    debug!(target: "lighting_chunk", "{} sources of {lt} light", sources.len());
+
+    let mut leaking = vec![];
+
+    let mut frontier: VecDeque<IVec3> = sources.into();
+    let mut iter = 0;
+    while let Some(pos) = frontier.pop_front() {
+        if iter >= MAX_LIGHTING_PROPAGATION {
+            break;
+        }
+        let source = chunk_mut[Chunk::xyz2idx(pos)];
+        let light = source.get_light(lt);
+        for dir in DIRS.iter() {
+            let target = pos + *dir;
+            if Chunk::contains(&target) {
+                let neighbor = &mut chunk_mut[Chunk::xyz2idx(target)];
+                if !neighbor.properties.check(BlockFlag::Opaque)
+                    && neighbor.get_light(lt) + 2 <= light
+                {
+                    neighbor.set_light(lt, light - 1);
+                    frontier.push_back(target);
+                }
+            } else if light > 0 {
+                leaking.push(LightSource {
+                    pos: target,
+                    brightness: light - 1,
+                });
+            }
+        }
+        iter += 1;
+    }
+
+    debug!(target: "lighting_chunk", "{} iters for {lt} light", iter);
+
+    leaking
+}
+
+// Remove one light source and set to 0 brightness the volume that was lit by that light source.
+// Then return the sources at the boundary and every other light source that was inside.
 pub fn propagate_darkness(
     universe: &mut Universe,
     bp: &Blueprints,
@@ -76,83 +122,4 @@ pub fn propagate_darkness(
         }
     }
     new_lights
-}
-
-// Todo: Modify so that the light that it operates only on one chunk.
-// Return the light sources leaving the chunk.
-// `sources` positions are relative to this chunk
-pub fn propagate_light_chunk(
-    chunk_mut: &mut RwLockWriteGuard<[Block; CHUNK_VOLUME]>,
-    sources: Vec<IVec3>,
-    lt: LightType,
-) -> Vec<LightSource> {
-    debug!(target: "lighting_chunk", "{} sources of {lt} light", sources.len());
-
-    let mut leaking = vec![];
-
-    let mut frontier: VecDeque<IVec3> = sources.into();
-    let mut iter = 0;
-    while let Some(pos) = frontier.pop_front() {
-        if iter >= MAX_LIGHTING_PROPAGATION {
-            break;
-        }
-        let source = chunk_mut[Chunk::xyz2idx(pos)];
-        let light = source.get_light(lt);
-        for dir in DIRS.iter() {
-            let target = pos + *dir;
-            if Chunk::contains(&target) {
-                let neighbor = &mut chunk_mut[Chunk::xyz2idx(target)];
-                if !neighbor.properties.check(BlockFlag::Opaque)
-                    && neighbor.get_light(lt) + 2 <= light
-                {
-                    neighbor.set_light(lt, light - 1);
-                    frontier.push_back(target);
-                }
-            } else if light > 0 {
-                leaking.push(LightSource {
-                    pos: target,
-                    brightness: light - 1,
-                });
-            }
-        }
-        iter += 1;
-    }
-
-    debug!(target: "lighting_chunk", "{} iters for {lt} light", iter);
-
-    leaking
-}
-
-pub fn propagate_light(universe: &mut Universe, sources: Vec<IVec3>, lt: LightType) {
-    debug!(target: "automata_lighting", "{} sources of {lt} light", sources.len());
-
-    let mut frontier: VecDeque<IVec3> = sources.clone().into();
-    for iter in 0..MAX_LIGHTING_PROPAGATION {
-        if let Some(pos) = frontier.pop_front() {
-            let Some(voxel) = universe.read_chunk_block(&pos) else {
-                continue;
-            };
-            let light = voxel.get_light(lt);
-            for dir in DIRS.iter() {
-                let target = pos + *dir;
-                let mut lit: Option<Block> = None;
-                if let Some(neighbor) = universe.read_chunk_block(&target) {
-                    if !neighbor.properties.check(BlockFlag::Opaque)
-                        && neighbor.get_light(lt) + 2 <= light
-                    {
-                        let mut l = neighbor;
-                        l.set_light(lt, light - 1);
-                        lit = Some(l);
-                    }
-                }
-                if let Some(voxel) = lit {
-                    universe.set_chunk_block(&target, voxel);
-                    frontier.push_back(target);
-                }
-            }
-        } else {
-            debug!(target: "automata_lighting", "{} iters for {lt} light", iter);
-            break;
-        }
-    }
 }
