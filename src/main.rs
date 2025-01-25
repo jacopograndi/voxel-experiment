@@ -76,6 +76,7 @@ fn main() -> AppExit {
     app.init_resource::<UniverseChanges>();
     app.init_resource::<LightSources>();
     app.init_resource::<ChunkGenerationRequest>();
+    app.init_resource::<SunBeams>();
 
     match settings.network_mode {
         NetworkMode::Client => {
@@ -140,7 +141,12 @@ fn add_server(app: &mut App) {
                 .run_if(resource_exists::<RenetServer>)
                 .chain()
                 .in_set(FixedNetSet::Receive),
-            (request_base_chunks, chunk_generation, apply_terrain_changes, apply_lighting_sources)
+            (
+                request_base_chunks,
+                chunk_generation,
+                apply_terrain_changes,
+                apply_lighting_sources,
+            )
                 .chain()
                 .in_set(FixedMainSet::Terrain),
             server_send_replica
