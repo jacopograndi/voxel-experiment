@@ -21,9 +21,16 @@ impl Universe {
     }
 
     pub fn pos_to_chunk_and_inner(&self, pos: &IVec3) -> (IVec3, IVec3) {
-        let chunk_size = IVec3::splat(CHUNK_SIDE as i32);
-        let chunk_pos = (pos.div_euclid(chunk_size)) * chunk_size;
-        let inner_pos = pos.rem_euclid(chunk_size);
+        const CHUNK_SIZE: IVec3 = IVec3::splat(CHUNK_SIDE as i32);
+        let chunk_pos = (pos.div_euclid(CHUNK_SIZE)) * CHUNK_SIZE;
+        let inner_pos = pos.rem_euclid(CHUNK_SIZE);
+        (chunk_pos, inner_pos)
+    }
+
+    pub fn pos_to_region_and_inner(&self, pos: &IVec2) -> (IVec2, IVec2) {
+        const CHUNK_SIZE: IVec2 = IVec2::splat(CHUNK_SIDE as i32);
+        let chunk_pos = (pos.div_euclid(CHUNK_SIZE)) * CHUNK_SIZE;
+        let inner_pos = pos.rem_euclid(CHUNK_SIZE);
         (chunk_pos, inner_pos)
     }
 

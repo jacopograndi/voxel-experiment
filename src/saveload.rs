@@ -1,18 +1,19 @@
 use std::{fs, path::PathBuf};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
+use bytemuck::{Pod, Zeroable};
 use mcrs_physics::{
     character::{CameraController, Character},
     TickStep,
 };
-use mcrs_universe::{chunk::Chunk, universe::Universe};
+use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE};
 use ron::{de::SpannedError, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     settings::McrsSettings,
     terrain::{get_spawn_chunks, UniverseChanges},
-    FixedMainSet, LightSources,
+    FixedMainSet, LightSources, SunBeam, SunBeams,
 };
 
 pub struct SaveLoadPlugin;
@@ -96,6 +97,7 @@ pub fn open_level(
 
     // The player is spawned when the spawn chunks are ready
     // The chunks are loaded when they are needed
+    // The sun beams are loaded when they are needed
 }
 
 pub fn close_level(
@@ -107,6 +109,7 @@ pub fn close_level(
     mut tickstep: ResMut<TickStep>,
     level_owned_query: Query<(Entity, &LevelOwned)>,
     mut light_sources: ResMut<LightSources>,
+    mut sun_beams: ResMut<SunBeams>,
 ) {
     let Some(_) = get_single_event(event_reader) else {
         return;
@@ -124,6 +127,7 @@ pub fn close_level(
     universe_changes.queue.clear();
     light_sources.leaked_sources.clear();
     light_sources.chunked_sources.clear();
+    sun_beams.beams.clear();
     *tickstep = TickStep::STOP;
 
     for (entity, _) in level_owned_query.iter() {
@@ -175,12 +179,20 @@ pub struct SerdeChunk {
     chunk: Vec<u8>,
 }
 
+#[derive(Pod, Zeroable, Copy, Debug, Clone, Default)]
+#[repr(C)]
+pub struct BeamPod {
+    bottom: i32,
+    top: i32,
+}
+
 pub fn save_level(
     event_reader: EventReader<SaveLevelEvent>,
     level: Option<Res<Level>>,
     universe: Res<Universe>,
     players_query: Query<&Transform, With<Character>>,
     camera_query: Query<(&Transform, &Parent), With<CameraController>>,
+    sun_beams: Res<SunBeams>,
 ) {
     let Some(_) = get_single_event(event_reader) else {
         return;
@@ -225,9 +237,33 @@ pub fn save_level(
         return;
     };
 
+    // Save the sun beams in files divided by region
+    // A region is a column of blocks that is as big as a chunk in x and z
+    // and extends from -inf to inf in y.
+    let sun_beams_path = path.join("sun_beams");
+    let _ = fs::create_dir_all(sun_beams_path.clone());
+    let mut sun_beams_by_region = HashMap::<IVec2, [BeamPod; CHUNK_AREA]>::new();
+    for (xz, beam) in sun_beams.beams.iter() {
+        let (region_pos, inner) = universe.pos_to_region_and_inner(xz);
+        let region = sun_beams_by_region
+            .entry(region_pos)
+            .or_insert([BeamPod::default(); CHUNK_AREA]);
+        let region_index = (inner.x + inner.y * CHUNK_SIDE as i32) as usize;
+        region[region_index].bottom = beam.bottom;
+        region[region_index].top = beam.top;
+    }
+    for (region_pos, beams) in sun_beams_by_region {
+        let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
+        let file_path = sun_beams_path.join(file_name);
+        let beams_bytes: &[u8] = bytemuck::cast_slice(&beams);
+        if let Err(err) = fs::write(file_path.clone(), beams_bytes) {
+            error!("Failed to write to {:?}:\n {:?}", file_path, err);
+            continue;
+        }
+    }
+
     let blocks_path = path.join("blocks");
     let _ = fs::create_dir_all(blocks_path.clone());
-
     for (chunk_pos, chunk) in universe.chunks.iter() {
         let file_name = format!("chunk_{}_{}_{}.bin", chunk_pos.x, chunk_pos.y, chunk_pos.z);
         let file_path = blocks_path.join(file_name);
@@ -268,6 +304,34 @@ pub fn get_player_from_save(player_name: &str, level_name: &str) -> Option<Serde
         .iter()
         .find(|p| p.name == player_name)
         .cloned()
+}
+
+pub fn get_sun_beams_from_save(chunk_pos: &IVec3, level_name: &str) -> Vec<(IVec2, SunBeam)> {
+    let region_pos = chunk_pos.xz();
+    let Some(mut path) = get_save_path() else {
+        warn!("Couldn't find the path of the save directory");
+        return vec![];
+    };
+    path.push(level_name);
+    path.push("sun_beams");
+    let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
+    path.push(file_name);
+    let Ok(beam_bytes) = fs::read(path) else {
+        return vec![];
+    };
+
+    let mut beams = vec![];
+    let beams_pod: &[BeamPod] = bytemuck::cast_slice(&beam_bytes);
+    for i in 0..CHUNK_AREA as i32 {
+        let (x, z) = (i % CHUNK_SIDE as i32, i / CHUNK_SIDE as i32);
+        let pos = IVec2::new(region_pos.x + x, region_pos.y + z);
+        let beam = SunBeam {
+            bottom: beams_pod[i as usize].bottom,
+            top: beams_pod[i as usize].top,
+        };
+        beams.push((pos, beam));
+    }
+    beams
 }
 
 pub fn get_chunk_from_save(chunk_pos: &IVec3, level_name: &str) -> Option<Chunk> {

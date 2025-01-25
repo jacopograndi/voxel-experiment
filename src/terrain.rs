@@ -1,6 +1,6 @@
 use crate::{
-    chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, hotbar::PlayerHand,
-    settings::McrsSettings, Level, PlayerInput, PlayerInputBuffer,
+    chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, get_sun_beams_from_save,
+    hotbar::PlayerHand, settings::McrsSettings, Level, PlayerInput, PlayerInputBuffer,
 };
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::{egui, EguiContexts};
@@ -560,6 +560,11 @@ pub fn chunk_generation(
         }
     }
     for loaded_chunk in loaded_chunks {
+        let beams = get_sun_beams_from_save(&loaded_chunk, &level.name);
+        for (pos, beam) in beams {
+            println!("{}, {:?}", pos, beam);
+            sun_beams.beams.insert(pos, beam);
+        }
         request.requested.remove(&loaded_chunk);
     }
 
