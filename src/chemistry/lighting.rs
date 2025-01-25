@@ -69,23 +69,23 @@ pub fn propagate_light_chunk(
 pub fn propagate_darkness(
     universe: &mut Universe,
     bp: &Blueprints,
-    source: IVec3,
+    sources: Vec<IVec3>,
     lt: LightType,
 ) -> Vec<LightSource> {
-    let val = if let Some(voxel) = universe.read_chunk_block(&source) {
-        let val = voxel.get_light(lt);
-        let mut dark = voxel.clone();
-        dark.set_light(lt, 0);
-        universe.set_chunk_block(&source, dark);
-        val
-    } else {
-        0
-    };
+    let mut val = 0;
+    for source in sources.iter() {
+        if let Some(voxel) = universe.read_chunk_block(&source) {
+            val = voxel.get_light(lt);
+            let mut dark = voxel.clone();
+            dark.set_light(lt, 0);
+            universe.set_chunk_block(&source, dark);
+        };
+    }
 
     debug!(target: "automata_lighting", "1 source of {lt} darkness val:{val}");
 
     let mut new_lights: Vec<LightSource> = vec![];
-    let mut frontier: VecDeque<IVec3> = [source].into();
+    let mut frontier: VecDeque<IVec3> = sources.into();
     for iter in 0..MAX_DARKNESS_PROPAGATION {
         if let Some(pos) = frontier.pop_front() {
             for dir in DIRS.iter() {

@@ -17,11 +17,13 @@ use mcrs_universe::{
     Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
 use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
-use std::ops::Range;
+
+// Todo: refactor this big file into lighting, generation and modification modules
 
 const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
 const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
+const MAX_SUN_BEAM_EXTENSION: i32 = 1000;
 
 #[derive(Debug, Clone)]
 pub enum UniverseChange {
@@ -51,18 +53,68 @@ pub struct UniverseChanges {
     pub queue: Vec<UniverseChange>,
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct SunBeam {
+    pub bottom: i32,
+    pub top: i32,
+}
+
+impl SunBeam {
+    fn new(start: i32, end: i32) -> Self {
+        Self {
+            bottom: start,
+            top: end,
+        }
+    }
+
+    // Extend an existing beam with another adjacent or overlapping one.
+    pub fn extend(&mut self, new_beam: SunBeam) {
+        assert!(
+            self.top + 1 >= new_beam.bottom && new_beam.top >= self.bottom - 1,
+            "not adjacent: {:?}, {:?}",
+            self,
+            new_beam
+        );
+        self.bottom = self.bottom.min(new_beam.bottom);
+        self.top = self.top.max(new_beam.top);
+    }
+
+    /// If `at` is inside the beam, return the two parts of the beam:
+    /// ```(self.start..=at, (at+1)..=self.end)```
+    pub fn cut(&mut self, at: i32) -> Option<(SunBeam, SunBeam)> {
+        println!("{:?}, {}", self, at);
+        if (self.bottom..=self.top).contains(&at) {
+            let lower = SunBeam::new(self.bottom, at);
+            let higher = SunBeam::new(at + 1, self.top);
+            self.bottom = (at + 1).min(self.top);
+            Some((lower, higher))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Resource, Default, Clone, Debug)]
 pub struct SunBeams {
-    pub beams: HashMap<IVec2, Range<i32>>,
+    pub beams: HashMap<IVec2, SunBeam>,
 }
 
 impl SunBeams {
-    pub fn extend_beam(&mut self, xz: &IVec2, beam: Range<i32>) {
+    pub fn get_at_mut<'a>(&'a mut self, xz: &'a IVec2) -> &'a mut SunBeam {
         let sun_height = get_sun_heightfield(*xz);
-        let sun_range = &mut self.beams.entry(*xz).or_insert(sun_height..sun_height);
-        sun_range.start = sun_range.start.min(beam.start);
-        sun_range.end = sun_range.start.max(beam.end);
-        // Todo: assert that the new beam is touching the old one
+        self.beams
+            .entry(*xz)
+            .or_insert(SunBeam::new(sun_height, sun_height))
+    }
+
+    pub fn extend_beam(&mut self, xz: &IVec2, new_beam: SunBeam) {
+        let sun_beam = self.get_at_mut(xz);
+        sun_beam.extend(new_beam);
+    }
+
+    pub fn cut_beam(&mut self, xz: &IVec2, at: i32) -> Option<(SunBeam, SunBeam)> {
+        let sun_beam = self.get_at_mut(xz);
+        sun_beam.cut(at)
     }
 }
 
@@ -70,6 +122,7 @@ pub fn apply_terrain_changes(
     mut universe: ResMut<Universe>,
     mut changes: ResMut<UniverseChanges>,
     mut light_sources: ResMut<LightSources>,
+    mut sun_beams: ResMut<SunBeams>,
     bp: Res<Blueprints>,
 ) {
     for change in changes.queue.iter() {
@@ -80,7 +133,7 @@ pub fn apply_terrain_changes(
                 if let Some(block) = universe.read_chunk_block(&pos) {
                     if bp.blocks.get(&block.id).is_light_source() {
                         let mut new_sources =
-                            propagate_darkness(&mut universe, &bp, *pos, LightType::Torch);
+                            propagate_darkness(&mut universe, &bp, vec![*pos], LightType::Torch);
                         light_sources
                             .leaked_sources
                             .entry(LightType::Torch)
@@ -112,36 +165,32 @@ pub fn apply_terrain_changes(
                     }
                 }
 
-                // Todo: sun beams
-                /*
-                let planar = IVec2::new(pos.x, pos.z);
-                if let Some(height) = universe.heightfield.get(&planar) {
-                    if pos.y == *height {
-                        // Recalculate the highest sunlit point
-                        let mut beam = pos.y - 100;
-                        for y in 0..=100 {
-                            let h = pos.y - y;
-                            let sample = IVec3::new(pos.x, h, pos.z);
-                            if let Some(voxel) = universe.read_chunk_block(&sample) {
-                                if voxel.properties.check(BlockFlag::Opaque) {
-                                    beam = h;
-                                    break;
-                                } else {
-                                    light_suns.push(sample);
-
-                                    let mut lit = voxel.clone();
-                                    lit.set_light(LightType::Sun, 15);
-                                    universe.set_chunk_block(&sample, lit);
-                                }
+                let xz = IVec2::new(pos.x, pos.z);
+                let beam = sun_beams.get_at_mut(&xz);
+                if beam.bottom - 1 == pos.y {
+                    // extend the beam
+                    let mut leaked_sun = vec![];
+                    for iter in 0..MAX_SUN_BEAM_EXTENSION {
+                        let h = pos.y - iter;
+                        let sample = IVec3::new(pos.x, h, pos.z);
+                        if let Some(voxel) = universe.read_chunk_block(&sample) {
+                            if voxel.properties.check(BlockFlag::Opaque) {
+                                beam.bottom = h + 1;
+                                break;
+                            } else {
+                                leaked_sun.push(LightSource {
+                                    pos: sample,
+                                    brightness: MAX_LIGHT,
+                                });
                             }
                         }
-                        universe.heightfield.insert(planar, beam);
                     }
+                    light_sources
+                        .leaked_sources
+                        .entry(LightType::Sun)
+                        .or_default()
+                        .extend(leaked_sun);
                 }
-
-                propagate_light(&mut universe, light_suns, LightType::Sun);
-                propagate_light(&mut universe, light_torches, LightType::Torch);
-                */
             }
             UniverseChange::Add { pos, block } => {
                 debug!(target: "terrain_editing", "placed block at {}", pos);
@@ -157,26 +206,21 @@ pub fn apply_terrain_changes(
                         brightness: block_bp.light_level,
                     });
 
-                // Todo: sun beams
-                /*
-                let mut dark_suns = vec![];
-                let planar = IVec2::new(pos.x, pos.z);
-                if let Some(height) = universe.heightfield.get(&planar) {
-                    if pos.y > *height {
-                        // Recalculate the highest sunlit point
-                        for y in (*height)..pos.y {
-                            let sample = IVec3::new(pos.x, y, pos.z);
-                            dark_suns.push(sample);
-                        }
-                        universe.heightfield.insert(planar, pos.y);
-                    }
+                let xz = IVec2::new(pos.x, pos.z);
+                if let Some((lower, _)) = sun_beams.cut_beam(&xz, pos.y) {
+                    let sources = (lower.bottom..lower.top)
+                        .map(|y| IVec3::new(pos.x, y, pos.z))
+                        .collect();
+                    let mut new_sources =
+                        propagate_darkness(&mut universe, &bp, sources, LightType::Sun);
+                    light_sources
+                        .leaked_sources
+                        .entry(LightType::Sun)
+                        .or_default()
+                        .append(&mut new_sources);
                 }
 
-                for sun in dark_suns {
-                    let new = propagate_darkness(&mut universe, sun, LightType::Sun);
-                    propagate_light(&mut universe, new, LightType::Sun)
-                }
-                */
+                // Todo: propagate darkness caused by light occlusion
             }
         }
     }
@@ -280,7 +324,7 @@ pub fn terrain_editing(
     bp: Res<Blueprints>,
     mut gizmos: Gizmos,
     mut contexts: EguiContexts,
-    mut show_red_cube: Local<bool>,
+    mut hide_red_cube: Local<bool>,
     mut changes: ResMut<UniverseChanges>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
@@ -322,14 +366,14 @@ pub fn terrain_editing(
                 .anchor(egui::Align2::LEFT_CENTER, egui::Vec2::new(5.0, 0.0))
                 .show(contexts.ctx_mut(), |ui| {
                     ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
-                    if *show_red_cube {
+                    if !*hide_red_cube {
                         ui.add(WidgetBlockDebug::new(
                             hit.grid_pos + hit.normal(),
                             &universe,
                             &bp,
                         ));
                     }
-                    ui.checkbox(&mut show_red_cube, "Show the facing cube in red");
+                    ui.checkbox(&mut hide_red_cube, "Hide the facing cube in red");
                 });
 
             gizmos.cuboid(
@@ -343,7 +387,7 @@ pub fn terrain_editing(
                 Color::BLACK,
             );
 
-            if *show_red_cube {
+            if !*hide_red_cube {
                 gizmos.cuboid(
                     Transform::from_translation(center_pos + hit.normal().as_vec3())
                         .with_scale(Vec3::splat(1.001)),
@@ -598,7 +642,8 @@ pub fn chunk_generation(
                     .properties
                     .check(BlockFlag::Opaque);
                 if is_opaque {
-                    part.blocks_lowest[plane_index] = y;
+                    // Only consider non-opaque blocks as part of the sun beam
+                    part.blocks_lowest[plane_index] = (y + 1).min(CHUNK_SIDE as i32 - 1);
                     break;
                 }
             }
@@ -634,12 +679,12 @@ pub fn chunk_generation(
             continue;
         }
 
-        // Calculate the light for the first time
         info!(
             target: "terrain_generation",
             "lighting chunk at {}", chunk_pos
         );
 
+        // Extend the light beams casting down from the sun heightfield
         for (x, z) in (0..CHUNK_SIDE as i32)
             .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
             .flatten()
@@ -664,25 +709,27 @@ pub fn chunk_generation(
             };
 
             if sun_light == MAX_LIGHT {
-                let sun_range = part.blocks_lowest[plane_index]..part.blocks_beams[plane_index];
-                sun_beams.extend_beam(&beam_pos, sun_range);
-            }
+                let beam_bottom = part.blocks_lowest[plane_index];
+                let beam_height = part.blocks_beams[plane_index].min(CHUNK_SIDE as i32 - 1) as i32;
 
-            for y in part.blocks_lowest[plane_index]
-                ..=(part.blocks_beams[plane_index].min(CHUNK_SIDE as i32 - 1)) as i32
-            {
-                let xyz = IVec3::new(x, y, z);
-                light_sources
-                    .leaked_sources
-                    .entry(LightType::Sun)
-                    .or_default()
-                    .push(LightSource {
-                        pos: xyz + chunk_pos,
-                        brightness: sun_light,
-                    });
+                let new_beam = SunBeam::new(beam_bottom + chunk_pos.y, beam_height + chunk_pos.y);
+                sun_beams.extend_beam(&beam_pos, new_beam);
+
+                for y in beam_bottom..=beam_height {
+                    let xyz = IVec3::new(x, y, z);
+                    light_sources
+                        .leaked_sources
+                        .entry(LightType::Sun)
+                        .or_default()
+                        .push(LightSource {
+                            pos: xyz + chunk_pos,
+                            brightness: sun_light,
+                        });
+                }
             }
         }
 
+        // Add the block light sources
         for xyz in Chunk::iter() {
             let id = chunk_mut[Chunk::xyz2idx(xyz)].id;
             let block_bp = bp.blocks.get(&id);
