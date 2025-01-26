@@ -29,7 +29,7 @@ use hotbar::{
     server_send_replica,
 };
 use input::*;
-use player::spawn_player;
+use player::{spawn_player, terrain_editing};
 use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};

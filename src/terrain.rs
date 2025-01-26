@@ -1,15 +1,10 @@
 use crate::{
-    chemistry::lighting::*, debug::WidgetBlockDebug, get_chunk_from_save, get_sun_beams_from_save,
-    hotbar::PlayerHand, settings::McrsSettings, Level, PlayerInput, PlayerInputBuffer,
+    chemistry::lighting::*, get_chunk_from_save, get_sun_beams_from_save, settings::McrsSettings,
+    Level,
 };
 use bevy::{prelude::*, utils::HashMap};
-use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
-use mcrs_physics::{
-    character::CameraController,
-    intersect::get_chunks_in_sphere,
-    raycast::{cast_ray, RayFinite},
-};
+use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_universe::{
     block::{Block, BlockFlag, LightType},
     chunk::Chunk,
@@ -317,93 +312,6 @@ pub fn apply_lighting_sources(
     group_leaked_light_into_chunks(&universe, leaked_inside, &mut light_sources);
 }
 
-pub fn terrain_editing(
-    camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
-    mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
-    universe: Res<Universe>,
-    bp: Res<Blueprints>,
-    mut gizmos: Gizmos,
-    mut contexts: EguiContexts,
-    mut hide_red_cube: Local<bool>,
-    mut changes: ResMut<UniverseChanges>,
-) {
-    for (_cam, tr, parent) in camera_query.iter() {
-        let Ok((mut input, hand)) = player_query.get_mut(parent.get()) else {
-            continue;
-        };
-
-        // Show debug info
-        if let Some(hit) = cast_ray(
-            RayFinite {
-                position: tr.translation(),
-                direction: tr.forward().as_vec3(),
-                reach: 4.5,
-            },
-            &universe,
-        ) {
-            for input in input.buffer.iter() {
-                match input {
-                    PlayerInput::Placing(true) => {
-                        if let Some(block_id) = hand.block_id {
-                            changes.queue.push(UniverseChange::Add {
-                                pos: hit.grid_pos + hit.normal(),
-                                block: Block::new(bp.blocks.get(&block_id)),
-                            });
-                        }
-                    }
-                    PlayerInput::Mining(true) => {
-                        changes
-                            .queue
-                            .push(UniverseChange::Remove { pos: hit.grid_pos });
-                    }
-                    _ => {}
-                };
-            }
-
-            let intersection = hit.final_position();
-
-            egui::Window::new("Player Raycast Hit")
-                .anchor(egui::Align2::LEFT_CENTER, egui::Vec2::new(5.0, 0.0))
-                .show(contexts.ctx_mut(), |ui| {
-                    ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
-                    if !*hide_red_cube {
-                        ui.add(WidgetBlockDebug::new(
-                            hit.grid_pos + hit.normal(),
-                            &universe,
-                            &bp,
-                        ));
-                    }
-                    ui.checkbox(&mut hide_red_cube, "Hide the facing cube in red");
-                });
-
-            gizmos.cuboid(
-                Transform::from_translation(intersection).with_scale(Vec3::splat(0.01)),
-                Color::BLACK,
-            );
-
-            let center_pos = hit.grid_pos.as_vec3() + Vec3::splat(0.5);
-            gizmos.cuboid(
-                Transform::from_translation(center_pos).with_scale(Vec3::splat(1.001)),
-                Color::BLACK,
-            );
-
-            if !*hide_red_cube {
-                gizmos.cuboid(
-                    Transform::from_translation(center_pos + hit.normal().as_vec3())
-                        .with_scale(Vec3::splat(1.001)),
-                    Color::srgb(1.0, 0.0, 0.0),
-                );
-                gizmos.arrow(
-                    intersection,
-                    intersection + hit.normal().as_vec3() * 0.5,
-                    Color::srgb(1.0, 0.0, 0.0),
-                );
-            }
-        }
-        input.buffer.clear();
-    }
-}
-
 #[derive(Resource, Default)]
 pub struct ChunkGenerationRequest {
     pub requested: HashMap<IVec3, ChunkGenerationState>,
@@ -562,7 +470,6 @@ pub fn chunk_generation(
     for loaded_chunk in loaded_chunks {
         let beams = get_sun_beams_from_save(&loaded_chunk, &level.name);
         for (pos, beam) in beams {
-            println!("{}, {:?}", pos, beam);
             sun_beams.beams.insert(pos, beam);
         }
         request.requested.remove(&loaded_chunk);

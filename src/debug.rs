@@ -11,6 +11,7 @@ use mcrs_physics::{
     TickStep,
 };
 use mcrs_universe::{universe::Universe, Blueprints};
+use renet::{RenetClient, RenetServer};
 
 use crate::{
     player::spawn_camera, settings::McrsSettings, CloseLevelEvent, Level, OpenLevelEvent,
@@ -35,16 +36,24 @@ impl Plugin for DebugDiagnosticPlugin {
         .add_systems(
             Update,
             (
-                debug_diagnostic_system,
-                debug_diagnostic_ui,
-                debug_saveload_ui,
                 debug_options_ui,
-                debug_show_hitboxes,
-                debug_camera_toggle,
-                debug_camera_movement,
+                (
+                    debug_diagnostic_system,
+                    debug_diagnostic_ui,
+                    debug_saveload_ui,
+                    debug_net_ui,
+                    debug_show_hitboxes,
+                    debug_camera_toggle,
+                    debug_camera_movement,
+                )
+                    .run_if(debug_active),
             ),
         );
     }
+}
+
+pub fn debug_active(debug_options: Res<DebugOptions>) -> bool {
+    debug_options.active
 }
 
 pub fn debug_diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real>>) {
@@ -58,7 +67,7 @@ pub fn debug_diagnostic_system(mut diagnostics: Diagnostics, time: Res<Time<Real
 
 pub fn debug_diagnostic_ui(mut contexts: EguiContexts, diagnostics: Res<DiagnosticsStore>) {
     egui::Window::new("Debug Diagnostics")
-        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::splat(5.0))
+        .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::new(5.0, -5.0))
         .show(contexts.ctx_mut(), |ui| {
             if let Some(value) = diagnostics
                 .get(&DIAGNOSTIC_FPS)
@@ -173,6 +182,7 @@ pub struct DebugCameraEvent {
 
 #[derive(Resource)]
 pub struct DebugOptions {
+    pub active: bool,
     show_hitboxes: bool,
     debug_camera_active: bool,
     debug_camera_has_character_control: bool,
@@ -181,6 +191,7 @@ pub struct DebugOptions {
 impl Default for DebugOptions {
     fn default() -> Self {
         Self {
+            active: true,
             show_hitboxes: false,
             debug_camera_active: false,
             debug_camera_has_character_control: false,
@@ -209,15 +220,37 @@ pub fn ui_button_shortcut(
     keys: &ButtonInput<KeyCode>,
     text: &str,
     key: KeyCode,
-    modifiers: &[KeyCode],
+    modifier: Option<Modifier>,
 ) -> bool {
-    let modifier = modifiers.iter().any(|m| keys.pressed(*m)) || modifiers.is_empty();
-    ui.button(format!("{} {:?} [{:?}]", text, modifiers, key))
+    let (modifier_name, modifier_pressed) = if let Some(modifier) = modifier {
+        (
+            format!("{} ", modifier.get_name()),
+            modifier.get_keys().iter().any(|m| keys.pressed(*m)),
+        )
+    } else {
+        (String::new(), false)
+    };
+    ui.button(format!("{} [{}{:?}]", text, modifier_name, key))
         .clicked()
-        || (keys.just_pressed(key) && modifier)
+        || (keys.just_pressed(key) && modifier_pressed)
 }
 
-const SHIFT_MOD: &'static [KeyCode; 2] = &[KeyCode::ShiftLeft, KeyCode::ShiftRight];
+pub enum Modifier {
+    Shift,
+}
+
+impl Modifier {
+    fn get_name(&self) -> &'static str {
+        match self {
+            Modifier::Shift => "Shift",
+        }
+    }
+    fn get_keys(&self) -> &[KeyCode] {
+        match self {
+            Modifier::Shift => &[KeyCode::ShiftLeft, KeyCode::ShiftRight],
+        }
+    }
+}
 
 pub fn debug_saveload_ui(
     mut contexts: EguiContexts,
@@ -249,16 +282,53 @@ pub fn debug_saveload_ui(
                 ui.text_edit_singleline(edit_level_name);
             });
 
-            if ui_button_shortcut(ui, &keys, "Open Level", KeyCode::KeyO, SHIFT_MOD) {
+            if ui_button_shortcut(
+                ui,
+                &keys,
+                "Open Level",
+                KeyCode::KeyO,
+                Some(Modifier::Shift),
+            ) {
                 open_event.send(OpenLevelEvent {
                     level_name: edit_level_name.clone(),
                 });
             }
-            if ui_button_shortcut(ui, &keys, "Save Level", KeyCode::KeyI, SHIFT_MOD) {
+            if ui_button_shortcut(
+                ui,
+                &keys,
+                "Save Level",
+                KeyCode::KeyI,
+                Some(Modifier::Shift),
+            ) {
                 save_event.send(SaveLevelEvent);
             }
-            if ui_button_shortcut(ui, &keys, "Quit Level", KeyCode::KeyP, SHIFT_MOD) {
+            if ui_button_shortcut(
+                ui,
+                &keys,
+                "Quit Level",
+                KeyCode::KeyP,
+                Some(Modifier::Shift),
+            ) {
                 close_event.send(CloseLevelEvent);
+            }
+        });
+}
+
+pub fn debug_net_ui(
+    mut contexts: EguiContexts,
+    renet_server: Option<Res<RenetServer>>,
+    renet_client: Option<Res<RenetClient>>,
+) {
+    let ctx = contexts.ctx_mut();
+    egui::Window::new("Debug Multiplayer")
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-5.0, -5.0))
+        .show(ctx, |ui| {
+            if let Some(_server) = &renet_server {
+                ui.label("Server up");
+            } else if let Some(_client) = &renet_client {
+                ui.label("Client up");
+            } else {
+                ui.label("Disconnected");
             }
         });
 }
@@ -272,12 +342,20 @@ pub fn debug_options_ui(
 ) {
     let ctx = contexts.ctx_mut();
     egui::Window::new("Debug Options")
-        .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::new(5.0, -5.0))
+        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(5.0, 5.0))
         .show(ctx, |ui| {
-            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2, &[]) {
+            ui_toggle_shortcut(
+                ui,
+                &keys,
+                &mut debug_options.active,
+                "Show debug windows",
+                KeyCode::F1,
+            );
+
+            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2, None) {
                 *tickstep = TickStep::Step { step: true }
             }
-            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3, &[]) {
+            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3, None) {
                 *tickstep = TickStep::Step { step: true }
             }
 
