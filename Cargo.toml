@@ -27,4 +27,3 @@ mcrs_universe = { path = "crates/mcrs_universe" }
 
 [workspace]
 members = ["crates/*"]
-exclude = ["tools/image_to_voxel_cube"]
