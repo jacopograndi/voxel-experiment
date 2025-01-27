@@ -1,9 +1,0 @@
-[package]
-name = "image_to_voxel_cube"
-description = "Converts 6 16x16 textures into a 16x16x16 voxel model"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-image = "0.24.7"
-dot_vox = "5.1.1"
