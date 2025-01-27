@@ -18,6 +18,9 @@ pub mod ghost;
 pub mod plugin;
 pub mod universe;
 
+#[cfg(test)]
+mod test;
+
 // TODO: To be passed from above
 pub const BLOCK_BLUEPRINTS_PATH: &str = "assets/block_blueprints.ron";
 pub const GHOST_BLUEPRINTS_PATH: &str = "assets/ghost_blueprints.ron";

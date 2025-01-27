@@ -12,7 +12,6 @@ mod ray {
     fn empty_out_of_range() {
         let universe = Universe {
             chunks: HashMap::new(),
-            heightfield: HashMap::new(),
         };
         assert!(cast_ray(
             RayFinite {

@@ -17,29 +17,32 @@ mod character {
     #[test]
     fn floating() {
         let (mut app, entity) = test_app(Vec3::new(0.5, 3.0, 0.5));
-        assert!(!is_character_grounded(&app, entity));
+        assert!(!is_character_grounded(&mut app, entity));
         app.update();
-        assert!(!is_character_grounded(&app, entity));
+        assert!(!is_character_grounded(&mut app, entity));
     }
 
     #[test]
     fn grounded_middle() {
         let (mut app, entity) = test_app(Vec3::new(0.5, 2.0, 0.5));
-        assert!(is_character_grounded(&app, entity));
+        assert!(is_character_grounded(&mut app, entity));
         app.update();
-        assert!(is_character_grounded(&app, entity));
+        assert!(is_character_grounded(&mut app, entity));
     }
 
     #[test]
     fn jumping() {
         let (mut app, entity) = test_app(Vec3::new(0.5, 2.0, 0.5));
         {
-            let mut controller = app.world.get_mut::<CharacterController>(entity).unwrap();
+            let mut controller = app
+                .world_mut()
+                .get_mut::<CharacterController>(entity)
+                .unwrap();
             controller.jumping = true;
         }
-        assert!(is_character_grounded(&app, entity));
+        assert!(is_character_grounded(&mut app, entity));
         app.update();
-        assert!(!is_character_grounded(&app, entity));
+        assert!(!is_character_grounded(&mut app, entity));
     }
 
     #[test]
@@ -61,13 +64,16 @@ mod character {
             while i < 10 {
                 // move against the corner
                 app.update();
-                assert!(is_character_grounded(&app, entity));
+                assert!(is_character_grounded(&mut app, entity));
                 let current_position = {
-                    let mut controller = app.world.get_mut::<CharacterController>(entity).unwrap();
+                    let mut controller = app
+                        .world_mut()
+                        .get_mut::<CharacterController>(entity)
+                        .unwrap();
                     // negative sign is because acceleration is scaled by tr.forward
                     // z and x are swapped because x * tr.forward and z * tr.left
                     controller.acceleration = -corner.zyx().as_vec3().normalize();
-                    let tr = app.world.get::<Transform>(entity).unwrap();
+                    let tr = app.world_mut().get::<Transform>(entity).unwrap();
                     tr.translation
                 };
                 if close_enough_vec(current_position, last_position) {
@@ -80,21 +86,24 @@ mod character {
             assert!(i < 10, "player couldn't reach the corner");
             {
                 // jump
-                let mut controller = app.world.get_mut::<CharacterController>(entity).unwrap();
+                let mut controller = app
+                    .world_mut()
+                    .get_mut::<CharacterController>(entity)
+                    .unwrap();
                 controller.acceleration = -corner.as_vec3().normalize();
                 controller.jumping = true;
             }
             app.update();
-            assert!(!is_character_grounded(&app, entity));
+            assert!(!is_character_grounded(&mut app, entity));
             let velocity_after_jump = {
-                let velocity = app.world.get_mut::<Velocity>(entity).unwrap();
+                let velocity = app.world_mut().get_mut::<Velocity>(entity).unwrap();
                 velocity.vel
             };
             for _ in 0..10 {
                 app.update();
-                assert!(!is_character_grounded(&app, entity));
+                assert!(!is_character_grounded(&mut app, entity));
                 {
-                    let velocity = app.world.get_mut::<Velocity>(entity).unwrap();
+                    let velocity = app.world_mut().get_mut::<Velocity>(entity).unwrap();
                     if velocity.vel.y < 0.0 {
                         break;
                     }
@@ -115,18 +124,14 @@ mod character {
         app.add_plugins(TimePlugin);
         app.configure_sets(FixedUpdate, FixedPhysicsSet::Tick);
         // Run the FixedUpdate every app.update()
-        app.world
-            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
-                1. / 64.,
-            )));
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+            1. / 64.,
+        )));
         let entity = app
-            .world
+            .world_mut()
             .spawn((
-                SpatialBundle {
-                    transform: Transform {
-                        translation: character_translation,
-                        ..default()
-                    },
+                Transform {
+                    translation: character_translation,
                     ..default()
                 },
                 Character {
@@ -134,6 +139,7 @@ mod character {
                     air_speed: 0.001,
                     ground_speed: 0.03,
                     jump_strenght: 0.2,
+                    jump_cooldown: Duration::from_millis(20),
                 },
                 CharacterController {
                     acceleration: Vec3::splat(0.0),
@@ -152,10 +158,11 @@ mod character {
         (app, entity)
     }
 
-    fn is_character_grounded(app: &App, entity: Entity) -> bool {
-        let character = app.world.get::<Character>(entity).unwrap();
-        let tr = app.world.get::<Transform>(entity).unwrap();
-        let universe = app.world.resource::<Universe>();
+    fn is_character_grounded(app: &mut App, entity: Entity) -> bool {
+        let world = app.world_mut();
+        let character = world.get::<Character>(entity).unwrap();
+        let tr = world.get::<Transform>(entity).unwrap();
+        let universe = world.resource::<Universe>();
         println!("character at {}", tr.translation);
         is_grounded(character, tr, universe)
     }
