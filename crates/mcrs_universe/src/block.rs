@@ -110,7 +110,7 @@ impl<'de> Deserialize<'de> for BlockId {
 }
 
 /// Bit index of each block flag in human readable form
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum BlockFlag {
     Collidable,
     Opaque,

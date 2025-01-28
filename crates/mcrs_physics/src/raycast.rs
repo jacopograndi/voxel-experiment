@@ -7,7 +7,7 @@ use crate::MARGIN_EPSILON;
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
 #[cfg(test)]
-const DEBUG_TRACE: bool = false;
+const DEBUG_TRACE: bool = true;
 
 #[derive(Debug, Clone)]
 /// Represents a line segment
@@ -122,6 +122,10 @@ pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
 /// the cuboid intersects a collidable block in universe.
 pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Raycaster> {
     let leading_vertex = get_leading_aabb_vertex(size, ray.direction);
+    test_trace(format!(
+        "ray: {:?}, size {}, leading vertex: {}",
+        ray, size, leading_vertex
+    ));
     let start = leading_vertex + ray.position;
     let collision_check = |raycaster: &Raycaster| {
         // inspired by https://github.com/fenomas/voxel-aabb-sweep

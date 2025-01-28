@@ -12,12 +12,11 @@ fn smoke_test_flag_bank() {
     );
 
     let mut bank = FlagBank::default();
-    dbg!(bank);
     bank.set(BlockFlag::Collidable);
-    dbg!(bank);
     bank.set(BlockFlag::Opaque);
-    dbg!(bank);
     let flags: Vec<BlockFlag> = bank.into();
-    println!("{:?}", flags);
-    assert_eq!(2, 3);
+    let mut flags_iter = flags.iter();
+    assert_eq!(Some(&BlockFlag::Collidable), flags_iter.next());
+    assert_eq!(Some(&BlockFlag::Opaque), flags_iter.next());
+    assert_eq!(None, flags_iter.next());
 }

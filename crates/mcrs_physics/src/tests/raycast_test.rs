@@ -1,254 +1,148 @@
 #[cfg(test)]
 mod ray {
+    use crate::{
+        raycast::{cast_ray, RayFinite},
+        tests::test::{universe_single_block, DIRS, EPS},
+    };
+    use bevy::prelude::*;
     use std::f32::consts::PI;
 
-    use crate::raycast::{cast_ray, RayFinite};
-    use bevy::{prelude::*, utils::HashMap};
-    use mcrs_universe::universe::Universe;
-
-    use crate::tests::test::{close_enough, single_block_universe};
+    /// Cast a ray from (0.5, 0.5, 0.5) into a universe with a block in 0, 0, 0
+    /// The block starts at (0.0, 0.0, 0.0) and ends at (1.0, 1.0, 1.0)
+    fn cast(pos: Vec3, dir: Vec3, reach: f32, result: bool) {
+        let u = universe_single_block();
+        let center = Vec3::ONE * 0.5;
+        let hit = cast_ray(
+            RayFinite {
+                position: center + pos,
+                direction: dir,
+                reach,
+            },
+            &u,
+        );
+        assert_eq!(
+            hit.is_some(),
+            result,
+            "ray in {pos} going {dir} for {reach}. \n{hit:?}",
+        );
+    }
 
     #[test]
-    fn empty_out_of_range() {
-        let universe = Universe {
-            chunks: HashMap::new(),
-        };
-        assert!(cast_ray(
-            RayFinite {
-                position: Vec3::ZERO,
-                direction: Vec3::X,
-                reach: 100.0
-            },
-            &universe
-        )
-        .is_none());
+    fn out_of_range() {
+        cast(Vec3::Y, -Vec3::X, 100.0, false);
     }
 
     #[test]
     fn adjacent() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_ray(
-            RayFinite {
-                position: center - Vec3::X * 0.5,
-                direction: Vec3::X,
-                reach: 0.1
-            },
-            &universe
-        )
-        .is_some());
-        assert!(cast_ray(
-            RayFinite {
-                position: center + Vec3::X * 0.5,
-                direction: -Vec3::X,
-                reach: 0.1
-            },
-            &universe
-        )
-        .is_some());
-        assert!(cast_ray(
-            RayFinite {
-                position: center,
-                direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
-                reach: 0.1
-            },
-            &universe
-        )
-        .is_some());
+        cast(-Vec3::X * 0.5, Vec3::X, 0.1, true);
+        cast(Vec3::X * 0.5, -Vec3::X, 0.1, true);
+        cast(
+            Vec3::ZERO,
+            Vec3::new(-1.0, -1.0, 0.0).normalize(),
+            0.1,
+            true,
+        );
     }
 
     #[test]
     fn adjacent_tangent() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_ray(
-            RayFinite {
-                position: center - Vec3::X * 0.5,
-                direction: Vec3::Y,
-                reach: 1.0
-            },
-            &universe
-        )
-        .is_some());
-        assert!(cast_ray(
-            RayFinite {
-                position: center - Vec3::X * 0.50001,
-                direction: Vec3::Y,
-                reach: 1.0
-            },
-            &universe
-        )
-        .is_none());
+        cast(-Vec3::X * 0.5, Vec3::Y, 0.1, true);
+        cast(Vec3::X * (0.5 + EPS), Vec3::Y, 0.1, false);
     }
 
     #[test]
-    fn giant_step() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_ray(
-            RayFinite {
-                position: center + Vec3::X * 0.7,
-                direction: Vec3::new(-100.0, -1.0, 0.0).normalize(),
-                reach: 0.1,
-            },
-            &universe
-        )
-        .is_none());
+    fn small_angle() {
+        cast(
+            Vec3::X * 0.7,
+            Vec3::new(-100.0, -1.0, 0.0).normalize(),
+            0.1,
+            false,
+        );
     }
 
     #[test]
-    fn just_of_range() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_ray(
-            RayFinite {
-                position: center + Vec3::X * 1.5,
-                direction: -Vec3::X,
-                reach: 0.999999
-            },
-            &universe
-        )
-        .is_none());
-        assert!(cast_ray(
-            RayFinite {
-                position: center + Vec3::X * 1.5,
-                direction: -Vec3::X,
-                reach: 1.000001
-            },
-            &universe
-        )
-        .is_some());
+    fn just_out_of_range() {
+        for i in 0..1000 {
+            let f = i as f32;
+            cast(Vec3::X * (0.5 + EPS * f), -Vec3::X, EPS * f, false);
+            cast(Vec3::X * (0.5 + EPS * f), -Vec3::X, EPS * (f + 1.0), true);
+        }
     }
+
     #[test]
     fn zero_length() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_ray(
-            RayFinite {
-                position: center + Vec3::X * 0.5,
-                direction: -Vec3::X,
-                reach: 0.000001
-            },
-            &universe
-        )
-        .is_some());
+        cast(Vec3::X * 0.5, -Vec3::X, 0.0, false);
+    }
+
+    #[test]
+    fn eps_length() {
+        cast(Vec3::X * 0.5, -Vec3::X, EPS, true);
     }
 
     #[test]
     fn axis_aligned() {
-        let universe = single_block_universe();
-        let axis = vec![Vec3::X, Vec3::Y, Vec3::Z];
-        let dirs = axis
-            .iter()
-            .map(|v| vec![*v, -*v])
-            .flatten()
-            .collect::<Vec<Vec3>>();
-        let center = Vec3::ONE * 0.5;
-        for direction in dirs {
-            let position = center - direction;
-            if let Some(hit) = cast_ray(
-                RayFinite {
-                    position,
-                    direction,
-                    reach: 2.0,
-                },
-                &universe,
-            ) {
-                assert_eq!(hit.distance(), 0.5);
-            } else {
-                panic!(
-                    "No hit for ray ({}, {}) in single block map",
-                    position, direction
-                );
-            }
+        for direction in DIRS {
+            cast(-direction, direction, 2.0, true);
         }
     }
 
     #[test]
     fn bombard_face() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5 + Vec3::Z * 0.5;
         for angle in 1..180 {
             let rot = Quat::from_rotation_y(angle as f32 / 360.0 * PI);
             let direction = rot * Vec3::X;
-            let position = center - direction;
-            if let Some(hit) = cast_ray(
-                RayFinite {
-                    position,
-                    direction,
-                    reach: 2.0,
-                },
-                &universe,
-            ) {
-                assert!(close_enough(hit.distance(), 1.0));
-            } else {
-                panic!(
-                    "No hit for ray ({}, {}) in single block map",
-                    position, direction
-                );
-            }
+            cast(-direction + Vec3::Z * 0.5, direction, 2.0, true);
         }
     }
 
     #[test]
     fn corner_hit() {
-        let universe = single_block_universe();
-        let position = -Vec3::ONE;
-        let direction = Vec3::ONE.normalize();
-        if let Some(hit) = cast_ray(
-            RayFinite {
-                position,
-                direction,
-                reach: 2.0,
-            },
-            &universe,
-        ) {
-            assert!(close_enough(hit.distance(), Vec3::ONE.length()));
-        } else {
-            panic!(
-                "No hit for ray ({}, {}) in single block map",
-                position, direction
-            );
-        }
+        cast(-Vec3::ONE, Vec3::ONE.normalize(), 2.0, true);
     }
 }
 
 #[cfg(test)]
 mod cuboid {
-    use crate::tests::test::single_block_universe;
-
-    use crate::raycast::{cast_cuboid, get_leading_aabb_vertex, RayFinite};
+    use crate::{
+        raycast::{cast_cuboid, get_leading_aabb_vertex, RayFinite},
+        tests::test::{universe_single_block, EPS},
+    };
     use bevy::prelude::*;
+
+    fn cast_cube(pos: Vec3, dir: Vec3, reach: f32, result: bool) {
+        let u = universe_single_block();
+        let center = Vec3::ONE * 0.5;
+        let hit = cast_cuboid(
+            RayFinite {
+                position: center + pos,
+                direction: -Vec3::X,
+                reach,
+            },
+            Vec3::ONE,
+            &u,
+        );
+        assert_eq!(
+            hit.is_some(),
+            result,
+            "cube of side lenght 1 in {pos} going {dir} for {reach}. \n{hit:?}",
+        );
+    }
+
+    #[test]
+    fn single_dimension_continuous() {}
 
     #[test]
     fn just_out_of_range() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 2.0,
-                direction: -Vec3::X,
-                reach: 0.999999,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_none());
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 2.0,
-                direction: -Vec3::X,
-                reach: 1.000001,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
+        for i in 0..1000 {
+            let f = i as f32;
+            cast_cube(Vec3::X * (1.0 + EPS * f), -Vec3::X, EPS * f, false);
+            cast_cube(Vec3::X * (1.0 + EPS * f), -Vec3::X, EPS * (f + 1.0), true);
+        }
     }
 
     #[test]
     fn adjacent() {
-        let universe = single_block_universe();
+        let universe = universe_single_block();
         let center = Vec3::ONE * 0.5;
         assert!(cast_cuboid(
             RayFinite {
@@ -275,22 +169,6 @@ mod cuboid {
                 position: center + Vec3::X * 1.0,
                 direction: Vec3::new(-1.0, -1.0, 0.0).normalize(),
                 reach: 1.0,
-            },
-            Vec3::ONE,
-            &universe
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn zero_length() {
-        let universe = single_block_universe();
-        let center = Vec3::ONE * 0.5;
-        assert!(cast_cuboid(
-            RayFinite {
-                position: center + Vec3::X * 1.0,
-                direction: -Vec3::X,
-                reach: 0.000001,
             },
             Vec3::ONE,
             &universe

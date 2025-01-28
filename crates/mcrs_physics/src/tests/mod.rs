@@ -14,39 +14,41 @@ mod test {
         universe::Universe,
     };
 
-    pub fn single_block_universe() -> Universe {
+    pub fn universe_single_block() -> Universe {
         let mut universe = Universe {
             chunks: [(IVec3::ZERO, Chunk::empty())].into_iter().collect(),
         };
-        let stone = Block::new(&BlockBlueprint {
+        universe.set_chunk_block(&IVec3::ZERO, stone());
+        universe
+    }
+
+    pub fn stone() -> Block {
+        Block::new(&BlockBlueprint {
             name: "Stone".to_string(),
             id: 1.into(),
             flags: FlagBank::from(vec![BlockFlag::Collidable]),
             ..default()
-        });
-        universe.set_chunk_block(&IVec3::ZERO, stone);
-        assert_eq!(Some(stone), universe.read_chunk_block(&IVec3::ZERO));
-        universe
+        })
     }
 
     pub fn add_block(app: &mut App, pos: IVec3) {
         let mut universe = app.world_mut().get_resource_mut::<Universe>().unwrap();
-        let stone = Block::new(&BlockBlueprint {
-            name: "Stone".to_string(),
-            id: 1.into(),
-            flags: FlagBank::from(vec![BlockFlag::Collidable]),
-            ..default()
-        });
-        universe.set_chunk_block(&pos, stone);
+        universe.set_chunk_block(&pos, stone());
     }
 
     // floats are no fun
-    const EPS: f32 = 0.0001;
-    pub fn close_enough(a: f32, b: f32) -> bool {
-        (a - EPS..a + EPS).contains(&b)
-    }
+    pub const EPS: f32 = 0.00001;
 
     pub fn close_enough_vec(a: Vec3, b: Vec3) -> bool {
         (-EPS..EPS).contains(&(a - b).length())
     }
+
+    pub const DIRS: [Vec3; 6] = [
+        Vec3::X,
+        Vec3::Y,
+        Vec3::Z,
+        Vec3::NEG_X,
+        Vec3::NEG_Y,
+        Vec3::NEG_Z,
+    ];
 }
