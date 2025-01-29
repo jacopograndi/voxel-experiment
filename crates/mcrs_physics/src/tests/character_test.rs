@@ -1,170 +1,215 @@
-#[cfg(test)]
-mod character {
-    use std::time::Duration;
+use super::{universe_single_block, EPS};
+use crate::{
+    character::{
+        character_controller_step, is_grounded, Character, CharacterController, Friction, Velocity,
+    },
+    tests::stone,
+};
+use bevy::{math::NormedVectorSpace, prelude::*};
+use mcrs_universe::universe::Universe;
+use std::time::Duration;
 
-    use bevy::{
-        prelude::*,
-        time::{TimePlugin, TimeUpdateStrategy},
-    };
-    use mcrs_universe::universe::Universe;
+#[derive(Clone, Debug, Default)]
+struct Context {
+    character: Character,
+    friction: Friction,
+    universe: Universe,
+    dt: Duration,
+}
 
-    use crate::{
-        character::*,
-        plugin::{FixedPhysicsSet, McrsPhysicsPlugin},
-        tests::test::{add_block, close_enough_vec, universe_single_block},
-    };
+impl Context {
+    fn new() -> Self {
+        Self {
+            character: Character {
+                // Make the character slightly smaller to avoid edge issues in testing
+                // See ray's corner_hit
+                size: Vec3::splat(1.0 - EPS),
+                air_speed: 0.001,
+                ground_speed: 0.03,
+                jump_strenght: 0.2,
+                jump_cooldown: Duration::from_millis(200),
+            },
+            friction: Friction {
+                air: Vec3::splat(0.99),
+                ground: Vec3::splat(0.78),
+            },
+            universe: universe_single_block(),
+            dt: Duration::from_millis(20),
+        }
+    }
+}
 
-    #[test]
-    fn floating() {
-        let (mut app, entity) = test_app(Vec3::new(0.5, 3.0, 0.5));
-        assert!(!is_character_grounded(&mut app, entity));
-        app.update();
-        assert!(!is_character_grounded(&mut app, entity));
+#[derive(Clone, Debug, Default)]
+struct CharacterState {
+    controller: CharacterController,
+    tr: Transform,
+    vel: Velocity,
+}
+
+fn step_cube_character(state: &CharacterState, opt: Option<Context>) -> CharacterState {
+    let context = opt.unwrap_or(Context::new());
+
+    // Return a mutated copy
+    let mut state = state.clone();
+
+    character_controller_step(
+        &mut state.controller,
+        &mut state.tr,
+        &mut state.vel,
+        &context.character,
+        &context.friction,
+        &context.universe,
+        context.dt,
+    );
+
+    state
+}
+
+#[test]
+fn gravity() {
+    let context = Context::new();
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 2.0;
+
+    assert!(
+        !is_grounded(&context.character, &state.tr, &context.universe),
+        "grounded"
+    );
+
+    let stepped = step_cube_character(&state, Some(context.clone()));
+
+    assert!(
+        !is_grounded(&context.character, &state.tr, &context.universe),
+        "grounded"
+    );
+
+    dbg!(&state, &stepped);
+    assert!(
+        state.vel.vel.y > stepped.vel.vel.y,
+        "velocity did not become more negative"
+    );
+    assert!(
+        state.tr.translation.y > stepped.tr.translation.y,
+        "not moved down"
+    );
+}
+
+#[test]
+fn grounded() {
+    let context = Context::new();
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y;
+
+    assert!(
+        is_grounded(&context.character, &state.tr, &context.universe),
+        "not grounded"
+    );
+
+    let stepped = step_cube_character(&state, Some(context.clone()));
+
+    dbg!(&state, &stepped);
+    assert!(
+        is_grounded(&context.character, &state.tr, &context.universe),
+        "not grounded"
+    );
+    assert!(
+        state.vel.vel.y == stepped.vel.vel.y,
+        "velocity stayed the same"
+    );
+    assert!(
+        state.tr.translation.y == stepped.tr.translation.y,
+        "moved down"
+    );
+}
+
+#[test]
+fn jump_while_falling() {
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 2.0;
+    state.controller.jumping = true;
+    let stepped = step_cube_character(&state, None);
+    dbg!(&state, &stepped);
+    assert!(
+        state.vel.vel.y > stepped.vel.vel.y,
+        "velocity did not become more negative"
+    );
+    assert!(
+        state.tr.translation.y > stepped.tr.translation.y,
+        "not moved down"
+    );
+}
+
+#[test]
+fn jump_once() {
+    let context = Context::new();
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 1.0;
+    state.controller.jumping = true;
+
+    let mut iterated = state.clone();
+    let mut iter = 0;
+    while iter < 100 {
+        if iter > 0 && is_grounded(&context.character, &iterated.tr, &context.universe) {
+            break;
+        }
+        if iter == 0 {
+            state.controller.jumping = false;
+        }
+
+        let stepped = step_cube_character(&iterated, Some(context.clone()));
+        iterated = stepped;
+        iter += 1;
     }
 
-    #[test]
-    fn grounded_middle() {
-        let (mut app, entity) = test_app(Vec3::new(0.5, 2.0, 0.5));
-        assert!(is_character_grounded(&mut app, entity));
-        app.update();
-        assert!(is_character_grounded(&mut app, entity));
-    }
+    dbg!(iter);
+    dbg!(&state, &iterated);
 
-    #[test]
-    fn jumping() {
-        let (mut app, entity) = test_app(Vec3::new(0.5, 2.0, 0.5));
+    assert!(iter < 100, "out of iterations");
+    assert!(iter > 0, "stayed grounded after first iteration");
+    assert!(iterated.vel.vel.length() < EPS, "character is moving");
+    assert!(
+        state.tr.translation.distance(iterated.tr.translation) < EPS * 10.0,
+        "returned to another position (even with some leeway)"
+    );
+}
+
+#[test]
+fn run_into_wall() {
+    let mut context = Context::new();
+    let u = &mut context.universe;
+
+    // The floor
+    u.set_chunk_block(&IVec3::new(0, 0, 0), stone());
+    u.set_chunk_block(&IVec3::new(0, 0, -1), stone());
+    u.set_chunk_block(&IVec3::new(0, 0, -2), stone());
+
+    // The wall
+    u.set_chunk_block(&IVec3::new(0, 1, -3), stone());
+    u.set_chunk_block(&IVec3::new(0, 2, -3), stone());
+
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 1.0;
+    state.controller.acceleration = Vec3::X;
+
+    let mut iterated = state.clone();
+    let mut iter = 0;
+    while iter < 1000 {
+        if !is_grounded(&context.character, &iterated.tr, &context.universe) {
+            dbg!(iter, &state, &iterated);
+            panic!("no longer grounded");
+        }
+
+        let stepped = step_cube_character(&iterated, Some(context.clone()));
+        if stepped.tr.translation.x > 1.0
+            && stepped.tr.translation.x.distance(iterated.tr.translation.x) < EPS
         {
-            let mut controller = app
-                .world_mut()
-                .get_mut::<CharacterController>(entity)
-                .unwrap();
-            controller.jumping = true;
+            dbg!(iter, &state, &stepped, &iterated);
+            assert!(
+                iterated.vel.vel.length() < EPS,
+                "character is moving after smashing into the wall"
+            );
         }
-        assert!(is_character_grounded(&mut app, entity));
-        app.update();
-        assert!(!is_character_grounded(&mut app, entity));
-    }
-
-    #[ignore] // this is broken for now
-    #[test]
-    fn jumping_hug_corner() {
-        for corner in [
-            IVec3::new(0, 0, 0),
-            IVec3::new(1, 0, 1),
-            IVec3::new(-1, 0, 1),
-            IVec3::new(-1, 0, -1),
-            IVec3::new(1, 0, -1),
-        ] {
-            let (mut app, entity) = test_app(Vec3::new(0.5, 2.0, 0.5));
-            add_block(&mut app, IVec3::new(1, 1, 0));
-            add_block(&mut app, IVec3::new(0, 1, 1));
-            add_block(&mut app, IVec3::new(-1, 1, 0));
-            add_block(&mut app, IVec3::new(0, 1, -1));
-            let mut last_position = Vec3::ZERO;
-            let mut i = 0;
-            while i < 10 {
-                // move against the corner
-                app.update();
-                assert!(is_character_grounded(&mut app, entity));
-                let current_position = {
-                    let mut controller = app
-                        .world_mut()
-                        .get_mut::<CharacterController>(entity)
-                        .unwrap();
-                    // negative sign is because acceleration is scaled by tr.forward
-                    // z and x are swapped because x * tr.forward and z * tr.left
-                    controller.acceleration = -corner.zyx().as_vec3().normalize();
-                    let tr = app.world_mut().get::<Transform>(entity).unwrap();
-                    tr.translation
-                };
-                if close_enough_vec(current_position, last_position) {
-                    break;
-                } else {
-                    last_position = current_position;
-                }
-                i += 1;
-            }
-            assert!(i < 10, "player couldn't reach the corner");
-            {
-                // jump
-                let mut controller = app
-                    .world_mut()
-                    .get_mut::<CharacterController>(entity)
-                    .unwrap();
-                controller.acceleration = -corner.as_vec3().normalize();
-                controller.jumping = true;
-            }
-            app.update();
-            assert!(!is_character_grounded(&mut app, entity));
-            let velocity_after_jump = {
-                let velocity = app.world_mut().get_mut::<Velocity>(entity).unwrap();
-                velocity.vel
-            };
-            for _ in 0..10 {
-                app.update();
-                assert!(!is_character_grounded(&mut app, entity));
-                {
-                    let velocity = app.world_mut().get_mut::<Velocity>(entity).unwrap();
-                    if velocity.vel.y < 0.0 {
-                        break;
-                    }
-                    assert!(
-                        velocity.vel.y < velocity_after_jump.y,
-                        "player is accelerating upwards"
-                    );
-                    println!("velocity: {}", velocity.vel);
-                };
-            }
-        }
-    }
-
-    fn test_app(character_translation: Vec3) -> (App, Entity) {
-        let mut app = App::new();
-        app.insert_resource(universe_single_block());
-        app.add_plugins(McrsPhysicsPlugin);
-        app.add_plugins(TimePlugin);
-        app.configure_sets(FixedUpdate, FixedPhysicsSet::Tick);
-        // Run the FixedUpdate every app.update()
-        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
-            1. / 64.,
-        )));
-        let entity = app
-            .world_mut()
-            .spawn((
-                Transform {
-                    translation: character_translation,
-                    ..default()
-                },
-                Character {
-                    size: Vec3::new(0.5, 2.0, 0.5),
-                    air_speed: 0.001,
-                    ground_speed: 0.03,
-                    jump_strenght: 0.2,
-                    jump_cooldown: Duration::from_millis(20),
-                },
-                CharacterController {
-                    acceleration: Vec3::splat(0.0),
-                    jumping: false,
-                    ..default()
-                },
-                Velocity::default(),
-                Friction {
-                    air: Vec3::splat(0.99),
-                    ground: Vec3::splat(0.78),
-                },
-            ))
-            .id();
-        // The first update ignores FixedUpdate
-        app.update();
-        (app, entity)
-    }
-
-    fn is_character_grounded(app: &mut App, entity: Entity) -> bool {
-        let world = app.world_mut();
-        let character = world.get::<Character>(entity).unwrap();
-        let tr = world.get::<Transform>(entity).unwrap();
-        let universe = world.resource::<Universe>();
-        println!("character at {}", tr.translation);
-        is_grounded(character, tr, universe)
+        iterated = stepped;
+        iter += 1;
     }
 }

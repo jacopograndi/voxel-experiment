@@ -89,61 +89,83 @@ pub fn is_grounded(character: &Character, tr: &Transform, universe: &Universe) -
 /// Step forward the `Character` using the values from the `CharacterController`
 pub fn character_controller_movement(
     mut character_query: Query<(
-        &Character,
         &mut CharacterController,
         &mut Transform,
         &mut Velocity,
+        &Character,
         &Friction,
     )>,
     universe: Res<Universe>,
     time: Res<Time<Fixed>>,
 ) {
-    for (character, mut controller, mut tr, mut vel, friction) in character_query.iter_mut() {
+    for (mut controller, mut tr, mut vel, character, friction) in character_query.iter_mut() {
         let (chunk_pos, _) = universe.pos_to_chunk_and_inner(&tr.translation.as_ivec3());
         let waiting_for_loading = universe.chunks.get(&chunk_pos).is_none();
         if waiting_for_loading {
             continue;
         }
 
-        if !controller.is_active {
-            controller.acceleration = Vec3::ZERO;
-            controller.jumping = false;
-        }
-
-        controller.jump_timer.tick(time.delta());
-
-        let acc = controller.acceleration.x * tr.forward() + controller.acceleration.z * tr.left();
-        if is_grounded(character, &tr, &universe) {
-            if controller.jumping && controller.jump_timer.finished() {
-                vel.vel.y = character.jump_strenght;
-                controller.jump_timer.set_duration(character.jump_cooldown);
-                controller.jump_timer.reset();
-            }
-            vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.ground_speed;
-            vel.vel *= friction.ground;
-        } else {
-            vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.air_speed;
-            vel.vel *= friction.air;
-            vel.vel -= Vec3::Y * 0.01;
-        }
-
-        for _ in 0..3 {
-            if let Some(hit) = cast_cuboid(
-                RayFinite {
-                    position: tr.translation,
-                    direction: vel.vel.normalize_or_zero(),
-                    reach: vel.vel.length(),
-                },
-                character.size,
-                &universe,
-            ) {
-                tr.translation += vel.vel.normalize_or_zero() * (hit.distance() - MARGIN_EPSILON);
-                vel.vel *= (IVec3::ONE - hit.mask).as_vec3();
-                if vel.vel.length() < MARGIN_EPSILON {
-                    break;
-                }
-            }
-        }
-        tr.translation += vel.vel;
+        character_controller_step(
+            &mut controller,
+            &mut tr,
+            &mut vel,
+            &character,
+            &friction,
+            &universe,
+            time.delta(),
+        );
     }
+}
+
+/// Move a Character using the CharacterController and solve collisions with the Universe.
+pub fn character_controller_step(
+    controller: &mut CharacterController,
+    tr: &mut Transform,
+    vel: &mut Velocity,
+    character: &Character,
+    friction: &Friction,
+    universe: &Universe,
+    dt: Duration,
+) {
+    if !controller.is_active {
+        controller.acceleration = Vec3::ZERO;
+        controller.jumping = false;
+    }
+
+    controller.jump_timer.tick(dt);
+
+    let acc = controller.acceleration.x * tr.forward() + controller.acceleration.z * tr.left();
+    if is_grounded(character, &tr, &universe) {
+        if controller.jumping && controller.jump_timer.finished() {
+            vel.vel.y = character.jump_strenght;
+            controller.jump_timer.set_duration(character.jump_cooldown);
+            controller.jump_timer.reset();
+        }
+        vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.ground_speed;
+        vel.vel *= friction.ground;
+    } else {
+        vel.vel += acc * Vec3::new(1.0, 0.0, 1.0) * character.air_speed;
+        vel.vel *= friction.air;
+        vel.vel -= Vec3::Y * 0.01;
+    }
+
+    for _ in 0..3 {
+        if let Some(hit) = cast_cuboid(
+            RayFinite {
+                position: tr.translation,
+                direction: vel.vel.normalize_or_zero(),
+                reach: vel.vel.length(),
+            },
+            character.size,
+            &universe,
+        ) {
+            tr.translation += vel.vel.normalize_or_zero() * (hit.distance() - MARGIN_EPSILON);
+            vel.vel *= (IVec3::ONE - hit.mask).as_vec3();
+            if vel.vel.length() < MARGIN_EPSILON {
+                break;
+            }
+        }
+    }
+
+    tr.translation += vel.vel;
 }
