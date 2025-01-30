@@ -32,8 +32,12 @@ pub fn stone() -> Block {
 // floats are no fun
 pub const EPS: f32 = 0.00001;
 
-pub fn close_enough_vec(a: Vec3, b: Vec3) -> bool {
-    (-EPS..EPS).contains(&(a - b).length())
+pub fn close_enough(a: f32, b: f32, eps: f32) -> bool {
+    (-eps..eps).contains(&(a - b).abs())
+}
+
+pub fn close_enough_vec(a: Vec3, b: Vec3, eps: f32) -> bool {
+    (-eps..eps).contains(&(a - b).length())
 }
 
 pub const DIRS: [Vec3; 6] = [

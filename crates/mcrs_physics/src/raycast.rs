@@ -7,7 +7,7 @@ use crate::MARGIN_EPSILON;
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
 #[cfg(test)]
-const DEBUG_TRACE: bool = true;
+const DEBUG_TRACE: bool = false;
 
 #[derive(Debug, Clone)]
 /// Represents a line segment
