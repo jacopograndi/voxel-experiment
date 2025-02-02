@@ -3,7 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use mcrs_universe::universe::Universe;
 
-use crate::{raycast::*, MARGIN_EPSILON};
+use crate::{raycast::*, test_trace, MARGIN_EPSILON};
 
 #[derive(Component, Debug, Clone, Default)]
 pub struct Character {
@@ -83,7 +83,7 @@ pub fn is_grounded(character: &Character, tr: &Transform, universe: &Universe) -
         character.size,
         &universe,
     )
-    .is_some_and(|hit| hit.distance() <= MARGIN_EPSILON * 2.0)
+    .is_some_and(|hit| hit.final_distance() <= MARGIN_EPSILON * 2.0)
 }
 
 /// Step forward the `Character` using the values from the `CharacterController`
@@ -149,23 +149,58 @@ pub fn character_controller_step(
         vel.vel -= Vec3::Y * 0.01;
     }
 
-    for _ in 0..3 {
+    if vel.vel.length_squared() < MARGIN_EPSILON {
+        return;
+    }
+
+    let mut vel_magnitude = vel.vel.length();
+    let mut vel_dir = vel.vel.normalize_or_zero();
+
+    // Loop until vel_magnitude is <= 0.0, but implementation bugs may lead to an infinite loop.
+    for i in 0..10 {
         if let Some(hit) = cast_cuboid(
             RayFinite {
                 position: tr.translation,
-                direction: vel.vel.normalize_or_zero(),
-                reach: vel.vel.length(),
+                direction: vel_dir,
+                reach: vel_magnitude,
             },
             character.size,
             &universe,
         ) {
-            tr.translation += vel.vel.normalize_or_zero() * (hit.distance() - MARGIN_EPSILON);
-            vel.vel *= (IVec3::ONE - hit.mask).as_vec3();
-            if vel.vel.length() < MARGIN_EPSILON {
+            // Project into normal for correct max bound
+            let vel_delta = (hit.final_distance() - MARGIN_EPSILON).max(0.0);
+            vel_magnitude -= vel_delta;
+
+            tr.translation += vel_dir * vel_delta;
+
+            let wall = (IVec3::ONE - hit.mask).as_vec3();
+
+            test_trace(format!(
+                "{}, m:{}, D:{}, d:{}, w:{}",
+                i, vel_magnitude, vel_delta, vel_dir, wall
+            ));
+
+            // Get the distance from the character's boundary and the block it hit.
+            let leading_vertex = get_leading_aabb_vertex(character.size, vel_dir);
+            let perp_vec = leading_vertex.fract() * wall - hit.normal().as_vec3();
+            let perp_distance = perp_vec.length();
+
+            if perp_distance < MARGIN_EPSILON {
+                tr.translation += hit.normal().as_vec3() * perp_distance;
+            }
+
+            // Remove the velocity component that has hit a wall
+            vel_dir *= wall;
+            vel.vel *= wall;
+
+            if vel_magnitude < MARGIN_EPSILON {
+                test_trace(format!("out of gas: m:{}", vel_magnitude));
                 break;
             }
+        } else {
+            println!("added: m:{}, d:{}", vel_magnitude, vel_dir);
+            tr.translation += vel_dir * vel_magnitude;
+            break;
         }
     }
-
-    tr.translation += vel.vel;
 }

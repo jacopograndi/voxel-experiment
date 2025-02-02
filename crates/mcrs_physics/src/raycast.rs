@@ -2,12 +2,9 @@ use bevy::math::{IVec3, Vec3};
 
 use mcrs_universe::{block::BlockFlag, universe::Universe};
 
-use crate::MARGIN_EPSILON;
+use crate::{test_trace, MARGIN_EPSILON};
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
-
-#[cfg(test)]
-const DEBUG_TRACE: bool = false;
 
 #[derive(Debug, Clone)]
 /// Represents a line segment
@@ -39,9 +36,54 @@ pub struct Raycaster {
     pub mask: IVec3,
     /// Accumulates the distance travelled for each direction.
     side_dist: Vec3,
+
+    iters: u32,
 }
 
+/// Inspired by https://lodev.org/cgtutor/raycasting.html
 impl Raycaster {
+    pub fn new(ray: &RayFinite) -> Self {
+        let grid_pos = ray.position.floor().as_ivec3();
+        let delta_dist = (1. / ray.direction).abs();
+
+        let mut grid_step = IVec3::ZERO;
+        let mut side_dist = Vec3::ZERO;
+
+        if ray.direction.x < 0.0 {
+            grid_step.x = -1;
+            side_dist.x = (ray.position.x - grid_pos.as_vec3().x) * delta_dist.x;
+        } else {
+            grid_step.x = 1;
+            side_dist.x = (-ray.position.x + 1.0 + grid_pos.as_vec3().x) * delta_dist.x;
+        }
+        if ray.direction.y < 0.0 {
+            grid_step.y = -1;
+            side_dist.y = (ray.position.y - grid_pos.as_vec3().y) * delta_dist.y;
+        } else {
+            grid_step.y = 1;
+            side_dist.y = (-ray.position.y + 1.0 + grid_pos.as_vec3().y) * delta_dist.y;
+        }
+        if ray.direction.z < 0.0 {
+            grid_step.z = -1;
+            side_dist.z = (ray.position.z - grid_pos.as_vec3().z) * delta_dist.z;
+        } else {
+            grid_step.z = 1;
+            side_dist.z = (-ray.position.z + 1.0 + grid_pos.as_vec3().z) * delta_dist.z;
+        }
+
+        let mut raycaster = Self {
+            ray: ray.clone(),
+            grid_pos,
+            grid_step,
+            side_dist,
+            mask: IVec3::ZERO,
+            delta_dist,
+            iters: 0,
+        };
+        raycaster.update_mask();
+        raycaster
+    }
+
     /// Steps through the grid until a collision is detected.
     pub fn cast(ray: RayFinite, collision_check: impl Fn(&Self) -> bool) -> Option<Raycaster> {
         if ray.direction.length_squared() <= MARGIN_EPSILON {
@@ -49,35 +91,40 @@ impl Raycaster {
         }
 
         // Inspired by https://lodev.org/cgtutor/raycasting.html
-        let dir_sign = signum_or_zero_vec(ray.direction);
-        let grid_pos = ray.position.floor().as_ivec3();
-        let delta_dist = (1. / ray.direction).abs();
-        let mut raycaster = Self {
-            ray: ray.clone(),
-            grid_pos,
-            grid_step: dir_sign.floor().as_ivec3(),
-            side_dist: (dir_sign * (grid_pos.as_vec3() - ray.position) + (dir_sign * 0.5) + 0.5)
-                * delta_dist,
-            mask: IVec3::ZERO,
-            delta_dist,
-        };
+        let mut raycaster = Raycaster::new(&ray);
         test_trace(format!("ray started: {:?}", raycaster));
 
+        // Check if it's already inside a block
+        if collision_check(&raycaster) {
+            test_trace(format!(
+                "ray was inside a block: distance {}, {:?}",
+                raycaster.final_distance(),
+                raycaster
+            ));
+            return Some(raycaster);
+        }
+
         for _i in 0..RAYCAST_MAX_ITERATIONS {
-            if raycaster.distance() < ray.reach {
-                if collision_check(&raycaster) {
-                    test_trace(format!(
-                        "ray hit: distance {}, {:?}",
-                        raycaster.distance(),
-                        raycaster
-                    ));
-                    return Some(raycaster);
-                } else {
-                    raycaster.step();
-                }
-            } else {
+            raycaster.step();
+
+            test_trace(format!(
+                "_i:{_i}, stepping_dist:{}, final_dist:{}",
+                raycaster.stepping_distance(),
+                raycaster.final_distance()
+            ));
+
+            if raycaster.final_distance() > ray.reach {
                 test_trace(format!("no hit"));
                 return None;
+            }
+
+            if collision_check(&raycaster) {
+                test_trace(format!(
+                    "ray hit: distance {}, {:?}",
+                    raycaster.final_distance(),
+                    raycaster
+                ));
+                return Some(raycaster);
             }
         }
         test_trace(format!("out of ray iterations"));
@@ -86,6 +133,14 @@ impl Raycaster {
 
     /// Advance the ray by one block
     fn step(&mut self) {
+        self.update_mask();
+        self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
+        self.grid_pos += self.mask * self.grid_step;
+        self.iters += 1;
+        test_trace(format!("ray stepped: {:?}", self));
+    }
+
+    pub fn update_mask(&mut self) {
         let Vec3 { x, y, z } = self.side_dist;
         self.mask = match (x < y, x < z, y < z) {
             (true, true, _) => IVec3::X,
@@ -93,16 +148,25 @@ impl Raycaster {
             (_, false, false) => IVec3::Z,
             _ => unreachable!(),
         };
-        self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
-        self.grid_pos += self.mask * self.grid_step;
-        test_trace(format!("ray stepped: {:?}", self));
+    }
+
+    pub fn stepping_position(&self) -> Vec3 {
+        self.ray.position + self.ray.direction * self.stepping_distance()
     }
 
     pub fn final_position(&self) -> Vec3 {
-        self.ray.position + self.ray.direction * self.distance()
+        self.ray.position + self.ray.direction * self.final_distance()
     }
 
-    pub fn distance(&self) -> f32 {
+    pub fn stepping_distance(&self) -> f32 {
+        mul_or_zero_vec(self.mask.as_vec3(), self.side_dist).length()
+    }
+
+    pub fn final_distance(&self) -> f32 {
+        if self.iters == 0 {
+            // The ray is inside a block
+            return 0.0;
+        }
         mul_or_zero_vec(self.mask.as_vec3(), self.side_dist - self.delta_dist).length()
     }
 
@@ -122,25 +186,35 @@ pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
 /// the cuboid intersects a collidable block in universe.
 pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Raycaster> {
     let leading_vertex = get_leading_aabb_vertex(size, ray.direction);
+
     test_trace(format!(
-        "ray: {:?}, size {}, leading vertex: {}",
+        "cuboid start: {:?}, size {}, leading vertex: {}",
         ray, size, leading_vertex
     ));
+
     let start = leading_vertex + ray.position;
     let collision_check = |raycaster: &Raycaster| {
-        // inspired by https://github.com/fenomas/voxel-aabb-sweep
-        let vert_pos = raycaster.final_position();
-        let inv_mask = IVec3::ONE - raycaster.mask;
-        let center_pos = vert_pos - leading_vertex * inv_mask.as_vec3()
-            + (raycaster.mask * raycaster.grid_step).as_vec3() * size * 0.5;
-        let min = (center_pos - size * 0.5 * inv_mask.as_vec3())
-            .floor()
-            .as_ivec3();
-        let max = (center_pos + size * 0.5 * inv_mask.as_vec3())
-            .floor()
-            .as_ivec3();
+        let ray_pos = raycaster.stepping_position();
+        let inv_mask = (IVec3::ONE - raycaster.mask).as_vec3();
+        let face_size = (size * inv_mask).length();
+        let face_diagonal = -(leading_vertex.signum() * inv_mask).normalize_or_zero();
+        let face_pos = ray_pos + face_diagonal * face_size;
+
+        let min = ray_pos.min(face_pos).floor().as_ivec3();
+        let max = ray_pos.max(face_pos).floor().as_ivec3();
+
+        test_trace(format!(
+            "cuboid check: ray_pos:{}, face_pos:{}, normal:{}, min:{}, max:{}",
+            ray_pos,
+            face_pos,
+            raycaster.normal(),
+            min,
+            max
+        ));
+
         iter_cuboid(min, max).any(|sample| is_block_collidable(&sample, universe))
     };
+
     let ray = RayFinite {
         position: start,
         direction: ray.direction,
@@ -189,25 +263,6 @@ pub fn get_leading_aabb_vertex(size: Vec3, direction: Vec3) -> Vec3 {
     leading_vertex * 0.5
 }
 
-// todo: maybe remove these functions
-// they exist to make the code more succint (and more akin to wgsl)
-// but it may be a disadvantage
-fn signum_or_zero(x: f32) -> f32 {
-    if x == 0.0 {
-        x
-    } else {
-        x.signum()
-    }
-}
-
-fn signum_or_zero_vec(v: Vec3) -> Vec3 {
-    Vec3::new(
-        signum_or_zero(v.x),
-        signum_or_zero(v.y),
-        signum_or_zero(v.z),
-    )
-}
-
 fn mul_or_zero(x: f32, y: f32) -> f32 {
     if y.is_finite() {
         x * y
@@ -222,12 +277,4 @@ fn mul_or_zero_vec(v: Vec3, w: Vec3) -> Vec3 {
         mul_or_zero(v.y, w.y),
         mul_or_zero(v.z, w.z),
     )
-}
-
-// Used to trace in testing
-fn test_trace(_s: String) {
-    #[cfg(test)]
-    if DEBUG_TRACE {
-        println!("{}", _s);
-    }
 }

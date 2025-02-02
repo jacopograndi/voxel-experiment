@@ -39,3 +39,14 @@ pub fn reset_tickstep(mut tickstep: ResMut<TickStep>) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+const DEBUG_TRACE: bool = true;
+
+// Used to trace in testing
+fn test_trace(_s: String) {
+    #[cfg(test)]
+    if DEBUG_TRACE {
+        println!("{}", _s);
+    }
+}

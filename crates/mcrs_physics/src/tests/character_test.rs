@@ -49,6 +49,12 @@ struct CharacterState {
     vel: Velocity,
 }
 
+impl ToString for CharacterState {
+    fn to_string(&self) -> String {
+        format!("tr:{}, vel:{}", self.tr.translation, self.vel.vel)
+    }
+}
+
 fn step_cube_character(state: &CharacterState, opt: Option<Context>) -> CharacterState {
     let context = opt.unwrap_or(Context::new());
 
@@ -199,7 +205,7 @@ fn bonk_into_wall() {
         u.set_chunk_block(&(idir * 3 + IVec3::Y * 2), stone());
 
         let mut state = CharacterState::default();
-        state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 1.0;
+        state.tr.translation = Vec3::splat(0.5) + Vec3::Y;
 
         // tr.forward is -z
         state.tr.rotation = Quat::from_rotation_y(rot);
@@ -224,7 +230,14 @@ fn bonk_into_wall() {
             }
 
             if bonked {
-                dbg!(iter, dir, &state, &iterated, &stepped);
+                println!(
+                    "i:{}, dir:{}, state:({}), before:({}), after:({})",
+                    iter,
+                    dir,
+                    state.to_string(),
+                    iterated.to_string(),
+                    stepped.to_string()
+                );
                 assert!(
                     stepped.vel.vel.length_squared() < EPS,
                     "character started moving after bonking"
@@ -295,7 +308,14 @@ fn bonk_into_wall_and_jump() {
             }
 
             if bonked {
-                dbg!(iter, dir, &state, &iterated, &stepped);
+                println!(
+                    "i:{}, dir:{}, state:({}), before:({}), after:({})",
+                    iter,
+                    dir,
+                    state.to_string(),
+                    iterated.to_string(),
+                    stepped.to_string()
+                );
                 let plane = Vec3::new(1.0, 0.0, 1.0);
                 let traveled =
                     (stepped.tr.translation * plane - state.tr.translation * plane).length();
@@ -362,11 +382,13 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
         let mut bonked = false;
         let mut bonk_pos = Vec3::ZERO;
 
+        dbg!(dir, &state);
+
         let mut iterated = state.clone();
         let mut iter = 0;
         while iter < 1000 {
             if !bonked && !is_grounded(&context.character, &iterated.tr, &context.universe) {
-                dbg!(iter, dir,&state, &iterated);
+                dbg!(iter, dir, &state, &iterated);
                 panic!("no longer grounded");
             }
 
@@ -379,19 +401,21 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
             }
 
             if bonked {
-                dbg!(
+                //dbg!(iter, dir, &state, &iterated, &stepped);
+                println!(
+                    "i:{}, dir:{}, state:({}), before:({}), after:({})",
                     iter,
                     dir,
-                    &state,
-                    &iterated,
-                    &stepped
+                    state.to_string(),
+                    iterated.to_string(),
+                    stepped.to_string()
                 );
                 let plane = Vec3::new(1.0, 0.0, 1.0);
                 let from_start_to_bonk = (bonk_pos * plane - state.tr.translation * plane).length();
                 let from_start_to_traveled =
                     (stepped.tr.translation * plane - state.tr.translation * plane).length();
                 assert!(
-                    close_enough(from_start_to_traveled, from_start_to_bonk, EPS * 10.0),
+                    close_enough(from_start_to_traveled, from_start_to_bonk, 0.01),
                     "wall bonked after traveling {}, but not straight at {}",
                     from_start_to_traveled,
                     from_start_to_bonk
