@@ -25,7 +25,7 @@ pub struct Raycaster {
 
     /// Precalculated values
     /// The direction to follow when checking a new block.
-    grid_step: IVec3,
+    pub grid_step: IVec3,
     /// For each direction holds the distance required to travel 1 unit.
     delta_dist: Vec3,
 
@@ -37,7 +37,8 @@ pub struct Raycaster {
     /// Accumulates the distance travelled for each direction.
     side_dist: Vec3,
 
-    iters: u32,
+    /// Distance traveled by the ray
+    pub distance: f32,
 }
 
 /// Inspired by https://lodev.org/cgtutor/raycasting.html
@@ -78,54 +79,44 @@ impl Raycaster {
             side_dist,
             mask: IVec3::ZERO,
             delta_dist,
-            iters: 0,
+            distance: 0.0,
         };
         raycaster.update_mask();
         raycaster
     }
 
     /// Steps through the grid until a collision is detected.
-    pub fn cast(ray: RayFinite, collision_check: impl Fn(&Self) -> bool) -> Option<Raycaster> {
-        if ray.direction.length_squared() <= MARGIN_EPSILON {
+    pub fn cast(
+        ray: RayFinite,
+        collision_check: impl Fn(&RaycastCheck) -> bool,
+    ) -> Option<Raycaster> {
+        if ray.direction.length_squared() <= MARGIN_EPSILON || ray.reach <= 0.0 {
             return None;
         }
 
-        // Inspired by https://lodev.org/cgtutor/raycasting.html
         let mut raycaster = Raycaster::new(&ray);
+
         test_trace(format!("ray started: {:?}", raycaster));
 
-        // Check if it's already inside a block
-        if collision_check(&raycaster) {
-            test_trace(format!(
-                "ray was inside a block: distance {}, {:?}",
-                raycaster.final_distance(),
-                raycaster
-            ));
-            return Some(raycaster);
-        }
-
         for _i in 0..RAYCAST_MAX_ITERATIONS {
-            raycaster.step();
-
-            test_trace(format!(
-                "_i:{_i}, stepping_dist:{}, final_dist:{}",
-                raycaster.stepping_distance(),
-                raycaster.final_distance()
-            ));
-
-            if raycaster.final_distance() > ray.reach {
+            if raycaster.distance > ray.reach {
                 test_trace(format!("no hit"));
                 return None;
             }
 
-            if collision_check(&raycaster) {
-                test_trace(format!(
-                    "ray hit: distance {}, {:?}",
-                    raycaster.final_distance(),
-                    raycaster
-                ));
-                return Some(raycaster);
+            raycaster.step();
+
+            if collision_check(&(&raycaster).into()) {
+                if raycaster.distance <= ray.reach {
+                    test_trace(format!(
+                        "ray hit: distance {}, {:?}",
+                        raycaster.distance, raycaster
+                    ));
+                    return Some(raycaster);
+                }
             }
+
+            test_trace(format!("_i:{_i}, final_dist:{}", raycaster.distance,));
         }
         test_trace(format!("out of ray iterations"));
         None
@@ -134,9 +125,9 @@ impl Raycaster {
     /// Advance the ray by one block
     fn step(&mut self) {
         self.update_mask();
+        self.distance = mul_or_zero_vec(self.mask.as_vec3(), self.side_dist).length();
         self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
         self.grid_pos += self.mask * self.grid_step;
-        self.iters += 1;
         test_trace(format!("ray stepped: {:?}", self));
     }
 
@@ -150,24 +141,8 @@ impl Raycaster {
         };
     }
 
-    pub fn stepping_position(&self) -> Vec3 {
-        self.ray.position + self.ray.direction * self.stepping_distance()
-    }
-
     pub fn final_position(&self) -> Vec3 {
-        self.ray.position + self.ray.direction * self.final_distance()
-    }
-
-    pub fn stepping_distance(&self) -> f32 {
-        mul_or_zero_vec(self.mask.as_vec3(), self.side_dist).length()
-    }
-
-    pub fn final_distance(&self) -> f32 {
-        if self.iters == 0 {
-            // The ray is inside a block
-            return 0.0;
-        }
-        mul_or_zero_vec(self.mask.as_vec3(), self.side_dist - self.delta_dist).length()
+        self.ray.position + self.ray.direction * self.distance
     }
 
     pub fn normal(&self) -> IVec3 {
@@ -175,10 +150,42 @@ impl Raycaster {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RaycastCheck {
+    /// The position on the block's boundary
+    position: Vec3,
+
+    /// Axis aligned versor
+    direction: Vec3,
+}
+
+impl RaycastCheck {
+    /// Get the plane of the face that is being checked
+    fn wall(&self) -> Vec3 {
+        Vec3::ONE - self.direction.abs()
+    }
+
+    /// Get the block that needs to be checked
+    fn grid_pos(&self) -> IVec3 {
+        (self.position + self.direction * MARGIN_EPSILON)
+            .floor()
+            .as_ivec3()
+    }
+}
+
+impl From<&Raycaster> for RaycastCheck {
+    fn from(value: &Raycaster) -> Self {
+        Self {
+            position: value.final_position(),
+            direction: (value.grid_step * value.mask).as_vec3(),
+        }
+    }
+}
+
 /// Checks if the segment defined by ray intersects a collidable block in universe.
 pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
-    Raycaster::cast(ray, |raycast: &Raycaster| {
-        is_block_collidable(&raycast.grid_pos, universe)
+    Raycaster::cast(ray, |c: &RaycastCheck| {
+        is_block_collidable(&c.grid_pos(), universe)
     })
 }
 
@@ -193,23 +200,20 @@ pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Ra
     ));
 
     let start = leading_vertex + ray.position;
-    let collision_check = |raycaster: &Raycaster| {
-        let ray_pos = raycaster.stepping_position();
-        let inv_mask = (IVec3::ONE - raycaster.mask).as_vec3();
-        let face_size = (size * inv_mask).length();
-        let face_diagonal = -(leading_vertex.signum() * inv_mask).normalize_or_zero();
+    let collision_check = |c: &RaycastCheck| {
+        let ray_pos = c.position + c.direction * MARGIN_EPSILON;
+
+        let wall = c.wall();
+        let face_size = (size * wall).length();
+        let face_diagonal = -(leading_vertex.signum() * wall * size).normalize_or_zero();
         let face_pos = ray_pos + face_diagonal * face_size;
 
         let min = ray_pos.min(face_pos).floor().as_ivec3();
         let max = ray_pos.max(face_pos).floor().as_ivec3();
 
         test_trace(format!(
-            "cuboid check: ray_pos:{}, face_pos:{}, normal:{}, min:{}, max:{}",
-            ray_pos,
-            face_pos,
-            raycaster.normal(),
-            min,
-            max
+            "cuboid check: ray_pos:{}, face_pos:{}, normal:{}, min:{}, max:{}, lead:{}",
+            ray_pos, face_pos, c.direction, min, max, leading_vertex
         ));
 
         iter_cuboid(min, max).any(|sample| is_block_collidable(&sample, universe))

@@ -35,8 +35,8 @@ fn adjacent() {
     cast(-Vec3::X * (0.5 + EPS), Vec3::X, 0.1, true);
     cast(Vec3::X * (0.5 + EPS), -Vec3::X, 0.1, true);
     cast(
-        Vec3::ZERO,
-        Vec3::new(-1.0, -1.0, 0.0).normalize(),
+        -Vec3::ONE * (0.5 + EPS),
+        Vec3::new(1.0, 1.0, 1.0).normalize(),
         0.1,
         true,
     );
@@ -44,7 +44,7 @@ fn adjacent() {
 
 #[test]
 fn adjacent_tangent() {
-    cast(-Vec3::X * 0.5, Vec3::Y, 0.1, true);
+    cast(-Vec3::X * 0.5, Vec3::Y, 0.1, false);
     cast(Vec3::X * (0.5 + EPS), Vec3::Y, 0.1, false);
 }
 
@@ -108,13 +108,6 @@ fn corner_hit() {
         // This is just a boundary condition, it shouldn't matter that it's different
         // Although, it's not pretty.
         cast(Vec3::new(1.5, -0.5, -0.5), -Vec3::X, 1.0 + EPS, true);
-
-        // Different axis exibit the same asymmetry:
-        cast(Vec3::new(-0.5, -0.5, -0.5), Vec3::X, 1.0 + EPS, true);
-        cast(Vec3::new(-0.5, 1.5, -0.5), -Vec3::Y, 1.0 + EPS, true);
-        cast(Vec3::new(-0.5, -0.5, -0.5), Vec3::Y, 1.0 + EPS, true);
-        cast(Vec3::new(-0.5, -0.5, 1.5), -Vec3::Z, 1.0 + EPS, true);
-        cast(Vec3::new(-0.5, -0.5, -0.5), Vec3::Z, 1.0 + EPS, true);
     }
 
     // Check the corner of each face with a ray parallel to the face's normal

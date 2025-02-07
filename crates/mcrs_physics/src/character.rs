@@ -83,7 +83,7 @@ pub fn is_grounded(character: &Character, tr: &Transform, universe: &Universe) -
         character.size,
         &universe,
     )
-    .is_some_and(|hit| hit.final_distance() <= MARGIN_EPSILON * 2.0)
+    .is_some_and(|hit| hit.distance <= MARGIN_EPSILON * 2.0)
 }
 
 /// Step forward the `Character` using the values from the `CharacterController`
@@ -161,15 +161,68 @@ pub fn character_controller_step(
         if let Some(hit) = cast_cuboid(
             RayFinite {
                 position: tr.translation,
-                direction: vel_dir,
-                reach: vel_magnitude,
+                direction: vel_dir.normalize_or_zero(),
+                reach: vel_magnitude + 1.0,
             },
             character.size,
             &universe,
         ) {
-            // Project into normal for correct max bound
-            let vel_delta = (hit.final_distance() - MARGIN_EPSILON).max(0.0);
+            if hit.distance > vel_magnitude {
+                test_trace(format!(
+                    "added just: m:{}, d:{}, to tr:{}",
+                    vel_magnitude, vel_dir, tr.translation
+                ));
+                println!(
+                    "added just: m:{}, d:{}, to tr:{}",
+                    vel_magnitude, vel_dir, tr.translation
+                );
+
+                let vel_delta = hit.distance.clamp(0.0, vel_magnitude - MARGIN_EPSILON);
+                tr.translation += vel_dir * vel_delta;
+
+                // Bound checks
+                for bound in [
+                    IVec3::X,
+                    IVec3::Y,
+                    IVec3::Z,
+                    IVec3::NEG_X,
+                    IVec3::NEG_Y,
+                    IVec3::NEG_Z,
+                ] {
+                    if let Some(perp_hit) = cast_cuboid(
+                        RayFinite {
+                            position: tr.translation,
+                            direction: bound.as_vec3(),
+                            reach: 1.0,
+                        },
+                        character.size,
+                        &universe,
+                    ) {
+                        if perp_hit.distance <= MARGIN_EPSILON * 2.0 {
+                            tr.translation *= (IVec3::ONE - perp_hit.mask).as_vec3();
+                            tr.translation += perp_hit.mask.as_vec3()
+                                * (perp_hit.grid_pos.as_vec3()
+                                    + Vec3::ONE * 0.5
+                                    + perp_hit.normal().as_vec3()
+                                        * (0.5 + MARGIN_EPSILON + character.size * 0.5));
+                            println!("move out of margin {}, bound {}", tr.translation, bound);
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            let vel_delta = hit.distance.clamp(0.0, vel_magnitude);
             vel_magnitude -= vel_delta;
+
+            println!(
+                "added bonk: m:{}, d:{}, n:{}, to tr:{}",
+                vel_delta,
+                vel_dir,
+                hit.normal(),
+                tr.translation
+            );
 
             tr.translation += vel_dir * vel_delta;
 
@@ -180,26 +233,97 @@ pub fn character_controller_step(
                 i, vel_magnitude, vel_delta, vel_dir, wall
             ));
 
-            // Get the distance from the character's boundary and the block it hit.
-            let leading_vertex = get_leading_aabb_vertex(character.size, vel_dir);
-            let perp_vec = leading_vertex.fract() * wall - hit.normal().as_vec3();
-            let perp_distance = perp_vec.length();
-
-            if perp_distance < MARGIN_EPSILON {
-                tr.translation += hit.normal().as_vec3() * perp_distance;
+            // Bound checks
+            for bound in [
+                IVec3::X,
+                IVec3::Y,
+                IVec3::Z,
+                IVec3::NEG_X,
+                IVec3::NEG_Y,
+                IVec3::NEG_Z,
+            ] {
+                if let Some(perp_hit) = cast_cuboid(
+                    RayFinite {
+                        position: tr.translation,
+                        direction: bound.as_vec3(),
+                        reach: 1.0,
+                    },
+                    character.size,
+                    &universe,
+                ) {
+                    let perp_distance = perp_hit.distance;
+                    if perp_distance <= MARGIN_EPSILON {
+                        tr.translation *= (IVec3::ONE - perp_hit.mask).as_vec3();
+                        tr.translation += perp_hit.mask.as_vec3()
+                            * (perp_hit.grid_pos.as_vec3()
+                                + Vec3::ONE * 0.5
+                                + perp_hit.normal().as_vec3()
+                                    * (0.5 + MARGIN_EPSILON + character.size * 0.5));
+                        println!("move out of margin {}, bound {}", tr.translation, bound);
+                    }
+                }
             }
 
             // Remove the velocity component that has hit a wall
-            vel_dir *= wall;
-            vel.vel *= wall;
+            let vel_dir_bonk = vel_dir * wall;
+            vel_dir = vel_dir_bonk.normalize_or_zero();
+            vel.vel = vel.vel * wall;
 
-            if vel_magnitude < MARGIN_EPSILON {
+            let lost_bonking = vel_dir_bonk.length();
+            vel_magnitude = if lost_bonking != 0.0 {
+                vel_magnitude * lost_bonking
+            } else {
+                0.0
+            };
+
+            if vel_magnitude <= MARGIN_EPSILON * 2.0 {
                 test_trace(format!("out of gas: m:{}", vel_magnitude));
                 break;
             }
         } else {
-            println!("added: m:{}, d:{}", vel_magnitude, vel_dir);
-            tr.translation += vel_dir * vel_magnitude;
+            test_trace(format!(
+                "added: m:{}, d:{}, to tr:{}",
+                vel_magnitude, vel_dir, tr.translation
+            ));
+            println!(
+                "added: m:{}, d:{}, to tr:{}",
+                vel_magnitude, vel_dir, tr.translation
+            );
+
+            let vel_delta = vel_magnitude.clamp(0.0, vel_magnitude - MARGIN_EPSILON);
+            tr.translation += vel_dir * vel_delta;
+
+            // Bound checks
+            for bound in [
+                IVec3::X,
+                IVec3::Y,
+                IVec3::Z,
+                IVec3::NEG_X,
+                IVec3::NEG_Y,
+                IVec3::NEG_Z,
+            ] {
+                if let Some(perp_hit) = cast_cuboid(
+                    RayFinite {
+                        position: tr.translation,
+                        direction: bound.as_vec3(),
+                        reach: 1.0,
+                    },
+                    character.size,
+                    &universe,
+                ) {
+                    let perp_distance = perp_hit.distance;
+                    if perp_distance <= MARGIN_EPSILON {
+                        tr.translation *= (IVec3::ONE - perp_hit.mask).as_vec3();
+                        tr.translation += perp_hit.mask.as_vec3()
+                            * (perp_hit.grid_pos.as_vec3()
+                                + Vec3::ONE * 0.5
+                                + perp_hit.normal().as_vec3()
+                                    * (0.5 + MARGIN_EPSILON + character.size * 0.5));
+                        println!("move out of margin {}, bound {}", tr.translation, bound);
+                    }
+                }
+            }
+
             break;
         }
     }

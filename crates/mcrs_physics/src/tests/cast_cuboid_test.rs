@@ -4,6 +4,8 @@ use crate::{
 };
 use bevy::prelude::*;
 
+use super::DIRS;
+
 #[test]
 fn leading_vertex() {
     let size = Vec3::new(1.0, 2.0, 3.0);
@@ -31,7 +33,7 @@ fn cast_cube(pos: Vec3, dir: Vec3, reach: f32, result: bool) {
     let hit = cast_cuboid(
         RayFinite {
             position: center + pos,
-            direction: -Vec3::X,
+            direction: dir,
             reach,
         },
         Vec3::ONE,
@@ -46,17 +48,19 @@ fn cast_cube(pos: Vec3, dir: Vec3, reach: f32, result: bool) {
 
 #[test]
 fn just_out_of_range() {
-    for i in 0..1000 {
-        let f = i as f32;
-        cast_cube(Vec3::X * (1.0 + EPS * f), -Vec3::X, EPS * (f - 1.0), false);
-        cast_cube(Vec3::X * (1.0 + EPS * f), -Vec3::X, EPS * (f + 1.0), true);
+    for dir in DIRS {
+        for i in 1..1000 {
+            let f = i as f32;
+            cast_cube(dir * (1.0 + EPS * f), -dir, EPS * (f - 1.0), false);
+            cast_cube(dir * (1.0 + EPS * f), -dir, EPS * (f + 1.0), true);
+        }
     }
 }
 
 #[test]
 fn corner_hit() {
     // Corner head on check
-    cast_cube(-Vec3::ONE, Vec3::ONE.normalize(), 2.0, true);
+    cast_cube(-Vec3::ONE * (1.0 + EPS), Vec3::ONE.normalize(), 2.0, true);
 
     // Manual checking
     {

@@ -183,6 +183,35 @@ fn jump_once() {
 }
 
 #[test]
+fn grounded_then_fall() {
+    let context = Context::new();
+    let mut state = CharacterState::default();
+    state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 1.0;
+    state.controller.acceleration.x = 1.0;
+
+    let mut iterated = state.clone();
+    let mut iter = 0;
+    while iter < 100 {
+        if (state.tr.translation - iterated.tr.translation).length() > 1.0 {
+            assert!(
+                !is_grounded(&context.character, &iterated.tr, &context.universe),
+                "grounded while falling"
+            );
+            return;
+        }
+
+        if !is_grounded(&context.character, &iterated.tr, &context.universe) {
+            panic!("not grounded while on the ground");
+        }
+
+        iterated = step_cube_character(&iterated, Some(context.clone()));
+        iter += 1;
+    }
+
+    assert!(iter < 100, "out of iterations");
+}
+
+#[test]
 fn bonk_into_wall() {
     for (dir, rot) in [
         (Vec3::X, -PI * 0.5),
@@ -387,6 +416,8 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
         let mut iterated = state.clone();
         let mut iter = 0;
         while iter < 1000 {
+            println!();
+
             if !bonked && !is_grounded(&context.character, &iterated.tr, &context.universe) {
                 dbg!(iter, dir, &state, &iterated);
                 panic!("no longer grounded");
@@ -395,6 +426,7 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
             let mut stepped = step_cube_character(&iterated, Some(context.clone()));
 
             if iter > 1 && stepped.vel.vel.length_squared() < EPS {
+                println!("BONK");
                 bonked = true;
                 stepped.controller.jumping = start_jumping_after_bonk;
                 bonk_pos = stepped.tr.translation;
