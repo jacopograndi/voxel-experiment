@@ -157,7 +157,7 @@ pub fn character_controller_step(
     let mut vel_dir = vel.vel.normalize_or_zero();
 
     // Loop until vel_magnitude is <= 0.0, but implementation bugs may lead to an infinite loop.
-    for i in 0..10 {
+    for _i in 0..10 {
         if let Some(hit) = cast_cuboid(
             RayFinite {
                 position: tr.translation,
@@ -177,7 +177,9 @@ pub fn character_controller_step(
                     vel_magnitude, vel_dir, tr.translation
                 );
 
-                let vel_delta = hit.distance.clamp(0.0, vel_magnitude - MARGIN_EPSILON);
+                let vel_delta = hit
+                    .distance
+                    .clamp(0.0, vel_magnitude - MARGIN_EPSILON * 2.0);
                 tr.translation += vel_dir * vel_delta;
 
                 // Bound checks
@@ -213,25 +215,30 @@ pub fn character_controller_step(
                 return;
             }
 
-            let vel_delta = hit.distance.clamp(0.0, vel_magnitude);
+            let vel_delta = hit
+                .distance
+                .clamp(0.0, vel_magnitude - MARGIN_EPSILON * 2.0);
             vel_magnitude -= vel_delta;
 
+            test_trace(format!(
+                "added bonk: m:{}, d:{}, n:{}, to tr:{}",
+                vel_delta,
+                vel_dir,
+                hit.normal(),
+                tr.translation,
+            ));
             println!(
                 "added bonk: m:{}, d:{}, n:{}, to tr:{}",
                 vel_delta,
                 vel_dir,
                 hit.normal(),
-                tr.translation
+                tr.translation,
             );
 
             tr.translation += vel_dir * vel_delta;
+            tr.translation -= hit.grid_step.as_vec3() * MARGIN_EPSILON;
 
             let wall = (IVec3::ONE - hit.mask).as_vec3();
-
-            test_trace(format!(
-                "{}, m:{}, D:{}, d:{}, w:{}",
-                i, vel_magnitude, vel_delta, vel_dir, wall
-            ));
 
             // Bound checks
             for bound in [
@@ -290,7 +297,7 @@ pub fn character_controller_step(
                 vel_magnitude, vel_dir, tr.translation
             );
 
-            let vel_delta = vel_magnitude.clamp(0.0, vel_magnitude - MARGIN_EPSILON);
+            let vel_delta = vel_magnitude.clamp(0.0, vel_magnitude - MARGIN_EPSILON * 2.0);
             tr.translation += vel_dir * vel_delta;
 
             // Bound checks

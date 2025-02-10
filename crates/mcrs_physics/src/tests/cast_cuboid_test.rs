@@ -62,15 +62,8 @@ fn corner_hit() {
     // Corner head on check
     cast_cube(-Vec3::ONE * (1.0 + EPS), Vec3::ONE.normalize(), 2.0, true);
 
-    // Manual checking
-    {
-        cast_cube(Vec3::new(2.0, 1.0, 1.0), -Vec3::X, 1.0 + EPS, false);
-        cast_cube(Vec3::new(2.0, -1.0, 1.0), -Vec3::X, 1.0 + EPS, false);
-        cast_cube(Vec3::new(2.0, 1.0, -1.0), -Vec3::X, 1.0 + EPS, false);
-
-        // Same asymmetry as a ray along -x
-        cast_cube(Vec3::new(2.0, -1.0, -1.0), -Vec3::X, 1.0 + EPS, true);
-    }
-
-    // There may be other asymmetries in choosing the leading vertex for casting a face head on
+    cast_cube(Vec3::new(2.0, 1.0, 1.0), -Vec3::X, 1.0 + EPS, false);
+    cast_cube(Vec3::new(2.0, -1.0, 1.0), -Vec3::X, 1.0 + EPS, false);
+    cast_cube(Vec3::new(2.0, 1.0, -1.0), -Vec3::X, 1.0 + EPS, false);
+    cast_cube(Vec3::new(2.0, -1.0, -1.0), -Vec3::X, 1.0 + EPS, false);
 }

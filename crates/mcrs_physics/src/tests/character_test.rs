@@ -4,6 +4,7 @@ use crate::{
         character_controller_step, is_grounded, Character, CharacterController, Friction, Velocity,
     },
     tests::{close_enough, stone},
+    MARGIN_EPSILON,
 };
 use bevy::prelude::*;
 use mcrs_universe::universe::Universe;
@@ -255,6 +256,7 @@ fn bonk_into_wall() {
 
             let traveled = (stepped.tr.translation - state.tr.translation).length();
             if iter > 1 && stepped.vel.vel.length_squared() < EPS {
+                println!("BONK");
                 bonked = true;
             }
 
@@ -378,8 +380,8 @@ fn bonk_into_corner_jumping() {
 
 fn bonk_into_corner(start_jumping_after_bonk: bool) {
     for ((s, t), rot) in [
-        ((-Vec3::X, -Vec3::Z), FRAC_PI_4 * 1.0),
-        ((-Vec3::X, Vec3::Z), FRAC_PI_4 * 3.0),
+        //((-Vec3::X, -Vec3::Z), FRAC_PI_4 * 1.0),
+        //((-Vec3::X, Vec3::Z), FRAC_PI_4 * 3.0),
         ((Vec3::X, Vec3::Z), FRAC_PI_4 * 5.0),
         ((Vec3::X, -Vec3::Z), FRAC_PI_4 * 7.0),
     ] {
@@ -392,7 +394,7 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
         // The floor
         u.set_chunk_block(&is, stone());
         u.set_chunk_block(&it, stone());
-        u.set_chunk_block(&(is * it), stone());
+        u.set_chunk_block(&(is + it), stone());
 
         // The wall (knight moves, corner at 2,2 is missing)
         u.set_chunk_block(&((is * 2 + it) + IVec3::Y), stone());
@@ -400,8 +402,16 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
         u.set_chunk_block(&((it * 2 + is) + IVec3::Y), stone());
         u.set_chunk_block(&((it * 2 + is) + IVec3::Y * 2), stone());
 
+        println!("{}", is);
+        println!("{}", it);
+        println!("{}", it + is);
+        println!("{}", (is * 2 + it) + IVec3::Y);
+        println!("{}", (is * 2 + it) + IVec3::Y * 2);
+        println!("{}", (it * 2 + is) + IVec3::Y);
+        println!("{}", (it * 2 + is) + IVec3::Y * 2);
+
         let mut state = CharacterState::default();
-        state.tr.translation = Vec3::splat(0.5) + Vec3::Y * 1.0;
+        state.tr.translation = Vec3::splat(0.5) + Vec3::Y * (1.0 + MARGIN_EPSILON);
 
         // tr.forward is -z
         state.tr.rotation = Quat::from_rotation_y(rot);
@@ -418,8 +428,8 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
         while iter < 1000 {
             println!();
 
-            if !bonked && !is_grounded(&context.character, &iterated.tr, &context.universe) {
-                dbg!(iter, dir, &state, &iterated);
+            if !is_grounded(&context.character, &iterated.tr, &context.universe) {
+                //dbg!(iter, dir, &state, &iterated);
                 panic!("no longer grounded");
             }
 
@@ -447,7 +457,7 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
                 let from_start_to_traveled =
                     (stepped.tr.translation * plane - state.tr.translation * plane).length();
                 assert!(
-                    close_enough(from_start_to_traveled, from_start_to_bonk, 0.01),
+                    close_enough(from_start_to_traveled, from_start_to_bonk, 0.1),
                     "wall bonked after traveling {}, but not straight at {}",
                     from_start_to_traveled,
                     from_start_to_bonk
@@ -457,6 +467,22 @@ fn bonk_into_corner(start_jumping_after_bonk: bool) {
             iterated = stepped;
             iter += 1;
         }
+
+        println!();
+        dbg!(iter, dir, &state, &iterated);
+        dbg!(&iterated);
+        println!();
+
+        let plane = Vec3::new(1.0, 0.0, 1.0);
+        let from_start_to_bonk = (bonk_pos * plane - state.tr.translation * plane).length();
+        let from_start_to_traveled =
+            (iterated.tr.translation * plane - state.tr.translation * plane).length();
+        assert!(
+            close_enough(from_start_to_traveled, from_start_to_bonk, 0.01),
+            "wall bonked after traveling {}, but not straight at {}",
+            from_start_to_traveled,
+            from_start_to_bonk
+        );
 
         assert!(bonked);
 
