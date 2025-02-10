@@ -7,7 +7,7 @@ use bevy::{
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::LocalPlayer;
 use mcrs_physics::{
-    character::{CameraController, Character, CharacterController, Velocity},
+    character::{CameraController, CharacterController, Rigidbody, Velocity},
     TickStep,
 };
 use mcrs_universe::{universe::Universe, Blueprints};
@@ -466,18 +466,18 @@ pub fn debug_camera_toggle(
 
 pub fn debug_show_hitboxes(
     local_characters: Query<
-        (&LocalPlayer, &Transform, &Character, &Velocity),
+        (&LocalPlayer, &Transform, &Rigidbody, &Velocity),
         Without<DebugCamera>,
     >,
     mut gizmos: Gizmos,
     debug_options: Res<DebugOptions>,
 ) {
     if debug_options.show_hitboxes {
-        for (_, character_tr, character, vel) in local_characters.iter() {
+        for (_, character_tr, rigidbody, vel) in local_characters.iter() {
             gizmos.cuboid(
                 character_tr
                     .with_rotation(Quat::IDENTITY)
-                    .with_scale(character.size),
+                    .with_scale(rigidbody.size),
                 Color::srgb(0.0, 0.8, 0.0),
             );
             gizmos.arrow(

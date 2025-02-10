@@ -2,47 +2,66 @@ use bevy::math::{IVec3, Vec3};
 
 use mcrs_universe::{block::BlockFlag, universe::Universe};
 
-use crate::{test_trace, MARGIN_EPSILON};
+use crate::{test_print, MARGIN_EPSILON};
 
 const RAYCAST_MAX_ITERATIONS: u32 = 1000;
 
-#[derive(Debug, Clone)]
 /// Represents a line segment
+#[derive(Debug, Clone)]
 pub struct RayFinite {
     /// Origin of the segment
     pub position: Vec3,
+
     /// Direction of the line parallel to the segment
     pub direction: Vec3,
+
     /// Lenght of the segment
     pub reach: f32,
 }
 
-#[derive(Debug, Clone)]
+impl RayFinite {
+    pub fn view(&self) -> String {
+        format!(
+            "pos:{}, dir:{}, reach:{}",
+            self.position, self.direction, self.reach
+        )
+    }
+}
+
 /// Checks intersections of rays through a grid.
+#[derive(Debug, Clone)]
 pub struct Raycaster {
     /// Starting conditions
     ray: RayFinite,
 
-    /// Precalculated values
+    /// Precalculated value
     /// The direction to follow when checking a new block.
     pub grid_step: IVec3,
+
+    /// Precalculated value
     /// For each direction holds the distance required to travel 1 unit.
     delta_dist: Vec3,
 
     /// Mutated at every step
     /// The current position in the grid that is being checked.
     pub grid_pos: IVec3,
+
+    /// Mutated at every step
     /// Is 1 in the direction of the last checked grid position, 0 otherwise.
     pub mask: IVec3,
+
+    /// Mutated at every step
     /// Accumulates the distance travelled for each direction.
     side_dist: Vec3,
 
+    /// Mutated at every step
     /// Distance traveled by the ray
     pub distance: f32,
 }
 
 /// Inspired by https://lodev.org/cgtutor/raycasting.html
 impl Raycaster {
+    /// Initialize a Raycaster from a ray
     pub fn new(ray: &RayFinite) -> Self {
         let grid_pos = ray.position.floor().as_ivec3();
         let delta_dist = (1. / ray.direction).abs();
@@ -86,6 +105,7 @@ impl Raycaster {
     }
 
     /// Steps through the grid until a collision is detected.
+    /// Starts at ray.pos and ends when either the distance > ray.reach or there's a collision.
     pub fn cast(
         ray: RayFinite,
         collision_check: impl Fn(&RaycastCheck) -> bool,
@@ -96,11 +116,16 @@ impl Raycaster {
 
         let mut raycaster = Raycaster::new(&ray);
 
-        test_trace(format!("ray started: {:?}", raycaster));
+        test_print(format!(
+            "# raycasting: start [{}, step:{}, delta:{}]",
+            ray.view(),
+            raycaster.grid_step,
+            raycaster.delta_dist
+        ));
 
         for _i in 0..RAYCAST_MAX_ITERATIONS {
             if raycaster.distance > ray.reach {
-                test_trace(format!("no hit"));
+                test_print(format!("# raycasting: miss. dist:{}", raycaster.distance));
                 return None;
             }
 
@@ -108,17 +133,12 @@ impl Raycaster {
 
             if collision_check(&(&raycaster).into()) {
                 if raycaster.distance <= ray.reach {
-                    test_trace(format!(
-                        "ray hit: distance {}, {:?}",
-                        raycaster.distance, raycaster
-                    ));
+                    test_print(format!("# raycasting: hit dist:{}", raycaster.distance));
                     return Some(raycaster);
                 }
             }
-
-            test_trace(format!("_i:{_i}, final_dist:{}", raycaster.distance,));
         }
-        test_trace(format!("out of ray iterations"));
+        test_print(format!("# raycasting: out of ray iterations"));
         None
     }
 
@@ -128,7 +148,7 @@ impl Raycaster {
         self.distance = mul_or_zero_vec(self.mask.as_vec3(), self.side_dist).length();
         self.side_dist += mul_or_zero_vec(self.mask.as_vec3(), self.delta_dist);
         self.grid_pos += self.mask * self.grid_step;
-        test_trace(format!("ray stepped: {:?}", self));
+        test_print(format!("# raycasting: [{}]", self.view_state()));
     }
 
     pub fn update_mask(&mut self) {
@@ -147,6 +167,13 @@ impl Raycaster {
 
     pub fn normal(&self) -> IVec3 {
         -self.grid_step * self.mask
+    }
+
+    pub fn view_state(&self) -> String {
+        format!(
+            "grid:{}, mask:{}, side:{}, dist:{}",
+            self.grid_pos, self.mask, self.side_dist, self.distance
+        )
     }
 }
 
@@ -194,9 +221,11 @@ pub fn cast_ray(ray: RayFinite, universe: &Universe) -> Option<Raycaster> {
 pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Raycaster> {
     let leading_vertex = get_leading_aabb_vertex(size, ray.direction);
 
-    test_trace(format!(
-        "cuboid start: {:?}, size {}, leading vertex: {}",
-        ray, size, leading_vertex
+    test_print(format!(
+        "cuboid: start [{}, size:{}, leading vertex:{}]",
+        ray.view(),
+        size,
+        leading_vertex
     ));
 
     let start = leading_vertex + ray.position;
@@ -211,8 +240,8 @@ pub fn cast_cuboid(ray: RayFinite, size: Vec3, universe: &Universe) -> Option<Ra
         let min = ray_pos.min(face_pos).floor().as_ivec3();
         let max = ray_pos.max(face_pos).floor().as_ivec3();
 
-        test_trace(format!(
-            "cuboid check: ray_pos:{}, face_pos:{}, normal:{}, min:{}, max:{}, lead:{}",
+        test_print(format!(
+            "cuboid: check [ray_pos:{}, face_pos:{}, normal:{}, min:{}, max:{}, lead:{}]",
             ray_pos, face_pos, c.direction, min, max, leading_vertex
         ));
 

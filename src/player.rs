@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use mcrs_net::{LocalPlayer, NetworkMode};
 use mcrs_physics::{
-    character::{CameraController, Character, CharacterController, Friction, Velocity},
+    character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
     raycast::{cast_ray, RayFinite},
 };
 use mcrs_render::{camera::VoxelCameraBundle, settings::RenderMode};
@@ -118,8 +118,10 @@ pub fn spawn_player(
             LevelOwned,
             LocalPlayer,
             PlayerInputBuffer::default(),
-            Character {
+            Rigidbody {
                 size: Vec3::new(0.5, 1.8, 0.5),
+            },
+            Character {
                 air_speed: 0.001,
                 ground_speed: 0.03,
                 jump_strenght: 0.2,
