@@ -157,7 +157,7 @@ impl Raycaster {
             (true, true, _) => IVec3::X,
             (false, _, true) => IVec3::Y,
             (_, false, false) => IVec3::Z,
-            _ => unreachable!(),
+            _ => IVec3::ZERO,
         };
     }
 

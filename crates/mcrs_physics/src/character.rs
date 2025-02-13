@@ -6,12 +6,15 @@ use mcrs_universe::universe::Universe;
 use crate::{raycast::*, test_print, MARGIN_EPSILON};
 
 /// An axis aligned cuboid that can be stepped forward in time.
+/// Paired with `Velocity` and `Friction`
 #[derive(Component, Debug, Clone, Default)]
 pub struct Rigidbody {
     // The extent of the bounding box.
     pub size: Vec3,
 }
 
+/// Defines the properties of how a character is impacted by forces
+/// Paired with `Rigidbody`, `Velocity` and `Friction`
 #[derive(Component, Debug, Clone, Default)]
 pub struct Character {
     // The speed multiplier when not standing on the ground.
@@ -27,17 +30,20 @@ pub struct Character {
     pub jump_cooldown: Duration,
 }
 
+/// The `Rigidbody` velocity component
 #[derive(Component, Debug, Clone, Default)]
 pub struct Velocity {
     pub vel: Vec3,
 }
 
+/// Removes some speed per tick to a `Rigidbody` based on the movement type of the body
 #[derive(Component, Debug, Clone, Default)]
 pub struct Friction {
     pub air: Vec3,
     pub ground: Vec3,
 }
 
+/// Tells the `Character` how to move
 #[derive(Component, Debug, Clone)]
 pub struct CharacterController {
     // The acceleration applied to Self.
@@ -64,6 +70,7 @@ impl Default for CharacterController {
     }
 }
 
+// Todo: Maybe move in src
 #[derive(Component, Debug, Clone)]
 pub struct CameraController {
     pub sensitivity: Vec3,
@@ -77,6 +84,7 @@ impl Default for CameraController {
     }
 }
 
+/// Checks if a rigidbody is very close to a block below
 pub fn is_grounded(rigidbody: &Rigidbody, tr: &Transform, universe: &Universe) -> bool {
     cast_cuboid(
         RayFinite {
@@ -90,7 +98,10 @@ pub fn is_grounded(rigidbody: &Rigidbody, tr: &Transform, universe: &Universe) -
     .is_some_and(|hit| hit.distance <= MARGIN_EPSILON * 2.0)
 }
 
-/// Step forward the `Character` using the values from the `CharacterController`
+// Todo: add a system that moves `Rigidbody`s that are not `Character`s
+// It would handle items. Projectiles and mobs would be handled separately.
+
+/// System to step forward the `Character` using the values from the `CharacterController`
 pub fn character_controller_movement(
     mut character_query: Query<(
         &mut CharacterController,
@@ -194,6 +205,7 @@ pub fn rigidbody_step(
                 vel_magnitude, vel_dir, tr.translation
             ));
 
+            // Speed Bleed: This operation removes some speed.
             let vel_delta = vel_magnitude.clamp(0.0, vel_magnitude - MARGIN_EPSILON * 2.0);
             tr.translation += vel_dir * vel_delta;
 
@@ -206,6 +218,7 @@ pub fn rigidbody_step(
             return;
         };
 
+        // Speed Bleed: This operation removes some speed.
         let vel_delta = hit
             .distance
             .clamp(0.0, vel_magnitude - MARGIN_EPSILON * 2.0);
@@ -226,7 +239,8 @@ pub fn rigidbody_step(
         // Add some margin back so that the character isn't touching the block anymore
         // Note: the margin is added to all directions because if the character hits a block
         // near a corner it's possible that it gets too close to the corner.
-        tr.translation -= hit.grid_step.as_vec3() * MARGIN_EPSILON;
+        // Speed Bleed: This operation removes some speed.
+        tr.translation -= hit.grid_step.as_vec3() * (MARGIN_EPSILON * 0.5);
 
         let wall = (IVec3::ONE - hit.mask).as_vec3();
 
