@@ -90,7 +90,7 @@ pub fn open_level(
 
     commands.insert_resource(Level {
         name: event.level_name,
-        seed: 23,
+        seed: 0,
     });
 
     *tickstep = TickStep::Tick;

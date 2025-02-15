@@ -10,12 +10,12 @@ use mcrs_physics::{
     character::{CameraController, CharacterController, Rigidbody, Velocity},
     TickStep,
 };
-use mcrs_universe::{universe::Universe, Blueprints};
+use mcrs_universe::{universe::Universe, Blueprints, CHUNK_SIDE};
 use renet::{RenetClient, RenetServer};
 
 use crate::{
-    player::spawn_camera, settings::McrsSettings, CloseLevelEvent, Level, OpenLevelEvent,
-    SaveLevelEvent,
+    player::spawn_camera, settings::McrsSettings, ChunkGenerationRequest, CloseLevelEvent,
+    GenerationPass, Level, OpenLevelEvent, SaveLevelEvent,
 };
 
 pub const DIAGNOSTIC_FPS: DiagnosticPath = DiagnosticPath::const_new("game/fps");
@@ -45,6 +45,7 @@ impl Plugin for DebugDiagnosticPlugin {
                     debug_show_hitboxes,
                     debug_camera_toggle,
                     debug_camera_movement,
+                    debug_chunks,
                 )
                     .run_if(debug_active),
             ),
@@ -546,5 +547,32 @@ pub fn debug_camera_movement(
         tr.translation += forward * delta.x;
         tr.translation += Vec3::Y * delta.y;
         tr.translation += left * delta.z;
+    }
+}
+
+pub fn debug_chunks(
+    universe: Res<Universe>,
+    chunk_gen: Res<ChunkGenerationRequest>,
+    mut gizmos: Gizmos,
+    debug_options: Res<DebugOptions>,
+) {
+    for (chunk_pos, gen_request) in &chunk_gen.requested {
+        let scale = Vec3::splat(CHUNK_SIDE as f32);
+        let center = chunk_pos.as_vec3() + scale * 0.5;
+        let color = match gen_request.pass {
+            GenerationPass::Blocks => Color::srgb(1.0, 0.0, 0.0),
+            GenerationPass::Lighting => Color::srgb(1.0, 0.3, 0.0),
+            GenerationPass::WaitingForSunlight => Color::srgb(1.0, 0.6, 0.0),
+            GenerationPass::Done => Color::srgb(1.0, 1.0, 0.0),
+        };
+        gizmos.cuboid(Transform::from_translation(center).with_scale(scale), color);
+    }
+    for (chunk_pos, chunk) in &universe.chunks {
+        let scale = Vec3::splat(CHUNK_SIDE as f32);
+        let center = chunk_pos.as_vec3() + scale * 0.5;
+        gizmos.cuboid(
+            Transform::from_translation(center).with_scale(scale),
+            Color::srgb(0.0, 0.5, 0.0),
+        );
     }
 }

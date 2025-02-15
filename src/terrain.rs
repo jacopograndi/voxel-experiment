@@ -11,7 +11,7 @@ use mcrs_universe::{
     universe::Universe,
     Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
-use noise::{NoiseFn, OpenSimplex, RidgedMulti, Seedable};
+use noise::{HybridMulti, MultiFractal, NoiseFn, OpenSimplex, RidgedMulti, Seedable};
 
 // Todo: refactor this big file into lighting, generation and modification modules
 
@@ -693,13 +693,16 @@ pub fn chunk_generation(
 }
 
 pub struct GeneratorSponge {
-    terrain_noise: RidgedMulti<OpenSimplex>,
+    terrain_noise: HybridMulti<noise::Perlin>,
 }
 
 impl GeneratorSponge {
     fn new(seed: u32) -> Self {
         Self {
-            terrain_noise: RidgedMulti::<OpenSimplex>::default().set_seed(seed),
+            terrain_noise: HybridMulti::<noise::Perlin>::default()
+                .set_frequency(1.2)
+                .set_octaves(2)
+                .set_seed(seed),
         }
     }
 
