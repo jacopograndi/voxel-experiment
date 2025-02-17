@@ -10,7 +10,7 @@ use block_mesh::{
     RIGHT_HANDED_Y_UP_CONFIG,
 };
 use mcrs_universe::{
-    block::BlockFlag,
+    block::{BlockFace, BlockFlag},
     chunk::{Chunk, ChunkVersion},
     universe::Universe,
     Blueprints, CHUNK_SIDE, MAX_LIGHT,
@@ -204,7 +204,7 @@ pub fn create_chunk_entity(
         entity_commands.insert((
             Mesh3d(meshes.add(render_mesh)),
             MeshMaterial3d(materials.add(StandardMaterial {
-                perceptual_roughness: 0.9,
+                unlit: true,
                 base_color_texture: Some(handles.blocks.clone_weak()),
                 ..default()
             })),
@@ -291,10 +291,48 @@ pub fn generate_chunk_mesh(
             ]);
             let block = chunk_ref[Chunk::xyz2idx(block_xyz)];
             let block_bp = bp.blocks.get(&block.id);
-            let offset = [
-                (block_bp.block_texture_offset[0]) as f32,
-                (block_bp.block_texture_offset[1]) as f32,
-            ];
+
+            let mut face_color = Color::WHITE;
+
+            let offset = if let Some(face_offsets) = &block_bp.block_texture_offset {
+                match face_offsets {
+                    BlockFace::Same((u, v)) => [*u as f32, *v as f32],
+                    BlockFace::Cube {
+                        top,
+                        bottom,
+                        left,
+                        right,
+                        forward,
+                        backward,
+                    } => {
+                        let n = IVec3::from_array(face.signed_normal().to_array());
+                        if n == IVec3::Y {
+                            // Hack: biomes aren't implemented yet.
+                            // Set the grass color to green instead of white
+                            if block_bp.name == "Grass" {
+                                face_color = Color::srgb(0.7, 1.0, 0.4);
+                            }
+                            [top.0 as f32, top.1 as f32]
+                        } else if n == -IVec3::Y {
+                            [bottom.0 as f32, bottom.1 as f32]
+                        } else if n == IVec3::X {
+                            [right.0 as f32, right.1 as f32]
+                        } else if n == -IVec3::X {
+                            [left.0 as f32, left.1 as f32]
+                        } else if n == IVec3::Z {
+                            [backward.0 as f32, backward.1 as f32]
+                        } else if n == -IVec3::Z {
+                            [forward.0 as f32, forward.1 as f32]
+                        } else {
+                            println!("the face has an impossible normal: {}", n);
+                            panic!();
+                        }
+                    }
+                }
+            } else {
+                println!("configure face offset for the block: {}", block_bp.name);
+                panic!();
+            };
             let uv_face = face.tex_coords(RIGHT_HANDED_Y_UP_CONFIG.u_flip_face, true, &quad.into());
             uvs.extend_from_slice(
                 &uv_face
@@ -347,7 +385,8 @@ pub fn generate_chunk_mesh(
                 }
 
                 let c = (light - ao).clamp(0.02, 1.0);
-                face_colors.push([c, c, c, 1.0]);
+                let l = face_color.to_linear();
+                face_colors.push([l.red * c, l.green * c, l.blue * c, 1.0]);
             }
             colors.extend_from_slice(&face_colors.as_slice());
         }

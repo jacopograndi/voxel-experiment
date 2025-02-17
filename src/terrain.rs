@@ -11,14 +11,14 @@ use mcrs_universe::{
     universe::Universe,
     Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
-use noise::{HybridMulti, MultiFractal, NoiseFn, OpenSimplex, RidgedMulti, Seedable};
+use noise::{HybridMulti, MultiFractal, NoiseFn, Seedable};
 
 // Todo: refactor this big file into lighting, generation and modification modules
 
-const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 2;
-const BLOCK_GENERATION_LOW_THRESHOLD: usize = 400;
-const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
-const MAX_SUN_BEAM_EXTENSION: i32 = 1000;
+const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 10;
+const BLOCK_GENERATION_LOW_THRESHOLD: usize = 4000;
+const MAX_BLOCK_GENERATION_PER_FRAME: usize = 100000;
+const MAX_SUN_BEAM_EXTENSION: i32 = 10000;
 
 #[derive(Debug, Clone)]
 pub enum UniverseChange {
@@ -86,6 +86,10 @@ impl SunBeam {
         } else {
             None
         }
+    }
+
+    pub fn contains(&self, at: &i32) -> bool {
+        (self.bottom..=self.top).contains(at)
     }
 }
 
@@ -351,10 +355,14 @@ pub enum GenerationPass {
     #[default]
     /// The chunk is requesting for blocks to be generated
     Blocks,
+    /// The chunk is waiting on the chunk above to be done before reverting to `Lighting`
+    WaitingForSunbeams,
+    /// The chunk is requesting for sunbeams to be propagated through it
+    Sunbeams,
+    /// The chunk is requesting biome to be added
+    Biome,
     /// The chunk is requesting lighting to be recalculated
     Lighting,
-    /// The chunk is waiting on the chunk above to be done before reverting to `Lighting`
-    WaitingForSunlight,
     /// The chunk is ready to be added to the universe
     Done,
 }
@@ -392,7 +400,7 @@ pub fn get_spawn_chunks() -> impl Iterator<Item = IVec3> {
 }
 
 pub fn get_sun_heightfield(_xz: IVec2) -> i32 {
-    128
+    256
 }
 
 pub fn request_base_chunks(
@@ -430,7 +438,7 @@ pub fn chunk_generation(
     bp: Res<Blueprints>,
     mut light_sources: ResMut<LightSources>,
     mut request: ResMut<ChunkGenerationRequest>,
-    mut generator: Local<Option<GeneratorSponge>>,
+    mut generator: Local<Option<GeneratorCrazyHill>>,
     mut sun_beams: ResMut<SunBeams>,
     level: Option<Res<Level>>,
 ) {
@@ -440,7 +448,7 @@ pub fn chunk_generation(
 
     // Initialize the block generator
     if generator.is_none() {
-        *generator = Some(GeneratorSponge::new(level.seed));
+        *generator = Some(GeneratorCrazyHill::new(level.seed));
     }
     let Some(generator) = generator.as_ref() else {
         return;
@@ -512,7 +520,7 @@ pub fn chunk_generation(
         }
 
         if part.current_block == CHUNK_VOLUME {
-            part.pass = GenerationPass::Lighting;
+            part.pass = GenerationPass::Sunbeams;
         }
 
         if generated_blocks >= max_block_generation {
@@ -523,7 +531,7 @@ pub fn chunk_generation(
     let mut request_for_sunlight = vec![];
 
     for _ in 0..10 {
-        let Some((chunk_pos, part)) = request.get_for_pass_mut(&GenerationPass::Lighting).next()
+        let Some((chunk_pos, part)) = request.get_for_pass_mut(&GenerationPass::Sunbeams).next()
         else {
             break;
         };
@@ -541,7 +549,7 @@ pub fn chunk_generation(
         // Todo: this can be cached and done in a separate `GenerationPass`.
         // Calculate sunbeams by raycasting up from the lowest blocks of the chunk.
         // If any beam escapes the chunk, request the chunk above.
-        let chunk_mut = chunk.get_ref();
+        let chunk_ref = chunk.get_ref();
         let mut any_beam_escaped = false;
         for (x, z) in (0..CHUNK_SIDE as i32)
             .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
@@ -550,7 +558,7 @@ pub fn chunk_generation(
             let plane_index = (x + z * CHUNK_SIDE as i32) as usize;
             for y in (0..CHUNK_SIDE as i32).rev() {
                 let xyz = IVec3::new(x, y, z);
-                let is_opaque = chunk_mut[Chunk::xyz2idx(xyz)]
+                let is_opaque = chunk_ref[Chunk::xyz2idx(xyz)]
                     .properties
                     .check(BlockFlag::Opaque);
                 if is_opaque {
@@ -562,7 +570,7 @@ pub fn chunk_generation(
 
             for y in part.blocks_lowest[plane_index]..CHUNK_SIDE as i32 {
                 let xyz = IVec3::new(x, y, z);
-                let is_opaque = chunk_mut[Chunk::xyz2idx(xyz)]
+                let is_opaque = chunk_ref[Chunk::xyz2idx(xyz)]
                     .properties
                     .check(BlockFlag::Opaque)
                     && y > part.blocks_lowest[plane_index];
@@ -583,7 +591,7 @@ pub fn chunk_generation(
 
         if any_beam_escaped && chunk_above.is_none() {
             request_for_sunlight.push(above);
-            part.pass = GenerationPass::WaitingForSunlight;
+            part.pass = GenerationPass::WaitingForSunbeams;
             info!(
                 target: "terrain_generation",
                 "lighting for chunk {} is waiting for the chunk above", chunk_pos,
@@ -626,53 +634,100 @@ pub fn chunk_generation(
 
                 let new_beam = SunBeam::new(beam_bottom + chunk_pos.y, beam_height + chunk_pos.y);
                 sun_beams.extend_beam(&beam_pos, new_beam);
-
-                for y in beam_bottom..=beam_height {
-                    let xyz = IVec3::new(x, y, z);
-                    light_sources
-                        .leaked_sources
-                        .entry(LightType::Sun)
-                        .or_default()
-                        .push(LightSource {
-                            pos: xyz + chunk_pos,
-                            brightness: sun_light,
-                        });
-                }
             }
         }
 
-        // Add the block light sources
-        for xyz in Chunk::iter() {
-            let id = chunk_mut[Chunk::xyz2idx(xyz)].id;
-            let block_bp = bp.blocks.get(&id);
-            if block_bp.is_light_source() {
-                light_sources
-                    .leaked_sources
-                    .entry(LightType::Torch)
-                    .or_default()
-                    .push(LightSource {
-                        pos: xyz + chunk_pos,
-                        brightness: block_bp.light_level,
-                    });
-            }
-        }
-
-        part.pass = GenerationPass::Done;
+        part.pass = GenerationPass::Biome;
     }
 
     for chunk_pos in request_for_sunlight {
         request.insert(chunk_pos);
     }
 
-    for (chunk_pos, part) in request.get_for_pass_mut(&GenerationPass::WaitingForSunlight) {
+    for (chunk_pos, part) in request.get_for_pass_mut(&GenerationPass::WaitingForSunbeams) {
         let above = chunk_pos + IVec3::Y * CHUNK_SIDE as i32;
         if universe.chunks.get(&above).is_some() {
             info!(
                 target: "terrain_generation",
                 "lighting for chunk {} resumed", chunk_pos,
             );
-            part.pass = GenerationPass::Lighting;
+            part.pass = GenerationPass::Sunbeams;
         }
+    }
+
+    for (chunk_pos, part) in request.get_for_pass_mut(&GenerationPass::Biome) {
+        let Some(chunk) = &part.chunk else {
+            error!("the chunk has no blocks in it");
+            continue;
+        };
+
+        // Add dirt to the 3 stone blocks under each sunbeam
+        let mut chunk_mut = chunk.get_mut();
+        for (x, z) in (0..CHUNK_SIDE as i32)
+            .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
+            .flatten()
+        {
+            let xz = IVec2::new(x, z) + chunk_pos.xz();
+            let beam = sun_beams.get_at_mut(&xz);
+            if (chunk_pos.y..chunk_pos.y + CHUNK_SIDE as i32).contains(&(beam.bottom - 1)) {
+                for h in 0..3 {
+                    let xyz = IVec3::new(x, (beam.bottom - chunk_pos.y) - h - 1, z);
+                    if !Chunk::contains(&xyz) {
+                        continue;
+                    }
+                    let block = &mut chunk_mut[Chunk::xyz2idx(xyz)];
+                    if !block.properties.check(BlockFlag::Opaque) {
+                        break;
+                    }
+                    if h == 0 {
+                        *block = Block::new(bp.blocks.get_named("Grass"));
+                    } else {
+                        *block = Block::new(bp.blocks.get_named("Dirt"));
+                    }
+                }
+            }
+        }
+
+        part.pass = GenerationPass::Lighting;
+    }
+
+    for (chunk_pos, part) in request.get_for_pass_mut(&GenerationPass::Lighting) {
+        let Some(chunk) = &part.chunk else {
+            error!("the chunk has no blocks in it");
+            continue;
+        };
+
+        let chunk_mut = chunk.get_mut();
+        for pos in Chunk::iter() {
+            let xyz = pos + chunk_pos;
+
+            let sun = if sun_beams.get_at_mut(&xyz.xz()).contains(&xyz.y) {
+                MAX_LIGHT
+            } else {
+                0
+            };
+            light_sources
+                .leaked_sources
+                .entry(LightType::Sun)
+                .or_default()
+                .push(LightSource {
+                    pos: xyz,
+                    brightness: sun,
+                });
+
+            let block = chunk_mut[Chunk::xyz2idx(pos)];
+            let block_bp = bp.blocks.get(&block.id);
+            let torch = block_bp.light_level;
+            light_sources
+                .leaked_sources
+                .entry(LightType::Torch)
+                .or_default()
+                .push(LightSource {
+                    pos: xyz + chunk_pos,
+                    brightness: torch,
+                });
+        }
+        part.pass = GenerationPass::Done;
     }
 
     request
@@ -692,57 +747,60 @@ pub fn chunk_generation(
         });
 }
 
-pub struct GeneratorSponge {
-    terrain_noise: HybridMulti<noise::Perlin>,
+pub struct GeneratorCrazyHill {
+    terrain_noise: noise::Exponent<f64, HybridMulti<noise::Perlin>, 2>,
+    sponge_noise: HybridMulti<noise::Perlin>,
 }
 
-impl GeneratorSponge {
+impl GeneratorCrazyHill {
     fn new(seed: u32) -> Self {
         Self {
-            terrain_noise: HybridMulti::<noise::Perlin>::default()
-                .set_frequency(1.2)
-                .set_octaves(2)
+            terrain_noise: noise::Exponent::new(
+                HybridMulti::<noise::Perlin>::default()
+                    .set_frequency(0.001)
+                    .set_octaves(4)
+                    .set_seed(seed),
+            ),
+            sponge_noise: HybridMulti::<noise::Perlin>::default()
+                .set_frequency(0.003)
+                .set_octaves(5)
+                .set_persistence(0.5)
                 .set_seed(seed),
         }
     }
 
-    fn sample_terrain(&self, pos: IVec3) -> f64 {
-        let mut sample = self.terrain_noise.get((pos.as_dvec3() * 0.01).to_array());
-        sample = (sample + 1.0) * 0.5;
-        sample = sample.clamp(0.0, 1.0);
-        if sample >= 1.0 {
-            sample = 0.999999;
-        }
-        assert!(
-            (0.0..1.0).contains(&sample),
-            "sample {} not in 0.0..1.0",
-            sample
-        );
-        sample
-    }
-
     fn gen_block(&self, pos: IVec3, bp: &Blueprints) -> Block {
-        let sample = self.sample_terrain(pos);
+        // create an envelope of 3d noise in -192..192
+        // squish that envelope in the y direction using a 2d perlin noise
 
-        let weigth: f64 = if pos.y > 0 {
-            let amt = (pos.y as f64 / 64.0).min(1.0);
-            0.5 - 0.5 * amt
-        } else if pos.y > -64 {
-            let y = pos.y + 64;
-            let amt = (y as f64 / 64.0).min(1.0);
-            0.8 - 0.3 * amt
+        let dpos = pos.as_dvec3();
+
+        let block;
+        let caves: f64 = -128.0;
+        let sky: f64 = 128.0;
+        let mid = (sky + caves) * 0.5;
+        let amp = (sky - caves).abs() * 0.5;
+        if dpos.y > sky {
+            block = bp.blocks.get_named("Air");
+        } else if dpos.y < caves {
+            block = bp.blocks.get_named("Stone");
         } else {
-            0.8
-        };
+            let flatness = self.terrain_noise.get(dpos.xz().to_array());
+            let flatness_norm = flatness * 0.5 + 0.5;
+            if dpos.y < mid - amp * flatness_norm {
+                block = bp.blocks.get_named("Stone");
+            } else if dpos.y > mid + amp * flatness_norm {
+                block = bp.blocks.get_named("Air");
+            } else {
+                let sample = self.sponge_noise.get(dpos.to_array());
+                if sample > 1.0 - flatness_norm {
+                    block = bp.blocks.get_named("Stone");
+                } else {
+                    block = bp.blocks.get_named("Air");
+                }
+            }
+        }
 
-        let block_bp = if sample >= weigth {
-            bp.blocks.get_named("Air")
-        } else if pos.y > -32 {
-            bp.blocks.get_named("Dirt")
-        } else {
-            bp.blocks.get_named("Stone")
-        };
-
-        Block::new(block_bp)
+        Block::new(block)
     }
 }

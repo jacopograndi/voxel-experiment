@@ -86,7 +86,7 @@ impl Plugin for McrsVoxelRenderPlugin {
             app.insert_resource(TextureHandles::default());
             app.insert_resource(ChunkEntities::default());
             app.insert_resource(AmbientLight {
-                brightness: 1000.0,
+                brightness: 4000.0,
                 ..default()
             });
             app.add_systems(Startup, load_texture);

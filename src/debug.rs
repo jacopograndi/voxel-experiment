@@ -192,7 +192,7 @@ pub struct DebugOptions {
 impl Default for DebugOptions {
     fn default() -> Self {
         Self {
-            active: true,
+            active: false,
             show_hitboxes: false,
             debug_camera_active: false,
             debug_camera_has_character_control: false,
@@ -342,58 +342,64 @@ pub fn debug_options_ui(
     mut tickstep: ResMut<TickStep>,
 ) {
     let ctx = contexts.ctx_mut();
-    egui::Window::new("Debug Options")
-        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(5.0, 5.0))
-        .show(ctx, |ui| {
-            ui_toggle_shortcut(
-                ui,
-                &keys,
-                &mut debug_options.active,
-                "Show debug windows",
-                KeyCode::F1,
-            );
+    if debug_options.active {
+        egui::Window::new("Debug Options")
+            .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(5.0, 5.0))
+            .show(ctx, |ui| {
+                ui_toggle_shortcut(
+                    ui,
+                    &keys,
+                    &mut debug_options.active,
+                    "Show debug windows",
+                    KeyCode::F1,
+                );
 
-            if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2, None) {
-                *tickstep = TickStep::Step { step: true }
-            }
-            if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3, None) {
-                *tickstep = TickStep::Step { step: true }
-            }
+                if ui_button_shortcut(ui, &keys, "Physics Step 1 Tick", KeyCode::F2, None) {
+                    *tickstep = TickStep::Step { step: true }
+                }
+                if ui_button_shortcut(ui, &keys, "Physics Resume Tick", KeyCode::F3, None) {
+                    *tickstep = TickStep::Step { step: true }
+                }
 
-            ui_toggle_shortcut(
-                ui,
-                &keys,
-                &mut debug_options.show_hitboxes,
-                "Show Hitboxes",
-                KeyCode::F4,
-            );
+                ui_toggle_shortcut(
+                    ui,
+                    &keys,
+                    &mut debug_options.show_hitboxes,
+                    "Show Hitboxes",
+                    KeyCode::F4,
+                );
 
-            if ui_toggle_shortcut(
-                ui,
-                &keys,
-                &mut debug_options.debug_camera_active,
-                "Debug Cam",
-                KeyCode::F5,
-            ) {
-                debug_camera_event.send(DebugCameraEvent {
-                    active: debug_options.debug_camera_active,
-                    has_character_control: debug_options.debug_camera_has_character_control,
-                });
-            }
+                if ui_toggle_shortcut(
+                    ui,
+                    &keys,
+                    &mut debug_options.debug_camera_active,
+                    "Debug Cam",
+                    KeyCode::F5,
+                ) {
+                    debug_camera_event.send(DebugCameraEvent {
+                        active: debug_options.debug_camera_active,
+                        has_character_control: debug_options.debug_camera_has_character_control,
+                    });
+                }
 
-            if ui_toggle_shortcut(
-                ui,
-                &keys,
-                &mut debug_options.debug_camera_has_character_control,
-                "Toggle Camera Control",
-                KeyCode::F6,
-            ) {
-                debug_camera_event.send(DebugCameraEvent {
-                    active: debug_options.debug_camera_active,
-                    has_character_control: debug_options.debug_camera_has_character_control,
-                });
-            }
-        });
+                if ui_toggle_shortcut(
+                    ui,
+                    &keys,
+                    &mut debug_options.debug_camera_has_character_control,
+                    "Toggle Camera Control",
+                    KeyCode::F6,
+                ) {
+                    debug_camera_event.send(DebugCameraEvent {
+                        active: debug_options.debug_camera_active,
+                        has_character_control: debug_options.debug_camera_has_character_control,
+                    });
+                }
+            });
+    } else {
+        if keys.just_pressed(KeyCode::F1) {
+            debug_options.active = true;
+        }
+    }
 }
 
 #[derive(Component)]
@@ -447,7 +453,7 @@ pub fn debug_camera_toggle(
                 };
                 let camera_pivot = commands.spawn((
                     DebugCamera {
-                        speed: 0.01,
+                        speed: 0.1,
                         controller: controller.clone(),
                     },
                     tr.compute_transform(),
@@ -554,20 +560,21 @@ pub fn debug_chunks(
     universe: Res<Universe>,
     chunk_gen: Res<ChunkGenerationRequest>,
     mut gizmos: Gizmos,
-    debug_options: Res<DebugOptions>,
 ) {
     for (chunk_pos, gen_request) in &chunk_gen.requested {
         let scale = Vec3::splat(CHUNK_SIDE as f32);
         let center = chunk_pos.as_vec3() + scale * 0.5;
         let color = match gen_request.pass {
             GenerationPass::Blocks => Color::srgb(1.0, 0.0, 0.0),
-            GenerationPass::Lighting => Color::srgb(1.0, 0.3, 0.0),
-            GenerationPass::WaitingForSunlight => Color::srgb(1.0, 0.6, 0.0),
+            GenerationPass::Lighting => Color::srgb(1.0, 0.2, 0.0),
+            GenerationPass::WaitingForSunbeams => Color::srgb(1.0, 0.4, 0.0),
+            GenerationPass::Sunbeams => Color::srgb(1.0, 0.6, 0.0),
+            GenerationPass::Biome => Color::srgb(1.0, 0.8, 0.0),
             GenerationPass::Done => Color::srgb(1.0, 1.0, 0.0),
         };
         gizmos.cuboid(Transform::from_translation(center).with_scale(scale), color);
     }
-    for (chunk_pos, chunk) in &universe.chunks {
+    for (chunk_pos, _) in &universe.chunks {
         let scale = Vec3::splat(CHUNK_SIDE as f32);
         let center = chunk_pos.as_vec3() + scale * 0.5;
         gizmos.cuboid(

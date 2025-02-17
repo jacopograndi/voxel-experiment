@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr, u8};
 
 use bevy::prelude::{Deref, DerefMut};
 use bytemuck::{Pod, Zeroable};
@@ -45,6 +45,19 @@ impl Block {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub enum BlockFace {
+    Same((u8, u8)),
+    Cube {
+        top: (u8, u8),
+        bottom: (u8, u8),
+        left: (u8, u8),
+        right: (u8, u8),
+        forward: (u8, u8),
+        backward: (u8, u8),
+    },
+}
+
 /// Specification of the properties of a block.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -59,8 +72,10 @@ pub struct BlockBlueprint {
     #[serde(default, skip_serializing_if = "is_default")]
     pub voxel_texture_path: String,
 
+    /// If there is only one, then every face will be the same
+    /// Otherwise, 6 faces are expected
     #[serde(default, skip_serializing_if = "is_default")]
-    pub block_texture_offset: Vec<u32>,
+    pub block_texture_offset: Option<BlockFace>,
 
     #[serde(default, skip_serializing_if = "is_default")]
     pub drop_item_id: BlockId,

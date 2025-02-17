@@ -1,6 +1,6 @@
 use bevy::{prelude::*, render::extract_resource::ExtractResource};
 
-pub const DEFAULT_VIEW_DISTANCE: u32 = 64;
+pub const DEFAULT_VIEW_DISTANCE: u32 = 192;
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct RenderSettings {
@@ -41,7 +41,7 @@ impl RenderMode {
 
 impl Default for RenderMode {
     fn default() -> Self {
-        Self::RaytraceThenRasterize
+        Self::RasterizeOnly
     }
 }
 
