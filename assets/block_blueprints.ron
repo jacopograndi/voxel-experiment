@@ -31,7 +31,14 @@
         id: 4,
         flags: [Opaque, Collidable],
         voxel_texture_path: "assets/voxels/wood-oak.vox",
-        block_texture_offset: Some(Same((4, 1))),
+        block_texture_offset: Some(Cube(
+            top: (5, 1),
+            bottom: (5, 1),
+            left: (4, 1),
+            right: (4, 1),
+            forward: (4, 1),
+            backward: (4, 1),
+        )),
     ),
     (
         name: "Glowstone",
@@ -53,5 +60,23 @@
             forward: (3, 0),
             backward: (3, 0),
         )),
+    ),
+    (
+        name: "Oak Planks",
+        id: 7,
+        flags: [Opaque, Collidable],
+        block_texture_offset: Some(Same((4, 0))),
+    ),
+    (
+        name: "Diamond Block",
+        id: 8,
+        flags: [Opaque, Collidable],
+        block_texture_offset: Some(Same((8, 1))),
+    ),
+    (
+        name: "Brick",
+        id: 9,
+        flags: [Opaque, Collidable],
+        block_texture_offset: Some(Same((7, 0))),
     ),
 ]

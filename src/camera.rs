@@ -12,6 +12,7 @@ impl Plugin for McrsCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, initial_grab_cursor);
         app.add_systems(Update, (camera_controller_movement, cursor_grab));
+        app.add_systems(PostUpdate, lock_cursor_position);
     }
 }
 
@@ -94,6 +95,18 @@ fn toggle_grab_cursor(window: &mut Window) {
         _ => {
             window.cursor_options.grab_mode = CursorGrabMode::None;
             window.cursor_options.visible = true;
+        }
+    }
+}
+
+fn lock_cursor_position(mut primary_window: Query<&mut Window, With<PrimaryWindow>>) {
+    if let Ok(mut window) = primary_window.get_single_mut() {
+        let (w, h) = (window.width(), window.height());
+        match window.cursor_options.grab_mode {
+            CursorGrabMode::None => {}
+            _ => {
+                window.set_cursor_position(Some(Vec2::new(w / 2., h / 2.)));
+            }
         }
     }
 }

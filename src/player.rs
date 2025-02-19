@@ -1,9 +1,8 @@
 use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
     get_player_from_save, get_single_event,
-    hotbar::PlayerHand,
     settings::McrsSettings,
-    Level, LevelOwned, LevelReadyEvent, PlayerInput, PlayerInputBuffer, SerdePlayer,
+    Level, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
     UniverseChange, UniverseChanges,
 };
 use bevy::prelude::*;
@@ -14,7 +13,11 @@ use mcrs_physics::{
     raycast::{cast_ray, RayFinite},
 };
 use mcrs_render::{camera::VoxelCameraBundle, settings::RenderMode};
-use mcrs_universe::{block::Block, universe::Universe, Blueprints};
+use mcrs_universe::{
+    block::{Block, BlockId},
+    universe::Universe,
+    Blueprints,
+};
 use std::time::Duration;
 
 pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
@@ -137,7 +140,10 @@ pub fn spawn_player(
                 air: Vec3::splat(0.99),
                 ground: Vec3::splat(0.78),
             },
-            PlayerHand { block_id: None },
+            PlayerHand {
+                block_id: Some(BlockId::from(1)),
+                hotbar_index: 0,
+            },
         ))
         .with_children(|parent| {
             let camera_pivot = parent.spawn((

@@ -40,10 +40,6 @@ pub struct TextureHandles {
     pub blocks: Handle<Image>,
 }
 
-pub fn load_texture(mut texture_handle: ResMut<TextureHandles>, asset_server: Res<AssetServer>) {
-    texture_handle.blocks = asset_server.load("textures/blocks.png");
-}
-
 fn adjacent() -> impl Iterator<Item = IVec3> {
     [
         IVec3::new(1, 0, 0),
@@ -384,7 +380,7 @@ pub fn generate_chunk_mesh(
                     }
                 }
 
-                let c = (light - ao).clamp(0.02, 1.0);
+                let c = (light - ao).clamp(0.02, 1.0) * 0.9 + 0.1;
                 let l = face_color.to_linear();
                 face_colors.push([l.red * c, l.green * c, l.blue * c, 1.0]);
             }

@@ -1,6 +1,6 @@
 use crate::{
     boxes_world::BoxesWorldPlugin,
-    chunk_mesh::{load_texture, sync_chunk_meshes, ChunkEntities, TextureHandles},
+    chunk_mesh::{sync_chunk_meshes, ChunkEntities, TextureHandles},
     graph::{NodeVoxel, Voxel},
     pipeline::{
         compute::ComputeResourcesPlugin,
@@ -89,7 +89,6 @@ impl Plugin for McrsVoxelRenderPlugin {
                 brightness: 4000.0,
                 ..default()
             });
-            app.add_systems(Startup, load_texture);
             app.add_systems(Update, sync_chunk_meshes);
         }
 

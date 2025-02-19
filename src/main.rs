@@ -1,6 +1,5 @@
-use bevy::{log::LogPlugin, prelude::*, window::PresentMode};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
-use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
@@ -9,13 +8,14 @@ use mcrs_net::{
     NetSettings, NetworkMode,
 };
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
-use mcrs_render::{plugin::McrsVoxelRenderPlugin, settings::RenderSettings};
+use mcrs_render::{
+    chunk_mesh::TextureHandles, plugin::McrsVoxelRenderPlugin, settings::RenderSettings,
+};
 use mcrs_universe::McrsUniversePlugin;
 
 mod camera;
 mod chemistry;
 mod debug;
-mod hotbar;
 mod input;
 mod player;
 mod saveload;
@@ -24,17 +24,12 @@ mod terrain;
 mod ui;
 
 use debug::DebugDiagnosticPlugin;
-use hotbar::{
-    client_receive_replica, client_send_replica, hotbar, server_receive_replica,
-    server_send_replica,
-};
 use input::*;
 use player::{spawn_player, terrain_editing};
-use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::*;
-use ui::ui;
+use ui::*;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum FixedMainSet {
@@ -101,7 +96,7 @@ fn add_client(app: &mut App) {
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    present_mode: PresentMode::AutoNoVsync,
+                    //present_mode: PresentMode::AutoNoVsync,
                     ..default()
                 }),
                 ..default()
@@ -113,8 +108,12 @@ fn add_client(app: &mut App) {
         McrsNetClientPlugin,
         McrsCameraPlugin,
     ));
-    app.add_systems(Startup, ui);
-    app.add_systems(Update, hotbar.in_set(UiSet::Overlay));
+    app.add_systems(
+        Startup,
+        (load_texture, ui_center_cursor, setup_hotbar).chain(),
+    );
+    app.add_systems(Update, send_fake_window_resize_once);
+    app.add_systems(Update, hotbar_interaction.in_set(UiSet::Overlay));
     app.add_systems(
         Update,
         (player_input, move_local_players)
@@ -122,36 +121,23 @@ fn add_client(app: &mut App) {
             .in_set(InputSet::Gather),
     );
     app.add_systems(Update, terrain_editing.after(InputSet::Gather));
-    app.add_systems(
-        FixedUpdate,
-        (
-            client_receive_replica.in_set(FixedNetSet::Receive),
-            client_send_replica.chain().in_set(FixedNetSet::Send),
-        )
-            .run_if(client_connected),
-    );
 }
 
 fn add_server(app: &mut App) {
     app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.add_systems(
         FixedUpdate,
-        (
-            server_receive_replica
-                .run_if(resource_exists::<RenetServer>)
-                .chain()
-                .in_set(FixedNetSet::Receive),
-            (
-                request_base_chunks,
-                chunk_generation,
-                apply_terrain_changes,
-                apply_lighting_sources,
-            )
-                .chain()
-                .in_set(FixedMainSet::Terrain),
-            server_send_replica
-                .in_set(FixedNetSet::Send)
-                .run_if(resource_exists::<RenetServer>),
-        ),
+        ((
+            request_base_chunks,
+            chunk_generation,
+            apply_terrain_changes,
+            apply_lighting_sources,
+        )
+            .chain()
+            .in_set(FixedMainSet::Terrain),),
     );
+}
+
+pub fn load_texture(mut texture_handle: ResMut<TextureHandles>, asset_server: Res<AssetServer>) {
+    texture_handle.blocks = asset_server.load("textures/blocks.png");
 }

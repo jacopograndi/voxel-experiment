@@ -187,6 +187,7 @@ pub struct DebugOptions {
     show_hitboxes: bool,
     debug_camera_active: bool,
     debug_camera_has_character_control: bool,
+    show_chunks: bool,
 }
 
 impl Default for DebugOptions {
@@ -196,6 +197,7 @@ impl Default for DebugOptions {
             show_hitboxes: false,
             debug_camera_active: false,
             debug_camera_has_character_control: false,
+            show_chunks: false,
         }
     }
 }
@@ -394,6 +396,14 @@ pub fn debug_options_ui(
                         has_character_control: debug_options.debug_camera_has_character_control,
                     });
                 }
+
+                ui_toggle_shortcut(
+                    ui,
+                    &keys,
+                    &mut debug_options.show_chunks,
+                    "Toggle Chunk Borders",
+                    KeyCode::F7,
+                );
             });
     } else {
         if keys.just_pressed(KeyCode::F1) {
@@ -560,7 +570,12 @@ pub fn debug_chunks(
     universe: Res<Universe>,
     chunk_gen: Res<ChunkGenerationRequest>,
     mut gizmos: Gizmos,
+    debug_options: Res<DebugOptions>,
 ) {
+    if !debug_options.show_chunks {
+        return;
+    }
+
     for (chunk_pos, gen_request) in &chunk_gen.requested {
         let scale = Vec3::splat(CHUNK_SIDE as f32);
         let center = chunk_pos.as_vec3() + scale * 0.5;
