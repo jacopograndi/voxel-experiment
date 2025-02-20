@@ -10,6 +10,7 @@ use bevy_egui::{egui, EguiContexts};
 use mcrs_net::{LocalPlayer, NetworkMode};
 use mcrs_physics::{
     character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
+    intersect::intersect_aabb_block,
     raycast::{cast_ray, RayFinite},
 };
 use mcrs_render::{camera::VoxelCameraBundle, settings::RenderMode};
@@ -156,7 +157,7 @@ pub fn spawn_player(
 
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
-    mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand)>,
+    mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand, &Transform, &Rigidbody)>,
     universe: Res<Universe>,
     bp: Res<Blueprints>,
     mut gizmos: Gizmos,
@@ -166,7 +167,7 @@ pub fn terrain_editing(
     debug_options: Res<DebugOptions>,
 ) {
     for (_cam, tr, parent) in camera_query.iter() {
-        let Ok((mut input, hand)) = player_query.get_mut(parent.get()) else {
+        let Ok((mut input, hand, tr_player, rigidbody)) = player_query.get_mut(parent.get()) else {
             continue;
         };
 
@@ -184,10 +185,17 @@ pub fn terrain_editing(
                 match input {
                     PlayerInput::Placing(true) => {
                         if let Some(block_id) = hand.block_id {
-                            changes.queue.push(UniverseChange::Add {
-                                pos: hit.grid_pos + hit.normal(),
-                                block: Block::new(bp.blocks.get(&block_id)),
-                            });
+                            let block_pos = hit.grid_pos + hit.normal();
+                            if !intersect_aabb_block(
+                                tr_player.translation,
+                                rigidbody.size,
+                                block_pos,
+                            ) {
+                                changes.queue.push(UniverseChange::Add {
+                                    pos: hit.grid_pos + hit.normal(),
+                                    block: Block::new(bp.blocks.get(&block_id)),
+                                });
+                            }
                         }
                     }
                     PlayerInput::Mining(true) => {
@@ -237,11 +245,20 @@ pub fn terrain_editing(
             );
 
             if !*hide_red_cube {
-                gizmos.cuboid(
-                    Transform::from_translation(center_pos + hit.normal().as_vec3())
-                        .with_scale(Vec3::splat(1.001)),
-                    Color::srgb(1.0, 0.0, 0.0),
-                );
+                let block_pos = hit.grid_pos + hit.normal();
+                if !intersect_aabb_block(tr_player.translation, rigidbody.size, block_pos) {
+                    gizmos.cuboid(
+                        Transform::from_translation(center_pos + hit.normal().as_vec3())
+                            .with_scale(Vec3::splat(1.001)),
+                        Color::srgb(1.0, 0.0, 0.0),
+                    );
+                } else {
+                    gizmos.cuboid(
+                        Transform::from_translation(center_pos + hit.normal().as_vec3())
+                            .with_scale(Vec3::splat(1.001)),
+                        Color::srgb(0.5, 0.0, 0.0),
+                    );
+                }
                 gizmos.arrow(
                     intersection,
                     intersection + hit.normal().as_vec3() * 0.5,

@@ -102,7 +102,6 @@ fn main() -> AppExit {
             .run_if(in_state(AppState::Playing)),
     );
 
-
     app.run()
 }
 

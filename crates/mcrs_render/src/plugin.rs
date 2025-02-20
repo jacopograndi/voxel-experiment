@@ -89,7 +89,7 @@ impl Plugin for McrsVoxelRenderPlugin {
                 brightness: 4000.0,
                 ..default()
             });
-            app.add_systems(Update, sync_chunk_meshes);
+            app.add_systems(FixedUpdate, sync_chunk_meshes);
         }
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
