@@ -65,7 +65,10 @@ pub fn sync_chunk_meshes(
 ) {
     let mut remeshed_chunks = 0;
 
+    // Todo: keep only the chunks around the localplayer
+
     // For each chunk that is in universe, check that it is instanced
+    let mut to_remove = vec![];
     for (chunk_pos, chunk) in universe.chunks.iter() {
         if let Some(chunk_entity) = chunk_entities.map.get(chunk_pos) {
             if chunk_entity.version != chunk.version {
@@ -74,6 +77,7 @@ pub fn sync_chunk_meshes(
                     chunk_pos, chunk_entity.version, chunk.version
                 );
                 commands.entity(chunk_entity.entity).despawn_recursive();
+                to_remove.push(chunk_pos.clone());
             } else {
                 continue;
             }
@@ -116,7 +120,6 @@ pub fn sync_chunk_meshes(
     }
 
     // For each chunk that is instanced and not in universe, despawn
-    let mut to_remove = vec![];
     for (chunk_pos, chunk_entity) in chunk_entities.map.iter() {
         if let None = universe.chunks.get(chunk_pos) {
             info!("despawned chunk mesh at {}", chunk_pos);
@@ -352,14 +355,14 @@ pub fn generate_chunk_mesh(
                 let normal = block_normal.as_vec3();
                 let dir = (xyz - face_xyz).normalize();
                 let ortho = dir.cross(normal);
-                let mut ao = 0.0;
+                let mut ao = 1.0;
 
                 let diagonal = (xyz + normal * 0.5 - ortho).floor().as_ivec3();
                 if universe
                     .read_chunk_block(&(chunk_pos + diagonal))
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
-                    ao += 0.1;
+                    ao = 0.6;
                 }
 
                 let diagonal = (xyz + normal * 0.5 + ortho).floor().as_ivec3();
@@ -367,7 +370,7 @@ pub fn generate_chunk_mesh(
                     .read_chunk_block(&(chunk_pos + diagonal))
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
-                    ao += 0.1;
+                    ao = 0.6;
                 }
 
                 let diagonal = (xyz + normal * 0.5 + dir).floor().as_ivec3();
@@ -375,12 +378,14 @@ pub fn generate_chunk_mesh(
                     .read_chunk_block(&(chunk_pos + diagonal))
                     .map_or(false, |b| b.properties.check(BlockFlag::Opaque))
                 {
-                    if ao == 0.0 {
-                        ao += 0.1;
+                    if ao != 1.0 {
+                        ao = 0.3;
+                    } else {
+                        ao = 0.6
                     }
                 }
 
-                let c = (light - ao).clamp(0.02, 1.0) * 0.9 + 0.1;
+                let c = ((light * 0.9 + 0.1) * ao).clamp(0.08, 1.0);
                 let l = face_color.to_linear();
                 face_colors.push([l.red * c, l.green * c, l.blue * c, 1.0]);
             }

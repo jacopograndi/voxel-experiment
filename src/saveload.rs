@@ -38,6 +38,7 @@ impl Plugin for SaveLoadPlugin {
 pub struct Level {
     pub name: String,
     pub seed: u32,
+    pub save_path: Option<PathBuf>,
 }
 
 #[derive(Resource, Debug, Clone)]
@@ -91,6 +92,7 @@ pub fn open_level(
     commands.insert_resource(Level {
         name: event.level_name,
         seed: 0,
+        save_path: get_save_path(),
     });
 
     *tickstep = TickStep::Tick;
@@ -140,6 +142,14 @@ pub fn get_save_path() -> Option<PathBuf> {
 
     let mut path = dirs::data_dir()?;
     path.push(CRATE_NAME);
+    let _ = fs::create_dir_all(path.clone());
+    Some(path)
+}
+
+pub fn get_path(folder: &str, level: &Level) -> Option<PathBuf> {
+    let mut path = level.save_path.clone()?;
+    path.push(level.name.as_str());
+    path.push(folder);
     let _ = fs::create_dir_all(path.clone());
     Some(path)
 }
@@ -237,11 +247,25 @@ pub fn save_level(
         return;
     };
 
-    // Save the sun beams in files divided by region
-    // A region is a column of blocks that is as big as a chunk in x and z
-    // and extends from -inf to inf in y.
-    let sun_beams_path = path.join("sun_beams");
+    save_sun_beams(&sun_beams, &universe, level);
+
+    for (chunk_pos, chunk) in universe.chunks.iter() {
+        save_chunk(chunk_pos, chunk, level);
+    }
+
+    let entities_path = path.join("entities");
+    let _ = fs::create_dir_all(entities_path.clone());
+
+    info!("save successful");
+}
+
+/// Save the sun beams in files divided by region
+/// A region is a column of blocks that is as big as a chunk in x and z
+/// and extends from -inf to inf in y.
+pub fn save_sun_beams(sun_beams: &SunBeams, universe: &Universe, level: &Level) {
+    let sun_beams_path = get_path("sun_beams", level).unwrap();
     let _ = fs::create_dir_all(sun_beams_path.clone());
+    // Todo: use `save_sun_beams_region` instead
     let mut sun_beams_by_region = HashMap::<IVec2, [BeamPod; CHUNK_AREA]>::new();
     for (xz, beam) in sun_beams.beams.iter() {
         let (region_pos, inner) = universe.pos_to_region_and_inner(xz);
@@ -261,24 +285,43 @@ pub fn save_level(
             continue;
         }
     }
+}
 
-    let blocks_path = path.join("blocks");
-    let _ = fs::create_dir_all(blocks_path.clone());
-    for (chunk_pos, chunk) in universe.chunks.iter() {
-        let file_name = format!("chunk_{}_{}_{}.bin", chunk_pos.x, chunk_pos.y, chunk_pos.z);
-        let file_path = blocks_path.join(file_name);
-        let chunk_ref = chunk.get_ref();
-        let block_bytes: &[u8] = bytemuck::cast_slice(chunk_ref.as_ref());
-        if let Err(err) = fs::write(file_path.clone(), block_bytes) {
-            error!("Failed to write to {:?}:\n {:?}", file_path, err);
-            continue;
-        }
+pub fn save_sun_beams_region(region_pos: IVec2, sun_beams: &SunBeams, level: &Level) {
+    let sun_beams_path = get_path("sun_beams", level).unwrap();
+    let _ = fs::create_dir_all(sun_beams_path.clone());
+    let mut region = [BeamPod::default(); CHUNK_AREA];
+    for (x, z) in (0..CHUNK_SIDE as i32)
+        .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
+        .flatten()
+    {
+        let xz = IVec2::new(x, z);
+        let beam = if let Some(beam) = sun_beams.beams.get(&xz) {
+            beam
+        } else {
+            &SunBeam::new_top(&xz)
+        };
+        let region_index = (x + z * CHUNK_SIDE as i32) as usize;
+        region[region_index].bottom = beam.bottom;
+        region[region_index].top = beam.top;
     }
+    let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
+    let file_path = sun_beams_path.join(file_name);
+    let beams_bytes: &[u8] = bytemuck::cast_slice(&region);
+    if let Err(err) = fs::write(file_path.clone(), beams_bytes) {
+        error!("Failed to write to {:?}:\n {:?}", file_path, err);
+    }
+}
 
-    let entities_path = path.join("entities");
-    let _ = fs::create_dir_all(entities_path.clone());
-
-    info!("save successful");
+pub fn save_chunk(chunk_pos: &IVec3, chunk: &Chunk, level: &Level) {
+    let chunks_path = get_path("blocks", level).unwrap();
+    let file_name = format!("chunk_{}_{}_{}.bin", chunk_pos.x, chunk_pos.y, chunk_pos.z);
+    let file_path = chunks_path.join(file_name);
+    let chunk_ref = chunk.get_ref();
+    let block_bytes: &[u8] = bytemuck::cast_slice(chunk_ref.as_ref());
+    if let Err(err) = fs::write(file_path.clone(), block_bytes) {
+        error!("Failed to write to {:?}:\n {:?}", file_path, err);
+    }
 }
 
 pub fn get_player_from_save(player_name: &str, level_name: &str) -> Option<SerdePlayer> {

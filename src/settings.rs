@@ -3,7 +3,8 @@ use clap::Parser;
 use mcrs_net::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
 use mcrs_render::settings::{RenderMode, RenderSettings, DEFAULT_VIEW_DISTANCE};
 
-const DEFAULT_TICKS_PER_SECOND: u32 = 64;
+pub const DEFAULT_TICKS_PER_SECOND: u32 = 64;
+pub const DEFAULT_LOAD_DISTANCE: u32 = 300;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -18,6 +19,9 @@ pub struct Args {
     pub view_distance: Option<u32>,
 
     #[arg(short, long)]
+    pub load_distance: Option<u32>,
+
+    #[arg(short, long)]
     pub render_mode: Option<String>,
 
     #[arg(short, long)]
@@ -28,6 +32,7 @@ pub struct Args {
 pub struct McrsSettings {
     pub ticks_per_second: u32,
     pub view_distance_blocks: u32,
+    pub load_distance_blocks: u32,
     pub server_address: String,
     pub network_mode: NetworkMode,
     pub render_mode: RenderMode,
@@ -39,6 +44,7 @@ impl Default for McrsSettings {
         Self {
             ticks_per_second: DEFAULT_TICKS_PER_SECOND,
             view_distance_blocks: DEFAULT_VIEW_DISTANCE,
+            load_distance_blocks: DEFAULT_LOAD_DISTANCE,
             server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
             network_mode: NetworkMode::ClientAndServer,
             render_mode: RenderMode::default(),

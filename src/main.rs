@@ -155,7 +155,6 @@ fn add_server(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-            request_base_chunks,
             chunk_generation,
             apply_terrain_changes,
             apply_lighting_sources,
