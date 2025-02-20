@@ -1,4 +1,4 @@
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{asset::LoadState, log::LogPlugin, prelude::*};
 use bevy_egui::EguiPlugin;
 use camera::McrsCameraPlugin;
 use clap::Parser;
@@ -42,21 +42,15 @@ pub enum UiSet {
     Overlay,
 }
 
+#[derive(States, Default, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum AppState {
+    #[default]
+    LoadingAssets,
+    Playing,
+}
+
 fn main() -> AppExit {
     let mut app = App::new();
-
-    app.configure_sets(
-        FixedUpdate,
-        (
-            FixedNetSet::Receive,
-            FixedPhysicsSet::Tick,
-            FixedMainSet::Terrain,
-            FixedMainSet::SaveLoad,
-            FixedNetSet::Send,
-        )
-            .chain(),
-    );
-    app.configure_sets(Update, (UiSet::Overlay, InputSet::Gather).chain());
 
     // todo: encapsulate in a settings plugin?
     let settings: McrsSettings = Args::parse().into();
@@ -86,7 +80,28 @@ fn main() -> AppExit {
             add_server(&mut app);
         }
     }
-    app.add_systems(Update, spawn_player);
+    app.add_systems(Update, spawn_player.run_if(in_state(AppState::Playing)));
+
+    app.insert_state(AppState::default());
+    app.configure_sets(
+        FixedUpdate,
+        (
+            FixedNetSet::Receive,
+            FixedPhysicsSet::Tick,
+            FixedMainSet::Terrain,
+            FixedMainSet::SaveLoad,
+            FixedNetSet::Send,
+        )
+            .chain()
+            .run_if(in_state(AppState::Playing)),
+    );
+    app.configure_sets(
+        Update,
+        (UiSet::Overlay, InputSet::Gather)
+            .chain()
+            .run_if(in_state(AppState::Playing)),
+    );
+
 
     app.run()
 }
@@ -108,36 +123,66 @@ fn add_client(app: &mut App) {
         McrsNetClientPlugin,
         McrsCameraPlugin,
     ));
-    app.add_systems(
-        Startup,
-        (load_texture, ui_center_cursor, setup_hotbar).chain(),
-    );
-    app.add_systems(Update, send_fake_window_resize_once);
-    app.add_systems(Update, hotbar_interaction.in_set(UiSet::Overlay));
+
+    // Load assets
+    app.add_systems(OnEnter(AppState::LoadingAssets), load_texture);
     app.add_systems(
         Update,
-        (player_input, move_local_players)
-            .chain()
-            .in_set(InputSet::Gather),
+        load_texture_check_finished.run_if(in_state(AppState::LoadingAssets)),
     );
-    app.add_systems(Update, terrain_editing.after(InputSet::Gather));
+
+    // Client systems
+    app.add_systems(
+        OnEnter(AppState::Playing),
+        (load_texture, ui_center_cursor, setup_hotbar).chain(),
+    );
+    app.add_systems(
+        Update,
+        (
+            send_fake_window_resize_once,
+            hotbar_interaction.in_set(UiSet::Overlay),
+            (player_input, move_local_players)
+                .chain()
+                .in_set(InputSet::Gather),
+            terrain_editing.after(InputSet::Gather),
+        )
+            .run_if(in_state(AppState::Playing)),
+    );
 }
 
 fn add_server(app: &mut App) {
+    // unaffected by AppState
     app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.add_systems(
         FixedUpdate,
-        ((
+        (
             request_base_chunks,
             chunk_generation,
             apply_terrain_changes,
             apply_lighting_sources,
         )
             .chain()
-            .in_set(FixedMainSet::Terrain),),
+            .in_set(FixedMainSet::Terrain),
     );
 }
 
 pub fn load_texture(mut texture_handle: ResMut<TextureHandles>, asset_server: Res<AssetServer>) {
     texture_handle.blocks = asset_server.load("textures/blocks.png");
+}
+
+pub fn load_texture_check_finished(
+    texture_handle: ResMut<TextureHandles>,
+    asset_server: Res<AssetServer>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    match asset_server.get_load_state(&texture_handle.blocks) {
+        Some(LoadState::Loaded) => {
+            next_state.set(AppState::Playing);
+        }
+        Some(LoadState::Failed(e)) => {
+            eprintln!("Failed to load the blocks texture: {e}");
+            panic!();
+        }
+        _ => {}
+    }
 }
