@@ -192,13 +192,10 @@ pub fn send_fake_window_resize_once(
         return;
     };
 
-    if timer.finished() {
-        return;
-    }
-
     timer.tick(time.delta());
 
     if timer.finished() {
+        timer.reset();
         if let Ok((entity, window)) = primary_window.get_single_mut() {
             events.send(WindowResized {
                 window: entity,

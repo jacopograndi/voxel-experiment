@@ -20,8 +20,8 @@ use noise::{HybridMulti, MultiFractal, NoiseFn, Seedable};
 
 const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 4;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 1000;
-const MAX_BLOCK_GENERATION_PER_FRAME: usize = 50000;
-const MAX_SUN_BEAM_EXTENSION: i32 = 10000;
+const MAX_BLOCK_GENERATION_PER_FRAME: usize = 4000;
+const MAX_SUN_BEAM_EXTENSION: i32 = 100000;
 
 #[derive(Debug, Clone)]
 pub enum UniverseChange {
@@ -85,7 +85,6 @@ impl SunBeam {
     /// If `at` is inside the beam, return the two parts of the beam:
     /// ```(self.start..=at, (at+1)..=self.end)```
     pub fn cut(&mut self, at: i32) -> Option<(SunBeam, SunBeam)> {
-        println!("{:?}, {}", self, at);
         if (self.bottom..=self.top).contains(&at) {
             let lower = SunBeam::new(self.bottom, at);
             let higher = SunBeam::new(at + 1, self.top);
@@ -328,13 +327,15 @@ pub struct ChunkGenerationRequest {
 
 impl ChunkGenerationRequest {
     fn insert_priority(&mut self, chunk_pos: IVec3, priority: i32) {
-        self.requested
+        let req = self
+            .requested
             .entry(chunk_pos)
             .or_insert(ChunkGenerationState {
                 pos: chunk_pos,
                 priority,
                 ..Default::default()
             });
+        req.priority = req.priority.min(priority);
     }
 
     fn get_for_pass_mut<'a>(
@@ -513,13 +514,16 @@ pub fn chunk_generation(
     // Maybe not needed to limit? It's very fast.
     let mut loaded_chunks = vec![];
     for (chunk_pos, _) in request.requested.iter() {
-        if let Some(chunk) = get_chunk_from_save(chunk_pos, &level.name) {
-            universe.chunks.insert(*chunk_pos, chunk);
-            loaded_chunks.push(*chunk_pos);
-            info!("loaded chunk at {}", chunk_pos);
+        if let None = universe.chunks.get(chunk_pos) {
+            if let Some(chunk) = get_chunk_from_save(chunk_pos, &level.name) {
+                universe.chunks.insert(*chunk_pos, chunk);
+                loaded_chunks.push(*chunk_pos);
+                info!("loaded chunk at {}", chunk_pos);
+            }
         }
     }
     for loaded_chunk in loaded_chunks {
+        info!("loading sun beams region at {}", loaded_chunk);
         let beams = get_sun_beams_from_save(&loaded_chunk, &level.name);
         for (pos, beam) in beams {
             sun_beams.beams.entry(pos).or_insert(beam);
@@ -742,35 +746,52 @@ pub fn chunk_generation(
             continue;
         };
 
-        let chunk_mut = chunk.get_mut();
+        let mut chunk_mut = chunk.get_mut();
         for pos in Chunk::iter() {
             let xyz = pos + chunk_pos;
 
-            let sun = if sun_beams.get_at_mut(&xyz.xz()).contains(&xyz.y) {
-                MAX_LIGHT
-            } else {
-                0
-            };
-            light_sources
-                .leaked_sources
-                .entry(LightType::Sun)
-                .or_default()
-                .push(LightSource {
-                    pos: xyz,
-                    brightness: sun,
-                });
+            let mut chunk_sources = HashMap::<LightType, Vec<LightSource>>::new();
 
+            // Collect sun sources
+            if sun_beams.get_at_mut(&xyz.xz()).contains(&xyz.y) {
+                chunk_mut[Chunk::xyz2idx(pos)].set_light(LightType::Sun, MAX_LIGHT);
+                chunk_sources
+                    .entry(LightType::Sun)
+                    .or_default()
+                    .push(LightSource {
+                        pos,
+                        brightness: MAX_LIGHT,
+                    });
+            };
+
+            // Collect torch sources
             let block = chunk_mut[Chunk::xyz2idx(pos)];
             let block_bp = bp.blocks.get(&block.id);
-            let torch = block_bp.light_level;
-            light_sources
-                .leaked_sources
-                .entry(LightType::Torch)
-                .or_default()
-                .push(LightSource {
-                    pos: xyz + chunk_pos,
-                    brightness: torch,
-                });
+            if block_bp.is_light_source() {
+                let brightness = block_bp.light_level;
+                chunk_mut[Chunk::xyz2idx(pos)].set_light(LightType::Sun, brightness);
+                chunk_sources
+                    .entry(LightType::Torch)
+                    .or_default()
+                    .push(LightSource { pos, brightness });
+            }
+
+            // Do a first pass of lighting
+            for (lt, sources) in chunk_sources {
+                let mut leaked_from_chunk = propagate_light_chunk(
+                    &mut chunk_mut,
+                    sources.iter().map(|s| s.pos).collect(),
+                    lt,
+                );
+                for source in leaked_from_chunk.iter_mut() {
+                    source.pos += chunk_pos;
+                }
+                light_sources
+                    .leaked_sources
+                    .entry(lt)
+                    .or_default()
+                    .append(&mut leaked_from_chunk);
+            }
         }
         part.pass = GenerationPass::Done;
     }
@@ -779,9 +800,16 @@ pub fn chunk_generation(
         .requested
         .retain(|chunk_pos, state| match state.pass {
             GenerationPass::Done => {
-                universe
-                    .chunks
-                    .insert(*chunk_pos, state.chunk.take().unwrap());
+                let chunk = state
+                    .chunk
+                    .take()
+                    .expect("the generator should output a chunk");
+
+                // This save is before lighting
+                save_chunk(chunk_pos, &chunk, &level);
+                save_sun_beams_region(chunk_pos.xz(), &sun_beams, &level);
+
+                universe.chunks.insert(*chunk_pos, chunk);
                 info!(
                     target: "terrain_generation",
                     "chunk generated at {}", chunk_pos

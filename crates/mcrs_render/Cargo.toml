@@ -12,3 +12,4 @@ dot_vox = "5.1.1"
 block-mesh = "0.2"
 
 mcrs_universe = { path = "../mcrs_universe" }
+mcrs_physics = {path = "../mcrs_physics/"}

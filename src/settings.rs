@@ -4,7 +4,7 @@ use mcrs_net::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
 use mcrs_render::settings::{RenderMode, RenderSettings, DEFAULT_VIEW_DISTANCE};
 
 pub const DEFAULT_TICKS_PER_SECOND: u32 = 64;
-pub const DEFAULT_LOAD_DISTANCE: u32 = 300;
+pub const DEFAULT_LOAD_DISTANCE: u32 = 192;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

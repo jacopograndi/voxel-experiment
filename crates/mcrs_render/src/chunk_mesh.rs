@@ -2,19 +2,22 @@ use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
-    utils::{HashMap, HashSet},
+    utils::{hashbrown::HashSet, HashMap},
 };
 use block_mesh::{
     ndshape::{ConstShape, ConstShape3u32},
     visible_block_faces, MergeVoxel, UnitQuadBuffer, Voxel, VoxelVisibility,
     RIGHT_HANDED_Y_UP_CONFIG,
 };
+use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_universe::{
     block::{BlockFace, BlockFlag},
     chunk::{Chunk, ChunkVersion},
     universe::Universe,
     Blueprints, CHUNK_SIDE, MAX_LIGHT,
 };
+
+use crate::settings::RenderSettings;
 
 #[derive(Resource, Default)]
 pub struct ChunkEntities {
@@ -62,14 +65,28 @@ pub fn sync_chunk_meshes(
     universe: Res<Universe>,
     bp: Res<Blueprints>,
     handles: Res<TextureHandles>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    render_settings: Res<RenderSettings>,
 ) {
+    let Some((_, camera_tr)) = camera_query.iter().next() else {
+        return;
+    };
+
     let mut remeshed_chunks = 0;
 
-    // Todo: keep only the chunks around the localplayer
+    let chunks_in_view = get_chunks_in_sphere(
+        camera_tr.translation(),
+        render_settings.view_distance_blocks as f32,
+    );
 
     // For each chunk that is in universe, check that it is instanced
     let mut to_remove = vec![];
-    for (chunk_pos, chunk) in universe.chunks.iter() {
+    let mut to_add = vec![];
+    for chunk_pos in chunks_in_view.iter() {
+        let Some(chunk) = universe.chunks.get(chunk_pos) else {
+            continue;
+        };
+
         if let Some(chunk_entity) = chunk_entities.map.get(chunk_pos) {
             if chunk_entity.version != chunk.version {
                 info!(
@@ -102,35 +119,38 @@ pub fn sync_chunk_meshes(
             &handles,
         );
 
-        chunk_entities.map.insert(
-            chunk_pos.clone(),
-            ChunkEntity::new(entity, chunk.version.clone()),
-        );
-
-        for dir in adjacent() {
-            chunk_entities
-                .to_update
-                .insert(chunk_pos + dir * CHUNK_SIDE as i32);
-        }
-
+        to_add.push((chunk_pos, entity, chunk.version.clone()));
         remeshed_chunks += 1;
         if remeshed_chunks >= MAX_CHUNK_REMESH_PER_FRAME {
             break;
         }
     }
+    for key in &to_remove {
+        chunk_entities.map.remove(key);
+    }
+    for (chunk_pos, entity, version) in to_add {
+        chunk_entities
+            .map
+            .insert(chunk_pos.clone(), ChunkEntity::new(entity, version));
+        // Todo: what is to_update again?
+        for dir in adjacent() {
+            chunk_entities
+                .to_update
+                .insert(chunk_pos + dir * CHUNK_SIDE as i32);
+        }
+    }
 
     // For each chunk that is instanced and not in universe, despawn
+    let mut to_remove = vec![];
     for (chunk_pos, chunk_entity) in chunk_entities.map.iter() {
-        if let None = universe.chunks.get(chunk_pos) {
+        if !universe.chunks.contains_key(chunk_pos) || !chunks_in_view.contains(chunk_pos) {
             info!("despawned chunk mesh at {}", chunk_pos);
             commands.entity(chunk_entity.entity).despawn_recursive();
             to_remove.push(chunk_pos.clone());
         }
     }
-    if !to_remove.is_empty() {
-        for key in &to_remove {
-            chunk_entities.map.remove(key);
-        }
+    for key in &to_remove {
+        chunk_entities.map.remove(key);
     }
 }
 

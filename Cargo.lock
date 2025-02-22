@@ -3121,6 +3121,7 @@ dependencies = [
  "block-mesh",
  "bytemuck",
  "dot_vox",
+ "mcrs_physics",
  "mcrs_universe",
 ]
 
