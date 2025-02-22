@@ -1,6 +1,6 @@
 use bevy::{prelude::*, render::extract_resource::ExtractResource};
 
-pub const DEFAULT_VIEW_DISTANCE: u32 = 192;
+pub const DEFAULT_VIEW_DISTANCE: u32 = 128;
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct RenderSettings {
