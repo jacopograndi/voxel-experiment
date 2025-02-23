@@ -3,10 +3,6 @@ use bevy_egui::EguiPlugin;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
-use mcrs_net::{
-    plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
-    NetSettings, NetworkMode,
-};
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
 use mcrs_render::{
     chunk_mesh::TextureHandles, plugin::McrsVoxelRenderPlugin, settings::RenderSettings,
@@ -17,6 +13,7 @@ mod camera;
 mod chemistry;
 mod debug;
 mod input;
+mod net;
 mod player;
 mod saveload;
 mod settings;
@@ -25,7 +22,9 @@ mod ui;
 
 use debug::DebugDiagnosticPlugin;
 use input::*;
+use net::*;
 use player::{spawn_player, terrain_editing};
+use plugin::{FixedNetSet, NetClientPlugin, NetServerPlugin};
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::*;
@@ -119,7 +118,7 @@ fn add_client(app: &mut App) {
         McrsVoxelRenderPlugin,
         EguiPlugin,
         DebugDiagnosticPlugin,
-        McrsNetClientPlugin,
+        NetClientPlugin,
         McrsCameraPlugin,
     ));
 
@@ -151,7 +150,7 @@ fn add_client(app: &mut App) {
 
 fn add_server(app: &mut App) {
     // unaffected by AppState
-    app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
+    app.add_plugins((NetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.add_systems(
         FixedUpdate,
         (

@@ -5,7 +5,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 use bevy_egui::{egui, EguiContexts};
-use mcrs_net::LocalPlayer;
+use crate::LocalPlayer;
 use mcrs_physics::{
     character::{CameraController, CharacterController, Rigidbody, Velocity},
     TickStep,

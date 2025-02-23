@@ -17,10 +17,10 @@ pub enum FixedNetSet {
     Send,
 }
 
-pub struct McrsNetServerPlugin;
-pub struct McrsNetClientPlugin;
+pub struct NetServerPlugin;
+pub struct NetClientPlugin;
 
-impl Plugin for McrsNetServerPlugin {
+impl Plugin for NetServerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((RenetServerPlugin, NetcodeServerPlugin));
         app.init_resource::<Lobby>();
@@ -38,7 +38,7 @@ impl Plugin for McrsNetServerPlugin {
     }
 }
 
-impl Plugin for McrsNetClientPlugin {
+impl Plugin for NetClientPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((RenetClientPlugin, NetcodeClientPlugin));
         app.init_resource::<Lobby>();

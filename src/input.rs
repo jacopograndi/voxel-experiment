@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use mcrs_net::LocalPlayer;
+use crate::LocalPlayer;
 use mcrs_physics::character::{CameraController, CharacterController};
 use serde::{Deserialize, Serialize};
 

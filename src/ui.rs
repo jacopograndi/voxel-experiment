@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     window::{PrimaryWindow, WindowResized},
 };
-use mcrs_net::LocalPlayer;
+use crate::LocalPlayer;
 use mcrs_render::chunk_mesh::TextureHandles;
 use mcrs_universe::{
     block::{BlockFace, BlockId},

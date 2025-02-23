@@ -4,10 +4,10 @@ use crate::{
     settings::McrsSettings,
     Level, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
     UniverseChange, UniverseChanges,
+LocalPlayer, NetworkMode
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use mcrs_net::{LocalPlayer, NetworkMode};
 use mcrs_physics::{
     character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
     intersect::intersect_aabb_block,

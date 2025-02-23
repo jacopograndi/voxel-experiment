@@ -3,8 +3,8 @@ use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow},
 };
-use mcrs_net::LocalPlayer;
 use mcrs_physics::character::{CameraController, Character, CharacterController};
+use crate::LocalPlayer;
 
 pub struct McrsCameraPlugin;
 

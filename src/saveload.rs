@@ -1,5 +1,3 @@
-use std::{fs, path::PathBuf};
-
 use bevy::{prelude::*, utils::HashMap};
 use bytemuck::{Pod, Zeroable};
 use mcrs_physics::{
@@ -10,7 +8,7 @@ use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE, CH
 use miniz_oxide::{deflate::compress_to_vec, inflate::decompress_to_vec_with_limit};
 use ron::{de::SpannedError, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
-
+use std::{fs, path::PathBuf};
 use crate::{
     settings::McrsSettings,
     terrain::{get_spawn_chunks, UniverseChanges},

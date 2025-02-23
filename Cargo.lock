@@ -3098,20 +3098,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcrs_net"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_renet",
- "bincode",
- "bytemuck",
- "mcrs_physics",
- "mcrs_universe",
- "renet",
- "serde",
-]
-
-[[package]]
 name = "mcrs_physics"
 version = "0.1.0"
 dependencies = [
@@ -4948,7 +4934,6 @@ dependencies = [
  "clap",
  "dirs",
  "egui_plot",
- "mcrs_net",
  "mcrs_physics",
  "mcrs_render",
  "mcrs_universe",

@@ -1,12 +1,12 @@
 use crate::{
     chemistry::lighting::*, get_chunk_from_save, get_sun_beams_from_save, save_chunk,
     save_sun_beams_region, settings::McrsSettings, Level,
+LocalPlayer,
 };
 use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use mcrs_net::LocalPlayer;
 use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_universe::{
     block::{Block, BlockFlag, LightType},

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use clap::Parser;
-use mcrs_net::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
+use crate::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
 use mcrs_render::settings::{RenderMode, RenderSettings, DEFAULT_VIEW_DISTANCE};
 
 pub const DEFAULT_TICKS_PER_SECOND: u32 = 64;

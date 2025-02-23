@@ -2,7 +2,8 @@ use super::{
     connection_config, Lobby, NetPlayer, NetworkMode, PlayerState, ServerChannel, ServerMessages,
     PORT, PROTOCOL_ID,
 };
-use crate::{LocalPlayer, NetSettings, NewPlayerSpawned, SyncUniverse};
+use crate::{LocalPlayer, NetSettings, NewPlayerSpawned};
+use crate::net::SyncUniverse;
 use bevy::{prelude::*, utils::HashMap};
 use bevy_renet::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
