@@ -13,21 +13,25 @@ pub const DEFAULT_NETWORK_ADDRESS: &str = "127.0.0.1";
 const PORT: u32 = 54550;
 pub const DEFAULT_REPLICATION_DISTANCE: u32 = 64;
 
-#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+#[derive(Resource, Debug, Clone, PartialEq, Eq, Default)]
 pub enum NetworkMode {
     Server,
     ClientAndServer,
     Client,
+
+    #[default]
+    Offline,
 }
 
 impl From<Option<String>> for NetworkMode {
     fn from(netmode: Option<String>) -> NetworkMode {
         match netmode {
-            None => NetworkMode::ClientAndServer,
+            None => NetworkMode::Offline,
             Some(s) => {
                 match s.as_str() {
                     "client" => NetworkMode::Client,
                     "server" => NetworkMode::Server,
+                    "offline" => NetworkMode::Offline,
                     _ => panic!("Use \"client\" for client-only mode, \"server\" for server-only mode, leave blank for standard (client+server) mode."),
                 }
             },
@@ -52,23 +56,45 @@ impl Default for NetSettings {
     fn default() -> Self {
         Self {
             server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
-            network_mode: NetworkMode::ClientAndServer,
+            network_mode: NetworkMode::Offline,
             replication_distance: DEFAULT_REPLICATION_DISTANCE,
         }
     }
 }
 
+/// Marker component that identifies the replicated entities of remotely connected players
 #[derive(Debug, Component)]
-pub struct NetPlayer {
+pub struct RemotePlayer {
     pub id: ClientId,
 }
 
+/// Marker component that identifies the local player entity
 #[derive(Debug, Component, Clone)]
 pub struct LocalPlayer;
 
+/// The id of the local player
+#[derive(Default, Debug, Resource, Clone)]
+pub struct LocalPlayerId {
+    pub id: Option<PlayerId>,
+}
+
+/// Identifier of a player in a remote connection
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PlayerId {
+    pub name: String,
+}
+
+impl From<String> for PlayerId {
+    fn from(value: String) -> Self {
+        PlayerId { name: value }
+    }
+}
+
+/// List of connected players
 #[derive(Debug, Default, Resource)]
 pub struct Lobby {
-    pub players: HashMap<ClientId, Entity>,
+    pub players: Vec<PlayerId>,
+    pub connections: HashMap<ClientId, PlayerId>,
 }
 
 #[derive(Debug, Default, Resource)]
@@ -76,13 +102,23 @@ pub struct ChunkReplication {
     requested_chunks: HashMap<ClientId, HashSet<IVec3>>,
 }
 
+/// Messages sent by the server to the clients
 #[derive(Debug, Serialize, Deserialize, Component)]
 pub enum ServerMessages {
-    PlayerConnected { id: ClientId },
-    PlayerDisconnected { id: ClientId },
+    PlayerConnected { ids: Vec<PlayerId> },
+    LoginRequest,
+    PlayerDisconnected { id: PlayerId },
 }
 
+/// Messages sent by the client to the server
+#[derive(Debug, Serialize, Deserialize, Component)]
+pub enum ClientMessages {
+    Login { id: PlayerId },
+}
+
+/// Defines the different channels to which data is sent from the clients to the server
 pub enum ClientChannel {
+    ClientMessages,
     PlayerInput,
     PlayerStates,
 }
@@ -90,8 +126,9 @@ pub enum ClientChannel {
 impl From<ClientChannel> for u8 {
     fn from(channel_id: ClientChannel) -> Self {
         match channel_id {
-            ClientChannel::PlayerInput => 0,
-            ClientChannel::PlayerStates => 1,
+            ClientChannel::ClientMessages => 0,
+            ClientChannel::PlayerInput => 2,
+            ClientChannel::PlayerStates => 2,
         }
     }
 }
@@ -99,6 +136,13 @@ impl From<ClientChannel> for u8 {
 impl ClientChannel {
     pub fn channels_config() -> Vec<ChannelConfig> {
         vec![
+            ChannelConfig {
+                channel_id: Self::ClientMessages.into(),
+                max_memory_usage_bytes: 10 * 1024 * 1024,
+                send_type: SendType::ReliableOrdered {
+                    resend_time: Duration::from_millis(200),
+                },
+            },
             ChannelConfig {
                 channel_id: Self::PlayerInput.into(),
                 max_memory_usage_bytes: 10 * 1024 * 1024,
@@ -115,8 +159,10 @@ impl ClientChannel {
     }
 }
 
+/// Defines the different channels to which data is sent from the server to the clients
 pub enum ServerChannel {
     ServerMessages,
+    ClientMessages,
     PlayerTransform,
     PlayerStates,
     Universe,
@@ -126,9 +172,10 @@ impl From<ServerChannel> for u8 {
     fn from(channel_id: ServerChannel) -> Self {
         match channel_id {
             ServerChannel::ServerMessages => 0,
-            ServerChannel::PlayerTransform => 1,
-            ServerChannel::PlayerStates => 2,
-            ServerChannel::Universe => 3,
+            ServerChannel::ClientMessages => 1,
+            ServerChannel::PlayerTransform => 2,
+            ServerChannel::PlayerStates => 3,
+            ServerChannel::Universe => 4,
         }
     }
 }
@@ -138,6 +185,13 @@ impl ServerChannel {
         vec![
             ChannelConfig {
                 channel_id: Self::ServerMessages.into(),
+                max_memory_usage_bytes: 10 * 1024 * 1024,
+                send_type: SendType::ReliableOrdered {
+                    resend_time: Duration::from_millis(200),
+                },
+            },
+            ChannelConfig {
+                channel_id: Self::ClientMessages.into(),
                 max_memory_usage_bytes: 10 * 1024 * 1024,
                 send_type: SendType::ReliableOrdered {
                     resend_time: Duration::from_millis(200),

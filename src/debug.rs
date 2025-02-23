@@ -1,3 +1,7 @@
+use crate::{
+    client::open_client, server::open_server, Lobby, LocalPlayer, LocalPlayerId, NetSettings,
+    PlayerId,
+};
 use bevy::{
     diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
     input::mouse::MouseMotion,
@@ -5,7 +9,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 use bevy_egui::{egui, EguiContexts};
-use crate::LocalPlayer;
+use bevy_renet::netcode::{NetcodeClientTransport, NetcodeServerTransport};
 use mcrs_physics::{
     character::{CameraController, CharacterController, Rigidbody, Velocity},
     TickStep,
@@ -318,20 +322,102 @@ pub fn debug_saveload_ui(
 }
 
 pub fn debug_net_ui(
+    mut commands: Commands,
     mut contexts: EguiContexts,
-    renet_server: Option<Res<RenetServer>>,
-    renet_client: Option<Res<RenetClient>>,
+    mut renet_server: Option<ResMut<RenetServer>>,
+    mut renet_client: Option<ResMut<RenetClient>>,
+    net_settings: Option<Res<NetSettings>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut lobby: ResMut<Lobby>,
+    mut local_player_id: ResMut<LocalPlayerId>,
+    mut edit_name: Local<String>,
 ) {
     let ctx = contexts.ctx_mut();
     egui::Window::new("Debug Multiplayer")
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-5.0, -5.0))
         .show(ctx, |ui| {
-            if let Some(_server) = &renet_server {
+            let Some(local_id) = local_player_id.id.as_ref() else {
+                ui.label("Set your name:");
+                if ui.text_edit_singleline(&mut *edit_name).has_focus() {
+                    keys.reset_all();
+                }
+                if ui.button("Set").clicked() {
+                    local_player_id.id = Some(PlayerId {
+                        name: edit_name.clone(),
+                    });
+                }
+                return;
+            };
+
+            ui.label(format!("Name: {}", local_id.name));
+
+            if let Some(server) = &mut renet_server {
                 ui.label("Server up");
-            } else if let Some(_client) = &renet_client {
-                ui.label("Client up");
+
+                ui.group(|ui| {
+                    ui.label("Lobby");
+                    ui.separator();
+                    for player_id in lobby.players.iter() {
+                        ui.label(&player_id.name);
+                    }
+                });
+                if ui.button("Close").clicked() {
+                    server.disconnect_all();
+                    commands.remove_resource::<RenetServer>();
+                    commands.remove_resource::<NetcodeServerTransport>();
+                }
+            } else if let Some(client) = &mut renet_client {
+                ui.label(format!(
+                    "Client up, {}",
+                    if client.is_connected() {
+                        "connected"
+                    } else {
+                        "disconnected"
+                    }
+                ));
+
+                ui.group(|ui| {
+                    ui.label("Lobby");
+                    ui.separator();
+                    for player_id in lobby.players.iter() {
+                        ui.label(&player_id.name);
+                    }
+                });
+                if ui.button("Disconnect").clicked() {
+                    client.disconnect();
+                    commands.remove_resource::<RenetClient>();
+                    commands.remove_resource::<NetcodeClientTransport>();
+                }
             } else {
                 ui.label("Disconnected");
+
+                if ui_button_shortcut(
+                    ui,
+                    &keys,
+                    "Open Client",
+                    KeyCode::KeyC,
+                    Some(Modifier::Shift),
+                ) {
+                    let address = net_settings
+                        .as_ref()
+                        .map(|settings| settings.server_address.clone())
+                        .unwrap_or(format!("127.0.0.1"));
+                    open_client(&mut commands, address);
+                }
+
+                if ui_button_shortcut(
+                    ui,
+                    &keys,
+                    "Open Server",
+                    KeyCode::KeyV,
+                    Some(Modifier::Shift),
+                ) {
+                    let address = net_settings
+                        .as_ref()
+                        .map(|settings| settings.server_address.clone())
+                        .unwrap_or(format!("127.0.0.1"));
+                    open_server(&mut commands, address, &local_player_id, &mut lobby);
+                }
             }
         });
 }

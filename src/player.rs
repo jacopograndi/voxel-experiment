@@ -2,9 +2,8 @@ use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
     get_player_from_save, get_single_event,
     settings::McrsSettings,
-    Level, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
-    UniverseChange, UniverseChanges,
-LocalPlayer, NetworkMode
+    Level, LevelOwned, LevelReadyEvent, LocalPlayer, NetworkMode, PlayerHand, PlayerInput,
+    PlayerInputBuffer, SerdePlayer, UniverseChange, UniverseChanges,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
@@ -83,7 +82,7 @@ pub fn spawn_player(
     level_ready_event: EventReader<LevelReadyEvent>,
     level: Option<Res<Level>>,
 ) {
-    if !matches!(settings.network_mode, NetworkMode::ClientAndServer) {
+    if !matches!(settings.network_mode, NetworkMode::Offline) {
         return;
     }
 
