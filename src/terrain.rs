@@ -20,7 +20,7 @@ use noise::{HybridMulti, MultiFractal, NoiseFn, Seedable};
 
 const BLOCK_GENERATION_LOW_MULTIPLIER: usize = 4;
 const BLOCK_GENERATION_LOW_THRESHOLD: usize = 1000;
-const MAX_BLOCK_GENERATION_PER_FRAME: usize = 4000;
+const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
 const MAX_SUN_BEAM_EXTENSION: i32 = 100000;
 
 #[derive(Debug, Clone)]
@@ -531,7 +531,7 @@ pub fn chunk_generation(
         request.requested.remove(&loaded_chunk);
     }
 
-    let mut generated_blocks = 0;
+    let mut processed_blocks = 0;
 
     for _ in 0..10 {
         let Some((chunk_pos, part)) = request.get_for_pass_mut(&GenerationPass::Blocks).next()
@@ -551,13 +551,13 @@ pub fn chunk_generation(
         if let Some(chunk) = &part.chunk {
             let mut chunk_mut = chunk.get_mut();
             let bound =
-                (part.current_block + (max_block_generation - generated_blocks)).min(CHUNK_VOLUME);
+                (part.current_block + (max_block_generation - processed_blocks)).min(CHUNK_VOLUME);
             for i in part.current_block..bound {
                 chunk_mut[i] = generator.gen_block(part.pos + Chunk::idx2xyz(i), &bp);
             }
             let count = bound - part.current_block;
             generated_blocks_chunk = count;
-            generated_blocks += count;
+            processed_blocks += count;
             info!(
                 "generated {} blocks for the chunk at {}, {} left",
                 count, part.pos, part.current_block
@@ -571,7 +571,7 @@ pub fn chunk_generation(
             part.pass = GenerationPass::Sunbeams;
         }
 
-        if generated_blocks >= max_block_generation {
+        if processed_blocks >= max_block_generation {
             break;
         }
     }
@@ -594,6 +594,11 @@ pub fn chunk_generation(
         else {
             break;
         };
+
+        if processed_blocks >= max_block_generation {
+            break;
+        }
+        processed_blocks += CHUNK_VOLUME;
 
         info!("trying to light chunk at {}", chunk_pos);
 
@@ -710,6 +715,11 @@ pub fn chunk_generation(
             continue;
         };
 
+        if processed_blocks >= max_block_generation {
+            break;
+        }
+        processed_blocks += CHUNK_VOLUME;
+
         // Add dirt to the 3 stone blocks under each sunbeam
         let mut chunk_mut = chunk.get_mut();
         for (x, z) in (0..CHUNK_SIDE as i32)
@@ -745,6 +755,11 @@ pub fn chunk_generation(
             error!("the chunk has no blocks in it");
             continue;
         };
+
+        if processed_blocks >= max_block_generation {
+            break;
+        }
+        processed_blocks += CHUNK_VOLUME;
 
         let mut chunk_mut = chunk.get_mut();
         for pos in Chunk::iter() {
