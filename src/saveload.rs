@@ -6,7 +6,8 @@ use mcrs_physics::{
     character::{CameraController, Character},
     TickStep,
 };
-use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE};
+use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
+use miniz_oxide::{deflate::compress_to_vec, inflate::decompress_to_vec_with_limit};
 use ron::{de::SpannedError, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 
@@ -319,7 +320,8 @@ pub fn save_chunk(chunk_pos: &IVec3, chunk: &Chunk, level: &Level) {
     let file_path = chunks_path.join(file_name);
     let chunk_ref = chunk.get_ref();
     let block_bytes: &[u8] = bytemuck::cast_slice(chunk_ref.as_ref());
-    if let Err(err) = fs::write(file_path.clone(), block_bytes) {
+    let block_compressed = compress_to_vec(block_bytes, 6);
+    if let Err(err) = fs::write(file_path.clone(), block_compressed) {
         error!("Failed to write to {:?}:\n {:?}", file_path, err);
     }
 }
@@ -389,12 +391,14 @@ pub fn get_chunk_from_save(chunk_pos: &IVec3, level_name: &str) -> Option<Chunk>
     let Ok(block_bytes) = fs::read(path) else {
         return None;
     };
+    let block_decompressed = decompress_to_vec_with_limit(block_bytes.as_slice(), CHUNK_VOLUME * 4)
+        .expect("Failed to decompress!");
 
     let chunk = Chunk::empty();
     {
         let mut write = chunk.get_mut();
         let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
-        bytes.copy_from_slice(block_bytes.as_slice());
+        bytes.copy_from_slice(block_decompressed.as_slice());
     }
     Some(chunk)
 }
