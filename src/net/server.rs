@@ -1,30 +1,62 @@
 use super::{
-    connection_config, ChunkReplication, Lobby, PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
+    connection_config, ChunkReplication, ClientChannel, ClientMessages, Lobby, LocalPlayerId,
+    PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
 };
-use crate::{
-    LocalPlayer, NetPlayer, NetSettings, NetworkMode, NewPlayerSpawned, ServerChannel,
-    ServerMessages,
-};
+use crate::{NetSettings, RemotePlayer, ServerChannel, ServerMessages};
 use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
 use bevy_renet::{
-    netcode::{NetcodeClientTransport, NetcodeServerTransport, ServerAuthentication, ServerConfig},
+    netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
     renet::{ClientId, RenetServer, ServerEvent},
 };
-use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_universe::{chunk::ChunkVersion, universe::Universe, CHUNK_VOLUME};
 use std::{
     net::{SocketAddr, UdpSocket},
     time::SystemTime,
 };
 
-pub fn open_server(mut commands: Commands, settings: Option<Res<NetSettings>>) {
-    let server_address = settings.map_or("127.0.0.1".to_string(), |s| s.server_address.clone());
+/// System that automatically opens a server if it's required at the start by network_mode
+pub fn setup_open_server(
+    mut commands: Commands,
+    settings: Option<Res<NetSettings>>,
+    local_id: Option<Res<LocalPlayerId>>,
+    mut lobby: ResMut<Lobby>,
+) {
+    println!("server opening");
+    if let Some(settings) = settings {
+        let open = match settings.network_mode {
+            super::NetworkMode::Server => true,
+            super::NetworkMode::ClientAndServer => true,
+            super::NetworkMode::Client => false,
+            super::NetworkMode::Offline => false,
+        };
+        let default_id = LocalPlayerId::default();
+        let local_id = local_id.as_deref().unwrap_or(&default_id);
+        if open {
+            open_server(
+                &mut commands,
+                settings.server_address.clone(),
+                local_id,
+                &mut lobby,
+            );
+        }
+    }
+}
+
+pub fn open_server(
+    commands: &mut Commands,
+    server_address: String,
+    local_id: &LocalPlayerId,
+    lobby: &mut Lobby,
+) {
     let (server, transport) = new_renet_server(&server_address);
     commands.insert_resource(server);
     commands.insert_resource(transport);
+    if let Some(ref local_id) = local_id.id {
+        lobby.players.push(local_id.clone());
+    }
 }
 
 pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
@@ -53,99 +85,67 @@ pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
 
 pub fn server_update_system(
     mut server_events: EventReader<ServerEvent>,
-    mut commands: Commands,
     mut lobby: ResMut<Lobby>,
     mut server: ResMut<RenetServer>,
-    transport: Option<Res<NetcodeClientTransport>>,
-    mut chunk_replication: ResMut<ChunkReplication>,
-    settings: Res<NetSettings>,
 ) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
-                let is_local_player =
-                    if let Some(local_id) = transport.as_ref().map(|t| t.client_id()) {
-                        local_id == *client_id
-                    } else {
-                        true
-                    };
+                info!(target: "net_server", "client {} connected", client_id);
 
-                if is_local_player {
-                    debug!(target: "net_server", "Connected to the server (our id = {})", client_id);
-                } else {
-                    debug!(target: "net_server", "New player connected with id = {}", client_id);
-                }
+                let message = bincode::serialize(&ServerMessages::LoginRequest).unwrap();
+                server.send_message(*client_id, ServerChannel::ServerMessages, message);
 
-                let spawn_point = Vec3::new(0.0, 5.0, 0.0);
-                let player_entity = commands
-                    .spawn((
-                        Transform::from_translation(spawn_point),
-                        NewPlayerSpawned,
-                        NetPlayer { id: *client_id },
-                    ))
-                    .id();
-                if matches!(settings.network_mode, NetworkMode::ClientAndServer) && is_local_player
-                {
-                    commands.entity(player_entity).insert(LocalPlayer);
-                }
-
-                // We could send an InitState with all the players id and positions for the client
-                // but this is easier to do.
-                for &player_id in lobby.players.keys() {
-                    let message =
-                        bincode::serialize(&ServerMessages::PlayerConnected { id: player_id })
-                            .unwrap();
-                    server.send_message(*client_id, ServerChannel::ServerMessages, message);
-                }
-
-                if !(is_local_player
-                    && matches!(settings.network_mode, NetworkMode::ClientAndServer))
-                {
-                    chunk_replication.requested_chunks.insert(
-                        *client_id,
-                        get_chunks_in_sphere(spawn_point, settings.replication_distance as f32),
-                    );
-                }
-
-                lobby.players.insert(*client_id, player_entity);
-
-                let message =
-                    bincode::serialize(&ServerMessages::PlayerConnected { id: *client_id })
-                        .unwrap();
-                server.broadcast_message(ServerChannel::ServerMessages, message);
+                // send all other already connected clients
+                let message = bincode::serialize(&ServerMessages::PlayerConnected {
+                    ids: lobby.players.clone(),
+                })
+                .unwrap();
+                server.send_message(*client_id, ServerChannel::ServerMessages, message);
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
-                let is_local_player =
-                    if let Some(local_id) = transport.as_ref().map(|t| t.client_id()) {
-                        local_id == *client_id
-                    } else {
-                        true
-                    };
+                info!(
+                    target: "net_server",
+                    "client {} disconnected with reason {}", client_id, reason
+                );
 
-                if is_local_player {
-                    debug!(target: "net_server", "Disconnected from the server: {}", reason);
-                } else {
-                    debug!(target: "net_server", "Player {} disconnected: {}", client_id, reason);
+                if let Some(player_id) = lobby.connections.remove(client_id) {
+                    lobby.players.retain(|p| *p != player_id);
+                    let message = bincode::serialize(&ServerMessages::PlayerDisconnected {
+                        id: player_id.clone(),
+                    })
+                    .unwrap();
+                    server.broadcast_message(ServerChannel::ServerMessages, message);
                 }
-                if let Some(player_entity) = lobby.players.remove(client_id) {
-                    commands.entity(player_entity).despawn_recursive();
-                }
-
-                chunk_replication.requested_chunks.remove(client_id);
-
-                let message =
-                    bincode::serialize(&ServerMessages::PlayerDisconnected { id: *client_id })
-                        .unwrap();
-                server.broadcast_message(ServerChannel::ServerMessages, message);
             }
         }
     }
 }
 
+pub fn server_receive_client_messages(mut server: ResMut<RenetServer>, mut lobby: ResMut<Lobby>) {
+    for client_id in server.clients_id() {
+        while let Some(message) = server.receive_message(client_id, ClientChannel::ClientMessages) {
+            let message: ClientMessages = bincode::deserialize(&message).unwrap();
+            match message {
+                ClientMessages::Login { id } => {
+                    lobby.players.push(id.clone());
+                    lobby.connections.insert(client_id, id.clone());
+                    let broadcast_message =
+                        bincode::serialize(&ServerMessages::PlayerConnected { ids: vec![id] })
+                            .unwrap();
+                    server.broadcast_message(ServerChannel::ServerMessages, broadcast_message);
+                    // spawn too?
+                }
+            }
+        }
+    }
+}
+
+/*
 pub fn server_sync_players(
     mut server: ResMut<RenetServer>,
     transforms: Query<&Transform>,
-    query: Query<(Entity, &NetPlayer, &Children)>,
+    query: Query<(Entity, &RemotePlayer, &Children)>,
 ) {
     let mut players: HashMap<ClientId, PlayerState> = HashMap::new();
     for (entity, player, children) in query.iter() {
@@ -217,3 +217,4 @@ pub fn server_sync_universe(
         }
     }
 }
+*/

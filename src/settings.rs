@@ -1,6 +1,6 @@
+use crate::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
 use bevy::prelude::*;
 use clap::Parser;
-use mcrs_net::{NetSettings, NetworkMode, DEFAULT_NETWORK_ADDRESS};
 use mcrs_render::settings::{RenderMode, RenderSettings, DEFAULT_VIEW_DISTANCE};
 
 pub const DEFAULT_TICKS_PER_SECOND: u32 = 64;
@@ -26,6 +26,9 @@ pub struct Args {
 
     #[arg(short, long)]
     pub open_level_name: Option<String>,
+
+    #[arg(short, long)]
+    pub player_name: Option<String>,
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
@@ -37,6 +40,7 @@ pub struct McrsSettings {
     pub network_mode: NetworkMode,
     pub render_mode: RenderMode,
     pub open_level_name: String,
+    pub player_name: Option<String>,
 }
 
 impl Default for McrsSettings {
@@ -46,9 +50,10 @@ impl Default for McrsSettings {
             view_distance_blocks: DEFAULT_VIEW_DISTANCE,
             load_distance_blocks: DEFAULT_LOAD_DISTANCE,
             server_address: DEFAULT_NETWORK_ADDRESS.to_string(),
-            network_mode: NetworkMode::ClientAndServer,
+            network_mode: NetworkMode::default(),
             render_mode: RenderMode::default(),
             open_level_name: format!("world"),
+            player_name: None,
         }
     }
 }
@@ -62,6 +67,7 @@ impl From<Args> for McrsSettings {
                 .unwrap_or(DEFAULT_NETWORK_ADDRESS.to_string()),
             network_mode: args.network_mode.into(),
             render_mode: args.render_mode.into(),
+            player_name: args.player_name,
             ..Default::default()
         }
     }

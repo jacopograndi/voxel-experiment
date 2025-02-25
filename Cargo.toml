@@ -24,7 +24,6 @@ miniz_oxide = "0.8.5"
 
 mcrs_physics = { path = "crates/mcrs_physics" }
 mcrs_render = { path = "crates/mcrs_render" }
-mcrs_net = { path = "crates/mcrs_net" }
 mcrs_universe = { path = "crates/mcrs_universe" }
 
 [workspace]

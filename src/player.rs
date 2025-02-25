@@ -2,12 +2,12 @@ use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
     get_single_event, read_player,
     settings::McrsSettings,
-    Db, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
-    UniverseChange, UniverseChanges,
+    Db, Level, LevelOwned, LevelReadyEvent,LocalPlayer, NetworkMode,
+    PlayerHand, PlayerInput, PlayerInputBuffer,
+    SerdePlayer,UniverseChange, UniverseChanges,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use mcrs_net::{LocalPlayer, NetworkMode};
 use mcrs_physics::{
     character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
     intersect::intersect_aabb_block,
@@ -83,7 +83,7 @@ pub fn spawn_player(
     level_ready_event: EventReader<LevelReadyEvent>,
     db: Option<Res<Db>>,
 ) {
-    if !matches!(settings.network_mode, NetworkMode::ClientAndServer) {
+    if !matches!(settings.network_mode, NetworkMode::Offline) {
         return;
     }
 

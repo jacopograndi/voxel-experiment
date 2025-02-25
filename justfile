@@ -17,10 +17,10 @@ test:
 # Run a headless server and n clients
 multi n:
     # Server
-    alacritty -e cargo r --release -- --network-mode server &
+    alacritty --hold -e cargo r --release -- --network-mode server --player-name name_server &
 
     # Clients
-    for run in $(seq {{n}}); do \
-    alacritty -e cargo r --release -- --network-mode client & \
+    for i in $(seq {{n}}); do \
+    alacritty --hold -e cargo r --release -- --network-mode client --player-name name_client_${i} & \
     done
 

@@ -1,12 +1,8 @@
-use bevy::{asset::LoadState, log::LogPlugin, prelude::*};
+use bevy::{asset::LoadState, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use bevy_egui::EguiPlugin;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
-use mcrs_net::{
-    plugin::{FixedNetSet, McrsNetClientPlugin, McrsNetServerPlugin},
-    NetSettings, NetworkMode,
-};
 use mcrs_physics::plugin::{FixedPhysicsSet, McrsPhysicsPlugin};
 use mcrs_render::{
     chunk_mesh::TextureHandles, plugin::McrsVoxelRenderPlugin, settings::RenderSettings,
@@ -17,6 +13,7 @@ mod camera;
 mod chemistry;
 mod debug;
 mod input;
+mod net;
 mod player;
 mod saveload;
 mod settings;
@@ -25,7 +22,9 @@ mod ui;
 
 use debug::DebugDiagnosticPlugin;
 use input::*;
+use net::*;
 use player::{spawn_player, terrain_editing};
+use plugin::{FixedNetSet, NetClientPlugin, NetServerPlugin};
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::*;
@@ -61,7 +60,7 @@ fn main() -> AppExit {
     app.insert_resource::<RenderSettings>(settings.clone().into());
     app.insert_resource(settings.clone());
 
-    app.add_plugins(McrsUniversePlugin);
+    app.add_plugins((McrsUniversePlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.init_resource::<UniverseChanges>();
     app.init_resource::<LightSources>();
     app.init_resource::<ChunkGenerationRequest>();
@@ -70,19 +69,26 @@ fn main() -> AppExit {
     match settings.network_mode {
         NetworkMode::Client => {
             add_client(&mut app);
+            app.insert_state(AppState::default());
         }
         NetworkMode::Server => {
-            app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default()));
+            app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default(), StatesPlugin));
             add_server(&mut app);
+            app.insert_state(AppState::Playing);
         }
         NetworkMode::ClientAndServer => {
             add_client(&mut app);
             add_server(&mut app);
+            app.insert_state(AppState::default());
+        }
+        NetworkMode::Offline => {
+            add_client(&mut app);
+            add_server(&mut app);
+            app.add_systems(Update, spawn_player.run_if(in_state(AppState::Playing)));
+            app.insert_state(AppState::default());
         }
     }
-    app.add_systems(Update, spawn_player.run_if(in_state(AppState::Playing)));
 
-    app.insert_state(AppState::default());
     app.configure_sets(
         FixedUpdate,
         (
@@ -119,7 +125,7 @@ fn add_client(app: &mut App) {
         McrsVoxelRenderPlugin,
         EguiPlugin,
         DebugDiagnosticPlugin,
-        McrsNetClientPlugin,
+        NetClientPlugin,
         McrsCameraPlugin,
     ));
 
@@ -150,8 +156,7 @@ fn add_client(app: &mut App) {
 }
 
 fn add_server(app: &mut App) {
-    // unaffected by AppState
-    app.add_plugins((McrsNetServerPlugin, McrsPhysicsPlugin, SaveLoadPlugin));
+    app.add_plugins(NetServerPlugin);
     app.add_systems(
         FixedUpdate,
         (
@@ -160,7 +165,8 @@ fn add_server(app: &mut App) {
             apply_lighting_sources,
         )
             .chain()
-            .in_set(FixedMainSet::Terrain),
+            .in_set(FixedMainSet::Terrain)
+            .run_if(in_state(AppState::Playing)),
     );
 }
 
