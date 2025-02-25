@@ -1,6 +1,6 @@
 use crate::{
-    chemistry::lighting::*, get_chunk_from_save, get_sun_beams_from_save, save_chunk,
-    save_sun_beams_region, settings::McrsSettings, Level,
+    chemistry::lighting::*, read_chunk, read_sun_beams, settings::McrsSettings, write_chunk,
+    write_sun_beams_region, Db, Level, TABLE_BLOCKS, TABLE_SUN_BEAMS,
 };
 use bevy::{
     prelude::*,
@@ -445,10 +445,14 @@ pub fn chunk_generation(
     mut request: ResMut<ChunkGenerationRequest>,
     mut generator: Local<Option<GeneratorCrazyHill>>,
     mut sun_beams: ResMut<SunBeams>,
-    level: Option<Res<Level>>,
     settings: Res<McrsSettings>,
+    level: Option<Res<Level>>,
+    db: Option<Res<Db>>,
 ) {
     let Some(level) = level else {
+        return;
+    };
+    let Some(db) = db else {
         return;
     };
 
@@ -468,21 +472,27 @@ pub fn chunk_generation(
         .collect();
 
     // Chunks out of load distance and no longer needed are unloaded
-    let mut unload_chunks: Vec<IVec3> = vec![];
-    for (chunk_pos, chunk) in universe.chunks.iter() {
-        if !base_set.contains(&chunk_pos)
-            && !request.requested.contains_key(chunk_pos)
-            && !depended_on_set.contains(chunk_pos)
-        {
-            info!("unloaded chunk at {}", chunk_pos);
-            save_chunk(chunk_pos, chunk, &level);
-            save_sun_beams_region(chunk_pos.xz(), &sun_beams, &level);
-            unload_chunks.push(*chunk_pos);
+    db.write(|tx| {
+        let mut sun_table = tx.open_table(TABLE_SUN_BEAMS)?;
+        let mut block_table = tx.open_table(TABLE_BLOCKS)?;
+        let mut unload_chunks: Vec<IVec3> = vec![];
+        for (chunk_pos, chunk) in universe.chunks.iter() {
+            if !base_set.contains(&chunk_pos)
+                && !request.requested.contains_key(chunk_pos)
+                && !depended_on_set.contains(chunk_pos)
+            {
+                info!("unloaded chunk at {}", chunk_pos);
+                write_chunk(tx, chunk_pos, chunk, Some(&mut block_table))?;
+                write_sun_beams_region(tx, chunk_pos.xz(), &sun_beams, Some(&mut sun_table))?;
+                unload_chunks.push(*chunk_pos);
+            }
         }
-    }
-    for chunk_pos in unload_chunks {
-        universe.chunks.remove(&chunk_pos);
-    }
+        for chunk_pos in unload_chunks {
+            universe.chunks.remove(&chunk_pos);
+        }
+        Ok(())
+    })
+    .expect("db write failed");
 
     drop(depended_on_set);
 
@@ -515,7 +525,7 @@ pub fn chunk_generation(
     let mut loaded_chunks = vec![];
     for (chunk_pos, _) in request.requested.iter() {
         if let None = universe.chunks.get(chunk_pos) {
-            if let Some(chunk) = get_chunk_from_save(chunk_pos, &level.name) {
+            if let Some(chunk) = db.get(|tx| read_chunk(tx, chunk_pos)) {
                 universe.chunks.insert(*chunk_pos, chunk);
                 loaded_chunks.push(*chunk_pos);
                 info!("loaded chunk at {}", chunk_pos);
@@ -524,9 +534,10 @@ pub fn chunk_generation(
     }
     for loaded_chunk in loaded_chunks {
         info!("loading sun beams region at {}", loaded_chunk);
-        let beams = get_sun_beams_from_save(&loaded_chunk, &level.name);
-        for (pos, beam) in beams {
-            sun_beams.beams.entry(pos).or_insert(beam);
+        if let Some(beams) = db.get(|tx| read_sun_beams(tx, &loaded_chunk.xz())) {
+            for (pos, beam) in beams {
+                sun_beams.beams.entry(pos).or_insert(beam);
+            }
         }
         request.requested.remove(&loaded_chunk);
     }
@@ -796,28 +807,38 @@ pub fn chunk_generation(
         part.pass = GenerationPass::Done;
     }
 
-    request
-        .requested
-        .retain(|chunk_pos, state| match state.pass {
-            GenerationPass::Done => {
-                let chunk = state
-                    .chunk
-                    .take()
-                    .expect("the generator should output a chunk");
+    db.write(|tx| {
+        let mut sun_table = tx.open_table(TABLE_SUN_BEAMS)?;
+        let mut block_table = tx.open_table(TABLE_BLOCKS)?;
+        let mut to_remove = vec![];
+        for (chunk_pos, state) in request.requested.iter_mut() {
+            match state.pass {
+                GenerationPass::Done => {
+                    let chunk = state
+                        .chunk
+                        .take()
+                        .expect("the generator should output a chunk");
 
-                // This save is before lighting
-                save_chunk(chunk_pos, &chunk, &level);
-                save_sun_beams_region(chunk_pos.xz(), &sun_beams, &level);
+                    // save the chunks as they are generated
+                    write_chunk(tx, chunk_pos, &chunk, Some(&mut block_table))?;
+                    write_sun_beams_region(tx, chunk_pos.xz(), &sun_beams, Some(&mut sun_table))?;
 
-                universe.chunks.insert(*chunk_pos, chunk);
-                info!(
-                    target: "terrain_generation",
-                    "chunk generated at {}", chunk_pos
-                );
-                false
+                    universe.chunks.insert(*chunk_pos, chunk);
+                    info!(
+                        target: "terrain_generation",
+                        "chunk generated at {}", chunk_pos
+                    );
+                    to_remove.push(*chunk_pos);
+                }
+                _ => {}
             }
-            _ => true,
-        });
+        }
+        for chunk_pos in to_remove.iter() {
+            request.requested.remove(chunk_pos);
+        }
+        Ok(())
+    })
+    .expect("db write failed");
 }
 
 pub struct GeneratorCrazyHill {

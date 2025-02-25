@@ -1,20 +1,24 @@
-use std::{fs, path::PathBuf};
-
-use bevy::{prelude::*, utils::HashMap};
-use bytemuck::{Pod, Zeroable};
-use mcrs_physics::{
-    character::{CameraController, Character},
-    TickStep,
-};
-use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE};
-use ron::{de::SpannedError, ser::PrettyConfig};
-use serde::{Deserialize, Serialize};
-
 use crate::{
     settings::McrsSettings,
     terrain::{get_spawn_chunks, UniverseChanges},
     FixedMainSet, LightSources, SunBeam, SunBeams,
 };
+use bevy::{prelude::*, utils::HashSet};
+use bytemuck::{Pod, Zeroable};
+use mcrs_physics::{
+    character::{CameraController, Character},
+    TickStep,
+};
+use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
+use miniz_oxide::{deflate::compress_to_vec, inflate::decompress_to_vec_with_limit};
+use redb::{Database, Error, ReadTransaction, Table, TableDefinition, WriteTransaction};
+use serde::{Deserialize, Serialize};
+use std::{fs, path::PathBuf};
+
+pub const TABLE_BLOCKS: TableDefinition<[i32; 3], &[u8]> = TableDefinition::new("blocks");
+pub const TABLE_SUN_BEAMS: TableDefinition<[i32; 2], &[u8]> = TableDefinition::new("sun_beams");
+pub const TABLE_PLAYERS: TableDefinition<&str, &[u8]> = TableDefinition::new("players");
+pub const TABLE_LEVEL: TableDefinition<&str, &[u8]> = TableDefinition::new("level");
 
 pub struct SaveLoadPlugin;
 
@@ -34,11 +38,41 @@ impl Plugin for SaveLoadPlugin {
     }
 }
 
+#[derive(Resource)]
+pub struct Db {
+    db: Database,
+}
+
+// Todo: make a new error that allows removal of .expect
+
+impl Db {
+    pub fn write<F>(&self, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(&WriteTransaction) -> Result<(), Error>,
+    {
+        let write_txn = self.db.begin_write()?;
+        {
+            f(&write_txn)?
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    pub fn get<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&ReadTransaction) -> Option<R>,
+    {
+        let read_txn = self.db.begin_read().ok()?;
+        let opt = f(&read_txn);
+        drop(read_txn);
+        opt
+    }
+}
+
 #[derive(Resource, Debug, Clone, Serialize, Deserialize)]
 pub struct Level {
     pub name: String,
     pub seed: u32,
-    pub save_path: Option<PathBuf>,
 }
 
 #[derive(Resource, Debug, Clone)]
@@ -72,8 +106,9 @@ pub fn auto_open_level(mut event_writer: EventWriter<OpenLevelEvent>, settings: 
 pub fn open_level(
     event_reader: EventReader<OpenLevelEvent>,
     mut commands: Commands,
-    existing_level: Option<Res<Level>>,
     mut tickstep: ResMut<TickStep>,
+    existing_level: Option<Res<Level>>,
+    existing_db: Option<Res<Db>>,
 ) {
     let Some(event) = get_single_event(event_reader) else {
         return;
@@ -84,28 +119,43 @@ pub fn open_level(
         return;
     }
 
+    if existing_db.is_some() {
+        warn!("Another db is open");
+        panic!();
+    }
+
     if event.level_name.is_empty() {
         warn!("Level name is empty");
         return;
     }
 
+    let path = get_save_path().map_or(String::new(), |p| p.to_str().unwrap_or("").to_string());
+
+    let Ok(db) = Database::create(&format!("{}/{}.redb", path, event.level_name)) else {
+        warn!("Failed to open level db");
+        return;
+    };
+
+    // todo read `Level`
+
+    commands.insert_resource(Db { db });
+
     commands.insert_resource(Level {
         name: event.level_name,
         seed: 0,
-        save_path: get_save_path(),
     });
 
     *tickstep = TickStep::Tick;
 
-    // The player is spawned when the spawn chunks are ready
-    // The chunks are loaded when they are needed
-    // The sun beams are loaded when they are needed
+    // In offline net_mode the player is spawned when the spawn chunks are ready
+    // The chunks and sun beams are loaded when they are needed
 }
 
 pub fn close_level(
     event_reader: EventReader<CloseLevelEvent>,
     mut commands: Commands,
     existing_level: Option<Res<Level>>,
+    existing_db: Option<Res<Db>>,
     mut universe: ResMut<Universe>,
     mut universe_changes: ResMut<UniverseChanges>,
     mut tickstep: ResMut<TickStep>,
@@ -122,6 +172,12 @@ pub fn close_level(
         return;
     }
 
+    if existing_db.is_none() {
+        warn!("No db was opened");
+        panic!();
+    }
+
+    commands.remove_resource::<Db>();
     commands.remove_resource::<Level>();
     commands.remove_resource::<LevelReady>();
 
@@ -144,31 +200,6 @@ pub fn get_save_path() -> Option<PathBuf> {
     path.push(CRATE_NAME);
     let _ = fs::create_dir_all(path.clone());
     Some(path)
-}
-
-pub fn get_path(folder: &str, level: &Level) -> Option<PathBuf> {
-    let mut path = level.save_path.clone()?;
-    path.push(level.name.as_str());
-    path.push(folder);
-    let _ = fs::create_dir_all(path.clone());
-    Some(path)
-}
-
-pub fn write_to_file<T: Serialize>(
-    path: PathBuf,
-    value: T,
-    ron_config: PrettyConfig,
-) -> Result<(), ()> {
-    let level_ron = ron::ser::to_string_pretty(&value, ron_config);
-    let Ok(level_ron) = level_ron else {
-        error!("Failed to serialize level:\n {:?}", level_ron);
-        return Err(());
-    };
-    if let Err(err) = fs::write(path.clone(), level_ron) {
-        error!("Failed to write to {:?}:\n {:?}", path, err);
-        return Err(());
-    }
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -203,6 +234,7 @@ pub fn save_level(
     players_query: Query<&Transform, With<Character>>,
     camera_query: Query<(&Transform, &Parent), With<CameraController>>,
     sun_beams: Res<SunBeams>,
+    existing_db: Option<ResMut<Db>>,
 ) {
     let Some(_) = get_single_event(event_reader) else {
         return;
@@ -213,89 +245,99 @@ pub fn save_level(
         return;
     };
 
-    let Some(mut path) = get_save_path() else {
-        warn!("Couldn't find the path to save the level");
-        return;
+    let Some(db) = existing_db else {
+        warn!("No db was opened");
+        panic!();
     };
 
-    let ron_config = PrettyConfig::default().compact_arrays(true).depth_limit(2);
+    info!("saving to: {:?}", get_save_path());
 
-    path.push(level.name.as_str());
-    let _ = fs::create_dir_all(path.clone());
-
-    info!("saving to: {:?}", path);
-
-    let Ok(_) = write_to_file(path.join("level.ron"), &**level, ron_config.clone()) else {
-        return;
-    };
-
-    let mut players = SerdePlayers { players: vec![] };
+    let mut serde_players = vec![];
     for (camera_tr, parent) in camera_query.iter() {
         let body_tr = players_query
             .get(parent.get())
             .expect("Players should have a body");
-        players.players.push(SerdePlayer {
+        let player = SerdePlayer {
             // Todo: handle player names
             name: "Nameless".to_string(),
             translation: body_tr.translation,
             body_rotation: body_tr.rotation,
             camera_rotation: camera_tr.rotation,
-        });
+        };
+        serde_players.push(player);
     }
 
-    let Ok(_) = write_to_file(path.join("players.ron"), &players, ron_config.clone()) else {
-        return;
-    };
+    db.write(|tx| {
+        write_level(tx, level)?;
+        write_sun_beams(tx, &sun_beams, &universe)?;
+        write_chunks(tx, &universe)?;
 
-    save_sun_beams(&sun_beams, &universe, level);
+        let mut table = tx.open_table(TABLE_PLAYERS)?;
+        for serde_player in serde_players.iter() {
+            write_player(tx, serde_player, Some(&mut table))?
+        }
 
-    for (chunk_pos, chunk) in universe.chunks.iter() {
-        save_chunk(chunk_pos, chunk, level);
-    }
+        Ok(())
+    })
+    .expect("db write failed");
 
-    let entities_path = path.join("entities");
-    let _ = fs::create_dir_all(entities_path.clone());
+    // Todo: tried this for large size mitigation, but it seems it doesn't work
+    //db.db.compact().expect("db compaction failed");
 
     info!("save successful");
 }
 
-/// Save the sun beams in files divided by region
-/// A region is a column of blocks that is as big as a chunk in x and z
-/// and extends from -inf to inf in y.
-pub fn save_sun_beams(sun_beams: &SunBeams, universe: &Universe, level: &Level) {
-    let sun_beams_path = get_path("sun_beams", level).unwrap();
-    let _ = fs::create_dir_all(sun_beams_path.clone());
-    // Todo: use `save_sun_beams_region` instead
-    let mut sun_beams_by_region = HashMap::<IVec2, [BeamPod; CHUNK_AREA]>::new();
-    for (xz, beam) in sun_beams.beams.iter() {
-        let (region_pos, inner) = universe.pos_to_region_and_inner(xz);
-        let region = sun_beams_by_region
-            .entry(region_pos)
-            .or_insert([BeamPod::default(); CHUNK_AREA]);
-        let region_index = (inner.x + inner.y * CHUNK_SIDE as i32) as usize;
-        region[region_index].bottom = beam.bottom;
-        region[region_index].top = beam.top;
-    }
-    for (region_pos, beams) in sun_beams_by_region {
-        let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
-        let file_path = sun_beams_path.join(file_name);
-        let beams_bytes: &[u8] = bytemuck::cast_slice(&beams);
-        if let Err(err) = fs::write(file_path.clone(), beams_bytes) {
-            error!("Failed to write to {:?}:\n {:?}", file_path, err);
-            continue;
-        }
-    }
+pub fn write_level<'txn>(write_txn: &'txn WriteTransaction, level: &Level) -> Result<(), Error> {
+    let mut table = write_txn.open_table(TABLE_LEVEL)?;
+    let bytes = bincode::serialize(level).expect("failed to serialize level");
+    table.insert("info", &*bytes)?;
+    Ok(())
 }
 
-pub fn save_sun_beams_region(region_pos: IVec2, sun_beams: &SunBeams, level: &Level) {
-    let sun_beams_path = get_path("sun_beams", level).unwrap();
-    let _ = fs::create_dir_all(sun_beams_path.clone());
+pub fn write_player<'txn>(
+    write_txn: &'txn WriteTransaction,
+    player: &SerdePlayer,
+    table: Option<&mut Table<'txn, &str, &[u8]>>,
+) -> Result<(), Error> {
+    let player_bytes = bincode::serialize(player).expect("failed player serialization");
+    let table = if let Some(table) = table {
+        table
+    } else {
+        &mut write_txn.open_table(TABLE_PLAYERS)?
+    };
+    table.insert(player.name.as_str(), &*player_bytes)?;
+    Ok(())
+}
+
+pub fn write_sun_beams<'txn>(
+    write_txn: &'txn WriteTransaction,
+    sun_beams: &SunBeams,
+    universe: &Universe,
+) -> Result<(), Error> {
+    let mut sun_beams_by_region = HashSet::<IVec2>::new();
+    for (xz, _) in sun_beams.beams.iter() {
+        let (region_pos, _) = universe.pos_to_region_and_inner(xz);
+        sun_beams_by_region.insert(region_pos);
+    }
+    let mut table = write_txn.open_table(TABLE_SUN_BEAMS)?;
+    for region_pos in sun_beams_by_region {
+        write_sun_beams_region(write_txn, region_pos, sun_beams, Some(&mut table))?
+    }
+    Ok(())
+}
+
+pub fn write_sun_beams_region<'txn>(
+    write_txn: &'txn WriteTransaction,
+    region_pos: IVec2,
+    sun_beams: &SunBeams,
+    table: Option<&mut Table<'txn, [i32; 2], &[u8]>>,
+) -> Result<(), Error> {
     let mut region = [BeamPod::default(); CHUNK_AREA];
     for (x, z) in (0..CHUNK_SIDE as i32)
         .map(|x| (0..CHUNK_SIDE as i32).map(move |z| (x, z)))
         .flatten()
     {
-        let xz = IVec2::new(x, z);
+        let xz = IVec2::new(x, z) + region_pos;
         let beam = if let Some(beam) = sun_beams.beams.get(&xz) {
             beam
         } else {
@@ -305,66 +347,80 @@ pub fn save_sun_beams_region(region_pos: IVec2, sun_beams: &SunBeams, level: &Le
         region[region_index].bottom = beam.bottom;
         region[region_index].top = beam.top;
     }
-    let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
-    let file_path = sun_beams_path.join(file_name);
     let beams_bytes: &[u8] = bytemuck::cast_slice(&region);
-    if let Err(err) = fs::write(file_path.clone(), beams_bytes) {
-        error!("Failed to write to {:?}:\n {:?}", file_path, err);
-    }
+    let table = if let Some(table) = table {
+        table
+    } else {
+        &mut write_txn.open_table(TABLE_SUN_BEAMS)?
+    };
+    table.insert(region_pos.to_array(), &*beams_bytes)?;
+    Ok(())
 }
 
-pub fn save_chunk(chunk_pos: &IVec3, chunk: &Chunk, level: &Level) {
-    let chunks_path = get_path("blocks", level).unwrap();
-    let file_name = format!("chunk_{}_{}_{}.bin", chunk_pos.x, chunk_pos.y, chunk_pos.z);
-    let file_path = chunks_path.join(file_name);
+pub fn write_chunks<'txn>(
+    write_txn: &'txn WriteTransaction,
+    universe: &Universe,
+) -> Result<(), Error> {
+    let mut table = write_txn.open_table(TABLE_BLOCKS)?;
+    for (chunk_pos, chunk) in universe.chunks.iter() {
+        write_chunk(write_txn, chunk_pos, &chunk, Some(&mut table))?
+    }
+    Ok(())
+}
+
+pub fn write_chunk<'txn>(
+    write_txn: &'txn WriteTransaction,
+    chunk_pos: &IVec3,
+    chunk: &Chunk,
+    table: Option<&mut Table<'txn, [i32; 3], &[u8]>>,
+) -> Result<(), Error> {
     let chunk_ref = chunk.get_ref();
     let block_bytes: &[u8] = bytemuck::cast_slice(chunk_ref.as_ref());
-    if let Err(err) = fs::write(file_path.clone(), block_bytes) {
-        error!("Failed to write to {:?}:\n {:?}", file_path, err);
+    let block_compressed = compress_to_vec(block_bytes, 6);
+    let table = if let Some(table) = table {
+        table
+    } else {
+        &mut write_txn.open_table(TABLE_BLOCKS)?
+    };
+    table.insert(&chunk_pos.to_array(), &*block_compressed)?;
+    Ok(())
+}
+
+pub fn read_player<'txn>(
+    read_txn: &'txn ReadTransaction,
+    player_name: &str,
+) -> Option<SerdePlayer> {
+    let table = read_txn.open_table(TABLE_PLAYERS).ok()?;
+    let option = table.get(player_name).ok()?;
+    let value = option?;
+    let player = bincode::deserialize(value.value()).expect("failed to deserialize player");
+    Some(player)
+}
+
+pub fn read_chunk<'txn>(read_txn: &'txn ReadTransaction, chunk_pos: &IVec3) -> Option<Chunk> {
+    let table = read_txn.open_table(TABLE_BLOCKS).ok()?;
+    let option = table.get(chunk_pos.to_array()).ok()?;
+    let value = option?;
+    let block_decompressed = decompress_to_vec_with_limit(value.value(), CHUNK_VOLUME * 4)
+        .expect("failed to decompress chunk");
+    let chunk = Chunk::empty();
+    {
+        let mut write = chunk.get_mut();
+        let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
+        bytes.copy_from_slice(&*block_decompressed);
     }
+    Some(chunk)
 }
 
-pub fn get_player_from_save(player_name: &str, level_name: &str) -> Option<SerdePlayer> {
-    let Some(mut path) = get_save_path() else {
-        warn!("Couldn't find the path of the save directory");
-        return None;
-    };
-    path.push(level_name);
-    path.push("players.ron");
-    let Ok(players_ron) = fs::read_to_string(path) else {
-        warn!("Couldn't read players.ron");
-        return None;
-    };
-
-    let players: Result<SerdePlayers, SpannedError> = ron::from_str(&players_ron);
-    let Ok(players) = players else {
-        warn!("Parse error of players.ron: \n {:?}", players);
-        return None;
-    };
-
-    players
-        .players
-        .iter()
-        .find(|p| p.name == player_name)
-        .cloned()
-}
-
-pub fn get_sun_beams_from_save(chunk_pos: &IVec3, level_name: &str) -> Vec<(IVec2, SunBeam)> {
-    let region_pos = chunk_pos.xz();
-    let Some(mut path) = get_save_path() else {
-        warn!("Couldn't find the path of the save directory");
-        return vec![];
-    };
-    path.push(level_name);
-    path.push("sun_beams");
-    let file_name = format!("region_{}_{}.bin", region_pos.x, region_pos.y);
-    path.push(file_name);
-    let Ok(beam_bytes) = fs::read(path) else {
-        return vec![];
-    };
-
+pub fn read_sun_beams<'txn>(
+    read_txn: &'txn ReadTransaction,
+    region_pos: &IVec2,
+) -> Option<Vec<(IVec2, SunBeam)>> {
+    let table = read_txn.open_table(TABLE_SUN_BEAMS).ok()?;
+    let option = table.get(region_pos.to_array()).ok()?;
+    let value = option?;
     let mut beams = vec![];
-    let beams_pod: &[BeamPod] = bytemuck::cast_slice(&beam_bytes);
+    let beams_pod: &[BeamPod] = bytemuck::cast_slice(value.value());
     for i in 0..CHUNK_AREA as i32 {
         let (x, z) = (i % CHUNK_SIDE as i32, i / CHUNK_SIDE as i32);
         let pos = IVec2::new(region_pos.x + x, region_pos.y + z);
@@ -374,29 +430,7 @@ pub fn get_sun_beams_from_save(chunk_pos: &IVec3, level_name: &str) -> Vec<(IVec
         };
         beams.push((pos, beam));
     }
-    beams
-}
-
-pub fn get_chunk_from_save(chunk_pos: &IVec3, level_name: &str) -> Option<Chunk> {
-    let Some(mut path) = get_save_path() else {
-        warn!("Couldn't find the path of the save directory");
-        return None;
-    };
-    path.push(level_name);
-    path.push("blocks");
-    let file_name = format!("chunk_{}_{}_{}.bin", chunk_pos.x, chunk_pos.y, chunk_pos.z);
-    path.push(file_name);
-    let Ok(block_bytes) = fs::read(path) else {
-        return None;
-    };
-
-    let chunk = Chunk::empty();
-    {
-        let mut write = chunk.get_mut();
-        let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
-        bytes.copy_from_slice(block_bytes.as_slice());
-    }
-    Some(chunk)
+    Some(beams)
 }
 
 pub fn is_level_ready(

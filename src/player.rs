@@ -1,8 +1,8 @@
 use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
-    get_player_from_save, get_single_event,
+    get_single_event, read_player,
     settings::McrsSettings,
-    Level, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
+    Db, LevelOwned, LevelReadyEvent, PlayerHand, PlayerInput, PlayerInputBuffer, SerdePlayer,
     UniverseChange, UniverseChanges,
 };
 use bevy::prelude::*;
@@ -81,13 +81,13 @@ pub fn spawn_player(
     mut commands: Commands,
     settings: Res<McrsSettings>,
     level_ready_event: EventReader<LevelReadyEvent>,
-    level: Option<Res<Level>>,
+    db: Option<Res<Db>>,
 ) {
     if !matches!(settings.network_mode, NetworkMode::ClientAndServer) {
         return;
     }
 
-    let Some(level) = level.as_ref() else {
+    let Some(db) = db.as_ref() else {
         return;
     };
 
@@ -98,7 +98,7 @@ pub fn spawn_player(
     info!("Spawning local player");
 
     // Todo: handle player names
-    let serde_player = match get_player_from_save("Nameless", &level.name) {
+    let serde_player = match db.get(|tx| read_player(tx, "Nameless")) {
         Some(p) => {
             info!("Found player in save.");
             p
