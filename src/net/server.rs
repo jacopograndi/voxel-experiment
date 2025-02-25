@@ -1,6 +1,6 @@
 use super::{
     connection_config, ChunkReplication, ClientChannel, ClientMessages, Lobby, LocalPlayerId,
-    PlayerState, SyncUniverse, PORT, PROTOCOL_ID,
+    PlayerState, PlayersChunkReplication, SyncUniverse, PORT, PROTOCOL_ID,
 };
 use crate::{NetSettings, RemotePlayer, ServerChannel, ServerMessages};
 use bevy::{
@@ -11,20 +11,16 @@ use bevy_renet::{
     netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
     renet::{ClientId, RenetServer, ServerEvent},
 };
+use mcrs_physics::intersect::get_chunks_in_sphere;
 use mcrs_universe::{chunk::ChunkVersion, universe::Universe, CHUNK_VOLUME};
+use miniz_oxide::deflate::compress_to_vec;
 use std::{
     net::{SocketAddr, UdpSocket},
     time::SystemTime,
 };
 
 /// System that automatically opens a server if it's required at the start by network_mode
-pub fn setup_open_server(
-    mut commands: Commands,
-    settings: Option<Res<NetSettings>>,
-    local_id: Option<Res<LocalPlayerId>>,
-    mut lobby: ResMut<Lobby>,
-) {
-    println!("server opening");
+pub fn setup_open_server(mut commands: Commands, settings: Option<Res<NetSettings>>) {
     if let Some(settings) = settings {
         let open = match settings.network_mode {
             super::NetworkMode::Server => true,
@@ -32,31 +28,17 @@ pub fn setup_open_server(
             super::NetworkMode::Client => false,
             super::NetworkMode::Offline => false,
         };
-        let default_id = LocalPlayerId::default();
-        let local_id = local_id.as_deref().unwrap_or(&default_id);
         if open {
-            open_server(
-                &mut commands,
-                settings.server_address.clone(),
-                local_id,
-                &mut lobby,
-            );
+            open_server(&mut commands, settings.server_address.clone());
         }
     }
 }
 
-pub fn open_server(
-    commands: &mut Commands,
-    server_address: String,
-    local_id: &LocalPlayerId,
-    lobby: &mut Lobby,
-) {
+pub fn open_server(commands: &mut Commands, server_address: String) {
+    info!("server opening");
     let (server, transport) = new_renet_server(&server_address);
     commands.insert_resource(server);
     commands.insert_resource(transport);
-    if let Some(ref local_id) = local_id.id {
-        lobby.players.push(local_id.clone());
-    }
 }
 
 pub fn new_renet_server(addr: &str) -> (RenetServer, NetcodeServerTransport) {
@@ -98,7 +80,12 @@ pub fn server_update_system(
 
                 // send all other already connected clients
                 let message = bincode::serialize(&ServerMessages::PlayerConnected {
-                    ids: lobby.players.clone(),
+                    ids: lobby
+                        .remote_players
+                        .iter()
+                        .chain(lobby.local_players.iter())
+                        .cloned()
+                        .collect(),
                 })
                 .unwrap();
                 server.send_message(*client_id, ServerChannel::ServerMessages, message);
@@ -110,7 +97,7 @@ pub fn server_update_system(
                 );
 
                 if let Some(player_id) = lobby.connections.remove(client_id) {
-                    lobby.players.retain(|p| *p != player_id);
+                    lobby.remote_players.retain(|p| *p != player_id);
                     let message = bincode::serialize(&ServerMessages::PlayerDisconnected {
                         id: player_id.clone(),
                     })
@@ -128,13 +115,12 @@ pub fn server_receive_client_messages(mut server: ResMut<RenetServer>, mut lobby
             let message: ClientMessages = bincode::deserialize(&message).unwrap();
             match message {
                 ClientMessages::Login { id } => {
-                    lobby.players.push(id.clone());
+                    lobby.remote_players.push(id.clone());
                     lobby.connections.insert(client_id, id.clone());
                     let broadcast_message =
                         bincode::serialize(&ServerMessages::PlayerConnected { ids: vec![id] })
                             .unwrap();
                     server.broadcast_message(ServerChannel::ServerMessages, broadcast_message);
-                    // spawn too?
                 }
             }
         }
@@ -163,58 +149,87 @@ pub fn server_sync_players(
     let sync_message = bincode::serialize(&players).unwrap();
     server.broadcast_message(ServerChannel::PlayerTransform, sync_message);
 }
+*/
 
 pub fn server_sync_universe(
     mut server: ResMut<RenetServer>,
     universe: Res<Universe>,
-    mut chunk_replication: ResMut<ChunkReplication>,
-    mut replicated_chunks: Local<HashMap<IVec3, ChunkVersion>>,
+    mut chunk_replication: ResMut<PlayersChunkReplication>,
+    lobby: Res<Lobby>,
+    player_query: Query<(&RemotePlayer, &Transform)>,
+    settings: Res<NetSettings>,
 ) {
     // todo: maybe make this observer pattern more general, it's the same in render and net
-    let mut changed_chunks = HashSet::<IVec3>::new();
-    for (chunk_pos, chunk) in universe.chunks.iter() {
-        if let Some(version) = replicated_chunks.get(chunk_pos) {
-            if version == &chunk.version {
-                continue;
-            }
+
+    for id in lobby.remote_players.iter() {
+        if let Some(player_tr) = player_query
+            .iter()
+            .find_map(|(rem, tr)| (&rem.id == id).then_some(tr))
+        {
+            let chunk_rep = chunk_replication.players.entry(id.clone()).or_default();
+            let request =
+                get_chunks_in_sphere(player_tr.translation, settings.replication_distance as f32);
+
+            let request_versions: HashMap<IVec3, ChunkVersion> = request
+                .iter()
+                .filter_map(|chunk_pos| {
+                    universe
+                        .chunks
+                        .get(chunk_pos)
+                        .map(|c| (*chunk_pos, c.version.clone()))
+                })
+                .filter(|(pos, v)| match chunk_rep.sent.get(pos) {
+                    Some(w) => v != w,
+                    None => true,
+                })
+                .collect();
+
+            chunk_rep
+                .requested
+                .extend(request_versions.clone().into_iter());
+
+            info!(target: "net_server", "player {} chunks: requested {}, sent {}", 
+                id.name, chunk_rep.requested.len(), chunk_rep.sent.len());
         }
-        replicated_chunks.insert(*chunk_pos, chunk.version.clone());
-        changed_chunks.insert(*chunk_pos);
     }
 
-    for (_, chunks) in chunk_replication.requested_chunks.iter_mut() {
-        chunks.extend(changed_chunks.clone());
-    }
+    for (player_id, chunk_rep) in chunk_replication.players.iter_mut() {
+        let Some((client_id, _)) = lobby.connections.iter().find(|(_, v)| v == &player_id) else {
+            continue;
+        };
 
-    for (client_id, chunks) in chunk_replication.requested_chunks.iter_mut() {
         let channel_size =
             server.channel_available_memory(*client_id, ServerChannel::Universe) as i32;
         let mut available_bytes = channel_size;
 
         let mut sync = SyncUniverse::default();
-        let chunk_size = (CHUNK_VOLUME * 4 + 12) as i32;
 
-        let mut sent_chunks = HashSet::<IVec3>::new();
+        let mut sent_chunks = HashMap::<IVec3, ChunkVersion>::new();
 
-        for chunk_pos in chunks.iter() {
+        for (chunk_pos, version) in chunk_rep.requested.iter() {
             if let Some(chunk) = universe.chunks.get(chunk_pos) {
-                if available_bytes > chunk_size {
-                    available_bytes -= chunk_size;
-                    let read = chunk.get_ref();
-                    let slice = bytemuck::cast_slice(read.as_ref());
+                let read = chunk.get_ref();
+                let block_bytes = bytemuck::cast_slice(read.as_ref());
+                let block_compressed = compress_to_vec(block_bytes, 6);
+                if available_bytes > (block_compressed.len() as i32) + 12 {
+                    available_bytes -= block_compressed.len() as i32;
                     sync.chunks
-                        .push((*chunk_pos, slice.iter().cloned().collect()));
-                    sent_chunks.insert(*chunk_pos);
+                        .push((*chunk_pos, block_compressed.iter().cloned().collect()));
+                    sent_chunks.insert(*chunk_pos, version.clone());
                 }
             }
         }
 
         if !sent_chunks.is_empty() {
             let sync_message = bincode::serialize(&sync).unwrap();
-            debug!(target: "net_server", "sending dirty universe ({} bytes)", sync_message.len());
+            debug!(target: "net_server", "sending universe ({} bytes)", sync_message.len());
+            info!(target: "net_server", "sending universe ({} bytes)", sync_message.len());
             server.send_message(*client_id, ServerChannel::Universe, sync_message);
-            *chunks = chunks.difference(&sent_chunks).cloned().collect();
+
+            for (chunk_pos, _) in sent_chunks.iter() {
+                chunk_rep.requested.remove(chunk_pos);
+            }
+            chunk_rep.sent.extend(sent_chunks.clone().into_iter());
         }
     }
 }
-*/

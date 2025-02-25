@@ -321,6 +321,24 @@ pub fn debug_saveload_ui(
         });
 }
 
+pub struct WidgetLobbyDebug<'a> {
+    pub lobby: &'a Lobby,
+}
+
+impl<'a> egui::Widget for WidgetLobbyDebug<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        ui.group(|ui| {
+            for player in self.lobby.local_players.iter() {
+                ui.label(format!("{} (Local)", player.name));
+            }
+            for player in self.lobby.remote_players.iter() {
+                ui.label(format!("{} (Remote)", player.name));
+            }
+        })
+        .response
+    }
+}
+
 pub fn debug_net_ui(
     mut commands: Commands,
     mut contexts: EguiContexts,
@@ -328,7 +346,7 @@ pub fn debug_net_ui(
     mut renet_client: Option<ResMut<RenetClient>>,
     net_settings: Option<Res<NetSettings>>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
-    mut lobby: ResMut<Lobby>,
+    lobby: Res<Lobby>,
     mut local_player_id: ResMut<LocalPlayerId>,
     mut edit_name: Local<String>,
 ) {
@@ -353,14 +371,7 @@ pub fn debug_net_ui(
 
             if let Some(server) = &mut renet_server {
                 ui.label("Server up");
-
-                ui.group(|ui| {
-                    ui.label("Lobby");
-                    ui.separator();
-                    for player_id in lobby.players.iter() {
-                        ui.label(&player_id.name);
-                    }
-                });
+                ui.add(WidgetLobbyDebug { lobby: &lobby });
                 if ui.button("Close").clicked() {
                     server.disconnect_all();
                     commands.remove_resource::<RenetServer>();
@@ -375,14 +386,7 @@ pub fn debug_net_ui(
                         "disconnected"
                     }
                 ));
-
-                ui.group(|ui| {
-                    ui.label("Lobby");
-                    ui.separator();
-                    for player_id in lobby.players.iter() {
-                        ui.label(&player_id.name);
-                    }
-                });
+                ui.add(WidgetLobbyDebug { lobby: &lobby });
                 if ui.button("Disconnect").clicked() {
                     client.disconnect();
                     commands.remove_resource::<RenetClient>();
@@ -416,7 +420,7 @@ pub fn debug_net_ui(
                         .as_ref()
                         .map(|settings| settings.server_address.clone())
                         .unwrap_or(format!("127.0.0.1"));
-                    open_server(&mut commands, address, &local_player_id, &mut lobby);
+                    open_server(&mut commands, address);
                 }
             }
         });

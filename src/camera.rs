@@ -1,16 +1,17 @@
+use crate::LocalPlayer;
 use bevy::{
     input::mouse::MouseMotion,
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow},
 };
 use mcrs_physics::character::{CameraController, Character, CharacterController};
-use crate::LocalPlayer;
 
 pub struct McrsCameraPlugin;
 
 impl Plugin for McrsCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, initial_grab_cursor);
+        // Temp: don't grab initially for multiplayer tests
+        //app.add_systems(Startup, initial_grab_cursor);
         app.add_systems(Update, (camera_controller_movement, cursor_grab));
         app.add_systems(PostUpdate, lock_cursor_position);
     }

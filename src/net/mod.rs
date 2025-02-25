@@ -4,9 +4,11 @@ pub mod server;
 
 use bevy::{prelude::*, utils::HashSet};
 use bevy_renet::renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
-use mcrs_universe::CHUNK_VOLUME;
+use mcrs_universe::{chunk::ChunkVersion, CHUNK_VOLUME};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
+
+use crate::SerdePlayer;
 
 const PROTOCOL_ID: u64 = 7;
 pub const DEFAULT_NETWORK_ADDRESS: &str = "127.0.0.1";
@@ -32,6 +34,7 @@ impl From<Option<String>> for NetworkMode {
                     "client" => NetworkMode::Client,
                     "server" => NetworkMode::Server,
                     "offline" => NetworkMode::Offline,
+                    "clientserver" => NetworkMode::ClientAndServer,
                     _ => panic!("Use \"client\" for client-only mode, \"server\" for server-only mode, leave blank for standard (client+server) mode."),
                 }
             },
@@ -62,15 +65,23 @@ impl Default for NetSettings {
     }
 }
 
+#[derive(Event, Debug, Clone)]
+pub struct NetPlayerSpawned {
+    pub id: PlayerId,
+    pub data: SerdePlayer,
+}
+
 /// Marker component that identifies the replicated entities of remotely connected players
 #[derive(Debug, Component)]
 pub struct RemotePlayer {
-    pub id: ClientId,
+    pub id: PlayerId,
 }
 
 /// Marker component that identifies the local player entity
 #[derive(Debug, Component, Clone)]
-pub struct LocalPlayer;
+pub struct LocalPlayer {
+    pub id: PlayerId,
+}
 
 /// The id of the local player
 #[derive(Default, Debug, Resource, Clone)]
@@ -93,13 +104,20 @@ impl From<String> for PlayerId {
 /// List of connected players
 #[derive(Debug, Default, Resource)]
 pub struct Lobby {
-    pub players: Vec<PlayerId>,
-    pub connections: HashMap<ClientId, PlayerId>,
+    connections: HashMap<ClientId, PlayerId>,
+    pub local_players: Vec<PlayerId>,
+    pub remote_players: Vec<PlayerId>,
 }
 
 #[derive(Debug, Default, Resource)]
+pub struct PlayersChunkReplication {
+    players: HashMap<PlayerId, ChunkReplication>,
+}
+
+#[derive(Debug, Default)]
 pub struct ChunkReplication {
-    requested_chunks: HashMap<ClientId, HashSet<IVec3>>,
+    requested: HashMap<IVec3, ChunkVersion>,
+    sent: HashMap<IVec3, ChunkVersion>,
 }
 
 /// Messages sent by the server to the clients
@@ -107,6 +125,7 @@ pub struct ChunkReplication {
 pub enum ServerMessages {
     PlayerConnected { ids: Vec<PlayerId> },
     LoginRequest,
+    PlayerSpawned { id: PlayerId, data: SerdePlayer },
     PlayerDisconnected { id: PlayerId },
 }
 
@@ -238,8 +257,3 @@ struct PlayerState {
     rotation_body: f32,
     rotation_camera: f32,
 }
-
-// todo: consider using an event instead of a marker component
-// definitely use an event, the marker component isn't destroyed when quitting the level
-#[derive(Debug, Clone, Component)]
-pub struct NewPlayerSpawned;

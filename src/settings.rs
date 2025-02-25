@@ -62,6 +62,7 @@ impl From<Args> for McrsSettings {
     fn from(args: Args) -> Self {
         Self {
             view_distance_blocks: args.view_distance.unwrap_or(DEFAULT_VIEW_DISTANCE),
+            load_distance_blocks: args.load_distance.unwrap_or(DEFAULT_LOAD_DISTANCE),
             server_address: args
                 .address_server
                 .unwrap_or(DEFAULT_NETWORK_ADDRESS.to_string()),

@@ -1,5 +1,6 @@
 use bevy::{asset::LoadState, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use bevy_egui::EguiPlugin;
+use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
@@ -23,8 +24,9 @@ mod ui;
 use debug::DebugDiagnosticPlugin;
 use input::*;
 use net::*;
-use player::{spawn_player, terrain_editing};
-use plugin::{FixedNetSet, NetClientPlugin, NetServerPlugin};
+use player::*;
+use plugin::{FixedNetSet, NetPlugin};
+use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::*;
@@ -65,29 +67,46 @@ fn main() -> AppExit {
     app.init_resource::<LightSources>();
     app.init_resource::<ChunkGenerationRequest>();
     app.init_resource::<SunBeams>();
+    app.init_resource::<LobbySpawnedPlayers>();
+
+    app.add_plugins(NetPlugin);
+    app.add_systems(
+        FixedUpdate,
+        (
+            chunk_generation,
+            apply_terrain_changes,
+            apply_lighting_sources,
+        )
+            .chain()
+            .in_set(FixedMainSet::Terrain)
+            .run_if(in_state(AppState::Playing)),
+    );
 
     match settings.network_mode {
-        NetworkMode::Client => {
-            add_client(&mut app);
-            app.insert_state(AppState::default());
-        }
         NetworkMode::Server => {
-            app.add_plugins((MinimalPlugins, TransformPlugin, LogPlugin::default(), StatesPlugin));
-            add_server(&mut app);
+            app.add_plugins((
+                MinimalPlugins,
+                TransformPlugin,
+                LogPlugin::default(),
+                StatesPlugin,
+            ));
             app.insert_state(AppState::Playing);
         }
-        NetworkMode::ClientAndServer => {
+        _ => {
             add_client(&mut app);
-            add_server(&mut app);
-            app.insert_state(AppState::default());
-        }
-        NetworkMode::Offline => {
-            add_client(&mut app);
-            add_server(&mut app);
-            app.add_systems(Update, spawn_player.run_if(in_state(AppState::Playing)));
             app.insert_state(AppState::default());
         }
     }
+
+    app.add_systems(
+        Update,
+        (
+            spawn_local_players_on_level_loaded,
+            spawn_players_client,
+            spawn_players_server.run_if(resource_exists::<RenetServer>),
+        )
+            .run_if(in_state(AppState::Playing)),
+    );
 
     app.configure_sets(
         FixedUpdate,
@@ -125,7 +144,6 @@ fn add_client(app: &mut App) {
         McrsVoxelRenderPlugin,
         EguiPlugin,
         DebugDiagnosticPlugin,
-        NetClientPlugin,
         McrsCameraPlugin,
     ));
 
@@ -144,28 +162,13 @@ fn add_client(app: &mut App) {
     app.add_systems(
         Update,
         (
-            send_fake_window_resize_once,
+            send_fake_window_resize,
             hotbar_interaction.in_set(UiSet::Overlay),
             (player_input, move_local_players)
                 .chain()
                 .in_set(InputSet::Gather),
             terrain_editing.after(InputSet::Gather),
         )
-            .run_if(in_state(AppState::Playing)),
-    );
-}
-
-fn add_server(app: &mut App) {
-    app.add_plugins(NetServerPlugin);
-    app.add_systems(
-        FixedUpdate,
-        (
-            chunk_generation,
-            apply_terrain_changes,
-            apply_lighting_sources,
-        )
-            .chain()
-            .in_set(FixedMainSet::Terrain)
             .run_if(in_state(AppState::Playing)),
     );
 }

@@ -2,11 +2,11 @@ use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
     get_single_event, read_player,
     settings::McrsSettings,
-    Db, Level, LevelOwned, LevelReadyEvent,LocalPlayer, NetworkMode,
-    PlayerHand, PlayerInput, PlayerInputBuffer,
-    SerdePlayer,UniverseChange, UniverseChanges,
+    Db, LevelOwned, LevelReady, LevelReadyEvent, Lobby, LocalPlayer, LocalPlayerId,
+    NetPlayerSpawned, NetworkMode, PlayerHand, PlayerId, PlayerInput, PlayerInputBuffer,
+    RemotePlayer, SerdePlayer, ServerChannel, ServerMessages, UniverseChange, UniverseChanges,
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::{egui, EguiContexts};
 use mcrs_physics::{
     character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
@@ -19,6 +19,7 @@ use mcrs_universe::{
     universe::Universe,
     Blueprints,
 };
+use renet::RenetServer;
 use std::time::Duration;
 
 pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
@@ -77,40 +78,181 @@ pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
     }
 }
 
-pub fn spawn_player(
-    mut commands: Commands,
-    settings: Res<McrsSettings>,
-    level_ready_event: EventReader<LevelReadyEvent>,
-    db: Option<Res<Db>>,
-) {
-    if !matches!(settings.network_mode, NetworkMode::Offline) {
-        return;
-    }
+#[derive(Default, Debug, Clone, Resource)]
+pub struct LobbySpawnedPlayers {
+    pub local_players: HashMap<PlayerId, Entity>,
+    pub remote_players: HashMap<PlayerId, Entity>,
+}
 
-    let Some(db) = db.as_ref() else {
+pub fn spawn_players_client(
+    mut commands: Commands,
+    mut events: EventReader<NetPlayerSpawned>,
+    mut spawned: ResMut<LobbySpawnedPlayers>,
+    settings: Res<McrsSettings>,
+    lobby: Res<Lobby>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for NetPlayerSpawned { id, data } in events.read() {
+        if lobby.local_players.contains(id) && !spawned.local_players.contains_key(id) {
+            let entity = spawn_local_player(&mut commands, &settings, data.clone(), id.clone());
+            spawned.local_players.insert(id.clone(), entity);
+        }
+        if lobby.remote_players.contains(id) && !spawned.remote_players.contains_key(id) {
+            let entity = spawn_remote_player(
+                &mut commands,
+                data.clone(),
+                id.clone(),
+                &mut meshes,
+                &mut materials,
+            );
+            spawned.remote_players.insert(id.clone(), entity);
+        }
+    }
+}
+
+pub fn spawn_players_server(
+    mut commands: Commands,
+    mut spawned: ResMut<LobbySpawnedPlayers>,
+    settings: Res<McrsSettings>,
+    lobby: Res<Lobby>,
+    level_ready: Option<Res<LevelReady>>,
+    db: Option<Res<Db>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut server: ResMut<RenetServer>,
+) {
+    let (Some(db), Some(_)) = (db, level_ready.as_ref()) else {
         return;
     };
 
+    for id in lobby.local_players.iter() {
+        if !spawned.local_players.contains_key(id) {
+            let serde_player = get_or_spawn_player(&db, &id.name);
+            let entity = spawn_local_player(&mut commands, &settings, serde_player, id.clone());
+            spawned.local_players.insert(id.clone(), entity);
+        }
+    }
+
+    for id in lobby.remote_players.iter() {
+        if !spawned.remote_players.contains_key(id) {
+            let serde_player = get_or_spawn_player(&db, &id.name);
+            let entity = spawn_remote_player(
+                &mut commands,
+                serde_player.clone(),
+                id.clone(),
+                &mut meshes,
+                &mut materials,
+            );
+            spawned.remote_players.insert(id.clone(), entity);
+
+            // Broadcast a player spawned event to every client
+            // It is used by the clients to spawn their local player
+            let message = bincode::serialize(&ServerMessages::PlayerSpawned {
+                id: id.clone(),
+                data: serde_player,
+            })
+            .unwrap();
+            server.broadcast_message(ServerChannel::ServerMessages, message);
+        }
+    }
+
+    let mut to_remove = vec![];
+    for (id, entity) in spawned.local_players.iter() {
+        if !lobby.local_players.contains(id) {
+            commands.entity(*entity).despawn_recursive();
+            to_remove.push(id.clone());
+        }
+    }
+    for id in to_remove {
+        spawned.local_players.remove(&id);
+    }
+
+    let mut to_remove = vec![];
+    for (id, entity) in spawned.remote_players.iter() {
+        if !lobby.remote_players.contains(id) {
+            commands.entity(*entity).despawn_recursive();
+            to_remove.push(id.clone());
+        }
+    }
+    for id in to_remove {
+        spawned.remote_players.remove(&id);
+    }
+}
+
+pub fn spawn_local_players_on_level_loaded(
+    settings: Res<McrsSettings>,
+    level_ready_event: EventReader<LevelReadyEvent>,
+    local_player_id: Res<LocalPlayerId>,
+    mut commands: Commands,
+    mut spawned: ResMut<LobbySpawnedPlayers>,
+    lobby: Option<ResMut<Lobby>>,
+    db: Option<Res<Db>>,
+) {
     let Some(_) = get_single_event(level_ready_event) else {
         return;
     };
+    let Some(db) = db else {
+        return;
+    };
+    let Some(mut lobby) = lobby else {
+        return;
+    };
 
-    info!("Spawning local player");
+    match settings.network_mode {
+        NetworkMode::ClientAndServer => {
+            let Some(id) = local_player_id.id.clone() else {
+                panic!("No local player name set");
+            };
+            let serde_player = get_or_spawn_player(&db, &id.name);
+            let entity = spawn_local_player(&mut commands, &settings, serde_player, id.clone());
+            spawned.local_players.insert(id.clone(), entity);
+            lobby.local_players.push(id);
+        }
+        NetworkMode::Offline => {
+            let id = local_player_id
+                .id
+                .iter()
+                .cloned()
+                .next()
+                .unwrap_or(PlayerId {
+                    name: format!("Nameless"),
+                });
+            let serde_player = get_or_spawn_player(&db, &id.name);
+            let entity = spawn_local_player(&mut commands, &settings, serde_player, id.clone());
+            spawned.local_players.insert(id.clone(), entity);
+        }
+        _ => {}
+    }
+}
 
-    // Todo: handle player names
-    let serde_player = match db.get(|tx| read_player(tx, "Nameless")) {
+pub fn get_or_spawn_player(db: &Db, player_name: &str) -> SerdePlayer {
+    match db.get(|tx| read_player(tx, player_name)) {
         Some(p) => {
             info!("Found player in save.");
             p
         }
         None => SerdePlayer {
-            name: "Nameless".to_string(),
+            name: player_name.to_string(),
             // Todo: find spawnpoint in spawn chunks
             translation: Vec3::ZERO,
             body_rotation: Quat::IDENTITY,
             camera_rotation: Quat::IDENTITY,
         },
-    };
+    }
+}
+
+pub fn spawn_remote_player(
+    commands: &mut Commands,
+    serde_player: SerdePlayer,
+    player_id: PlayerId,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) -> Entity {
+    info!(
+        "Spawning remote player for {:?} named {}",
+        player_id, serde_player.name
+    );
 
     commands
         .spawn((
@@ -120,7 +262,57 @@ pub fn spawn_player(
                 ..default()
             },
             LevelOwned,
-            LocalPlayer,
+            RemotePlayer { id: player_id },
+            Rigidbody {
+                size: Vec3::new(0.5, 1.8, 0.5),
+            },
+            Character {
+                air_speed: 0.001,
+                ground_speed: 0.03,
+                jump_strenght: 0.2,
+                jump_cooldown: Duration::from_millis(200),
+            },
+            Velocity::default(),
+            Friction {
+                air: Vec3::splat(0.99),
+                ground: Vec3::splat(0.78),
+            },
+            PlayerHand {
+                block_id: None,
+                hotbar_index: 0,
+            },
+            Mesh3d(meshes.add(Cuboid::new(0.5, 1.8, 0.5))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
+            // spawn body
+        ))
+        .with_children(|parent| {
+            // spawn head
+            parent.spawn((
+                Transform::from_xyz(0.0, 0.5, 0.0).with_rotation(serde_player.camera_rotation),
+                Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
+                MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
+            ));
+        })
+        .id()
+}
+
+pub fn spawn_local_player(
+    commands: &mut Commands,
+    settings: &McrsSettings,
+    serde_player: SerdePlayer,
+    id: PlayerId,
+) -> Entity {
+    info!("Spawning local player named {}", serde_player.name);
+
+    commands
+        .spawn((
+            Transform {
+                translation: serde_player.translation,
+                rotation: serde_player.body_rotation,
+                ..default()
+            },
+            LevelOwned,
+            LocalPlayer { id },
             PlayerInputBuffer::default(),
             Rigidbody {
                 size: Vec3::new(0.5, 1.8, 0.5),
@@ -152,7 +344,8 @@ pub fn spawn_player(
                 Transform::from_xyz(0.0, 0.5, 0.0).with_rotation(serde_player.camera_rotation),
             ));
             spawn_camera(camera_pivot, &settings);
-        });
+        })
+        .id()
 }
 
 pub fn terrain_editing(

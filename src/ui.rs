@@ -1,9 +1,9 @@
+use crate::LocalPlayer;
 use bevy::{
     input::mouse::MouseWheel,
     prelude::*,
     window::{PrimaryWindow, WindowResized},
 };
-use crate::LocalPlayer;
 use mcrs_render::chunk_mesh::TextureHandles;
 use mcrs_universe::{
     block::{BlockFace, BlockId},
@@ -176,7 +176,7 @@ pub fn setup_hotbar(
         });
 }
 
-pub fn send_fake_window_resize_once(
+pub fn send_fake_window_resize(
     mut primary_window: Query<(Entity, &mut Window), With<PrimaryWindow>>,
     mut events: EventWriter<WindowResized>,
     mut timer: Local<Option<Timer>>,

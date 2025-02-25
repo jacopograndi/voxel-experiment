@@ -1,7 +1,6 @@
 use crate::{
-    chemistry::lighting::*, read_chunk, read_sun_beams,
-    settings::McrsSettings, write_chunk, write_sun_beams_region, Db, Level, LocalPlayer,
-    TABLE_BLOCKS, TABLE_SUN_BEAMS,
+    chemistry::lighting::*, read_chunk, read_sun_beams, settings::McrsSettings, write_chunk,
+    write_sun_beams_region, Db, Level, LocalPlayer, TABLE_BLOCKS, TABLE_SUN_BEAMS,
 };
 use bevy::{
     prelude::*,

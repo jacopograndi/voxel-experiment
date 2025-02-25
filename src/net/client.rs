@@ -1,15 +1,17 @@
 use super::{
-    connection_config, Lobby, LocalPlayerId, NetworkMode, PlayerState, RemotePlayer, ServerChannel,
-    ServerMessages, PORT, PROTOCOL_ID,
+    connection_config, Lobby, LocalPlayerId, NetPlayerSpawned, NetworkMode, PlayerId,
+    ServerChannel, ServerMessages, PORT, PROTOCOL_ID,
 };
 use crate::net::SyncUniverse;
-use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings, NewPlayerSpawned};
+use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_renet::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
     renet::{ClientId, RenetClient},
 };
+use mcrs_universe::CHUNK_VOLUME;
 use mcrs_universe::{chunk::Chunk, universe::Universe};
+use miniz_oxide::inflate::decompress_to_vec_with_limit;
 use std::{
     net::{ToSocketAddrs, UdpSocket},
     time::SystemTime,
@@ -29,6 +31,7 @@ pub fn setup_open_client(mut commands: Commands, settings: Option<Res<NetSetting
 }
 
 pub fn open_client(commands: &mut Commands, server_address: String) {
+    info!("client opening");
     let (client, transport) = new_renet_client(&server_address);
     commands.insert_resource(client);
     commands.insert_resource(transport);
@@ -65,7 +68,12 @@ pub fn client_receive_server_messages(
     mut lobby: ResMut<Lobby>,
     mut client: ResMut<RenetClient>,
     local_id: Res<LocalPlayerId>,
+    mut events: EventWriter<NetPlayerSpawned>,
 ) {
+    let Some(local_id) = local_id.id.as_ref() else {
+        panic!("client is opened without a local id");
+    };
+
     while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
         let server_message = bincode::deserialize(&message).unwrap();
 
@@ -76,26 +84,32 @@ pub fn client_receive_server_messages(
 
         match server_message {
             ServerMessages::PlayerConnected { mut ids } => {
-                lobby.players.append(&mut ids);
+                lobby.remote_players.append(&mut ids);
             }
             ServerMessages::PlayerDisconnected { id } => {
-                lobby.players.retain(|p| *p != id);
+                lobby.remote_players.retain(|p| *p != id);
             }
             ServerMessages::LoginRequest => {
-                send_login_to_server(&mut client, &local_id);
+                send_login_to_server(&mut client, local_id);
+            }
+            ServerMessages::PlayerSpawned { id, data } => {
+                if local_id == &id {
+                    lobby.local_players.push(id.clone());
+                } else {
+                    lobby.remote_players.push(id.clone());
+                }
+                events.send(NetPlayerSpawned { id, data });
             }
         }
     }
 }
 
-fn send_login_to_server(client: &mut RenetClient, local_id: &LocalPlayerId) {
-    if let Some(ref local_id) = local_id.id {
-        let message = bincode::serialize(&ClientMessages::Login {
-            id: local_id.clone(),
-        })
-        .unwrap();
-        client.send_message(ClientChannel::ClientMessages, message);
-    }
+fn send_login_to_server(client: &mut RenetClient, local_id: &PlayerId) {
+    let message = bincode::serialize(&ClientMessages::Login {
+        id: local_id.clone(),
+    })
+    .unwrap();
+    client.send_message(ClientChannel::ClientMessages, message);
 }
 
 /*
@@ -169,27 +183,33 @@ pub fn client_sync_players(
         }
     }
 }
+*/
 
 pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
     while let Some(message) = client.receive_message(ServerChannel::Universe) {
         let server_message: SyncUniverse = bincode::deserialize(&message).unwrap();
         debug!(target: "net_client", "{:?}", server_message.chunks.len());
+        info!(target: "net_client", "{:?}", server_message.chunks.len());
         for (pos, chunk_bytes) in server_message.chunks.iter() {
+            let block_decompressed =
+                decompress_to_vec_with_limit(chunk_bytes, CHUNK_VOLUME * 4 + 12)
+                    .expect("failed to decompress chunk");
             if let Some(chunk) = universe.chunks.get_mut(pos) {
+                {
+                    let mut write = chunk.get_mut();
+                    let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
+                    bytes.copy_from_slice(&block_decompressed);
+                }
                 chunk.version.update();
-                let mut write = chunk.get_mut();
-                let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
-                bytes.copy_from_slice(chunk_bytes.as_slice());
             } else {
                 let chunk = Chunk::empty();
                 {
                     let mut write = chunk.get_mut();
                     let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut (*write));
-                    bytes.copy_from_slice(chunk_bytes.as_slice());
+                    bytes.copy_from_slice(&block_decompressed);
                 }
                 universe.chunks.insert(*pos, chunk);
             }
         }
     }
 }
-*/

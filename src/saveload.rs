@@ -281,9 +281,6 @@ pub fn save_level(
     })
     .expect("db write failed");
 
-    // Todo: tried this for large size mitigation, but it seems it doesn't work
-    //db.db.compact().expect("db compaction failed");
-
     info!("save successful");
 }
 
