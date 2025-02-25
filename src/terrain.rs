@@ -1,12 +1,7 @@
 use crate::{
-<<<<<<< HEAD
-    chemistry::lighting::*, read_chunk, read_sun_beams, settings::McrsSettings, write_chunk,
-    write_sun_beams_region, Db, Level, TABLE_BLOCKS, TABLE_SUN_BEAMS,
-=======
-    chemistry::lighting::*, get_chunk_from_save, get_sun_beams_from_save, save_chunk,
-    save_sun_beams_region, settings::McrsSettings, Level,
-LocalPlayer,
->>>>>>> dfbfcda8b602db650373ef544074f7da232637fa
+    chemistry::lighting::*, chemistry::lighting::*, read_chunk, read_sun_beams,
+    settings::McrsSettings, write_chunk, write_sun_beams_region, Db, Level, LocalPlayer,
+    TABLE_BLOCKS, TABLE_SUN_BEAMS,
 };
 use bevy::{
     prelude::*,
