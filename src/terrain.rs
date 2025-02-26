@@ -341,13 +341,10 @@ impl ChunkGenerationRequest {
         &'a mut self,
         pass: &'a GenerationPass,
     ) -> impl Iterator<Item = (&'a IVec3, &'a mut ChunkGenerationState)> {
-        let mut vec: Vec<(&IVec3, &mut ChunkGenerationState)> = self
+        self
             .requested
             .iter_mut()
             .filter(|(_, state)| state.pass == *pass)
-            .collect();
-        vec.sort_by(|a, b| a.1.priority.cmp(&b.1.priority));
-        vec.into_iter()
     }
 }
 
