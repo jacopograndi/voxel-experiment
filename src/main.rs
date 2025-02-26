@@ -103,7 +103,9 @@ fn main() -> AppExit {
         (
             spawn_local_players_on_level_loaded,
             spawn_players_client,
+            apply_players_replica,
             spawn_players_server.run_if(resource_exists::<RenetServer>),
+            apply_players_state.run_if(resource_exists::<RenetServer>),
         )
             .run_if(in_state(AppState::Playing)),
     );

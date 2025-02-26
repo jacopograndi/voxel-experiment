@@ -1,6 +1,7 @@
 use super::{
     connection_config, ChunkReplication, ClientChannel, ClientMessages, Lobby, LocalPlayerId,
-    PlayerState, PlayersChunkReplication, SyncUniverse, PORT, PROTOCOL_ID,
+    Player, PlayerId, PlayerReplica, PlayerState, PlayersChunkReplication, PlayersState,
+    SyncUniverse, PORT, PROTOCOL_ID,
 };
 use crate::{NetSettings, RemotePlayer, ServerChannel, ServerMessages};
 use bevy::{
@@ -127,31 +128,7 @@ pub fn server_receive_client_messages(mut server: ResMut<RenetServer>, mut lobby
     }
 }
 
-/*
-pub fn server_sync_players(
-    mut server: ResMut<RenetServer>,
-    transforms: Query<&Transform>,
-    query: Query<(Entity, &RemotePlayer, &Children)>,
-) {
-    let mut players: HashMap<ClientId, PlayerState> = HashMap::new();
-    for (entity, player, children) in query.iter() {
-        let tr = transforms.get(entity).unwrap();
-        let camera_entity = children.iter().next().unwrap();
-        let tr_camera = transforms.get(*camera_entity).unwrap();
-        let playerstate = PlayerState {
-            position: tr.translation,
-            rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
-            rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
-        };
-        players.insert(player.id, playerstate);
-    }
-
-    let sync_message = bincode::serialize(&players).unwrap();
-    server.broadcast_message(ServerChannel::PlayerTransform, sync_message);
-}
-*/
-
-pub fn server_sync_universe(
+pub fn server_send_universe(
     mut server: ResMut<RenetServer>,
     universe: Res<Universe>,
     mut chunk_replication: ResMut<PlayersChunkReplication>,
@@ -159,8 +136,6 @@ pub fn server_sync_universe(
     player_query: Query<(&RemotePlayer, &Transform)>,
     settings: Res<NetSettings>,
 ) {
-    // todo: maybe make this observer pattern more general, it's the same in render and net
-
     for id in lobby.remote_players.iter() {
         if let Some(player_tr) = player_query
             .iter()
@@ -188,8 +163,10 @@ pub fn server_sync_universe(
                 .requested
                 .extend(request_versions.clone().into_iter());
 
-            info!(target: "net_server", "player {} chunks: requested {}, sent {}", 
+            if request_versions.len() > 0 {
+                info!(target: "net_server", "player {} chunks: requested {}, sent {}", 
                 id.name, chunk_rep.requested.len(), chunk_rep.sent.len());
+            }
         }
     }
 
@@ -222,8 +199,7 @@ pub fn server_sync_universe(
 
         if !sent_chunks.is_empty() {
             let sync_message = bincode::serialize(&sync).unwrap();
-            debug!(target: "net_server", "sending universe ({} bytes)", sync_message.len());
-            info!(target: "net_server", "sending universe ({} bytes)", sync_message.len());
+            info!(target: "net_server", "sending to {} universe ({} bytes)", player_id.name, sync_message.len());
             server.send_message(*client_id, ServerChannel::Universe, sync_message);
 
             for (chunk_pos, _) in sent_chunks.iter() {
@@ -232,4 +208,40 @@ pub fn server_sync_universe(
             chunk_rep.sent.extend(sent_chunks.clone().into_iter());
         }
     }
+}
+
+pub fn server_receive_player_state(
+    mut server: ResMut<RenetServer>,
+    mut players_state: ResMut<PlayersState>,
+) {
+    for client_id in server.clients_id() {
+        while let Some(message) = server.receive_message(client_id, ClientChannel::PlayerStates) {
+            let players: HashMap<PlayerId, PlayerState> = bincode::deserialize(&message).unwrap();
+            for (player_id, playerstate) in players.into_iter() {
+                players_state.players.insert(player_id, playerstate);
+            }
+        }
+    }
+}
+
+pub fn server_send_player_replica(
+    mut server: ResMut<RenetServer>,
+    transforms: Query<&Transform>,
+    query: Query<(Entity, &Player, &Children)>,
+) {
+    let mut players: HashMap<PlayerId, PlayerReplica> = HashMap::new();
+    for (entity, player, children) in query.iter() {
+        let tr = transforms.get(entity).unwrap();
+        let camera_entity = children.iter().next().unwrap();
+        let tr_camera = transforms.get(*camera_entity).unwrap();
+        let playerstate = PlayerReplica {
+            position: tr.translation,
+            rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
+            rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
+        };
+        players.insert(player.id.clone(), playerstate);
+    }
+
+    let sync_message = bincode::serialize(&players).unwrap();
+    server.broadcast_message(ServerChannel::PlayerReplica, sync_message);
 }

@@ -1,6 +1,7 @@
 use super::{
     connection_config, Lobby, LocalPlayerId, NetPlayerSpawned, NetworkMode, PlayerId,
-    ServerChannel, ServerMessages, PORT, PROTOCOL_ID,
+    PlayerReplica, PlayerState, PlayersReplica, RemotePlayer, ServerChannel, ServerMessages, PORT,
+    PROTOCOL_ID,
 };
 use crate::net::SyncUniverse;
 use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings};
@@ -85,6 +86,7 @@ pub fn client_receive_server_messages(
         match server_message {
             ServerMessages::PlayerConnected { mut ids } => {
                 lobby.remote_players.append(&mut ids);
+                lobby.remote_players.dedup();
             }
             ServerMessages::PlayerDisconnected { id } => {
                 lobby.remote_players.retain(|p| *p != id);
@@ -93,9 +95,9 @@ pub fn client_receive_server_messages(
                 send_login_to_server(&mut client, local_id);
             }
             ServerMessages::PlayerSpawned { id, data } => {
-                if local_id == &id {
+                if local_id == &id && !lobby.local_players.contains(&id) {
                     lobby.local_players.push(id.clone());
-                } else {
+                } else if !lobby.remote_players.contains(&id) {
                     lobby.remote_players.push(id.clone());
                 }
                 events.send(NetPlayerSpawned { id, data });
@@ -112,80 +114,7 @@ fn send_login_to_server(client: &mut RenetClient, local_id: &PlayerId) {
     client.send_message(ClientChannel::ClientMessages, message);
 }
 
-/*
-pub fn client_sync_players(
-    mut commands: Commands,
-    mut client: ResMut<RenetClient>,
-    mut lobby: ResMut<Lobby>,
-    transport: Res<NetcodeClientTransport>,
-    query: Query<(Entity, &RemotePlayer, &Children)>,
-    mut query_transform: Query<&mut Transform>,
-    settings: Res<NetSettings>,
-) {
-    while let Some(message) = client.receive_message(ServerChannel::ServerMessages) {
-        let server_message = bincode::deserialize(&message).unwrap();
-        match server_message {
-            ServerMessages::PlayerConnected { id } => {
-                let is_local_player = id == transport.client_id();
-
-                if is_local_player {
-                    debug!(target: "net_client", "Connected to the server");
-                } else {
-                    debug!(target: "net_client", "New player connected with id = {}", id);
-                }
-
-                let spawn_point = Vec3::new(0.0, 0.0, 0.0);
-                if matches!(settings.network_mode, NetworkMode::Client) {
-                    let player_entity = commands
-                        .spawn((
-                            Transform::from_translation(spawn_point),
-                            NewPlayerSpawned,
-                            RemotePlayer { id },
-                        ))
-                        .id();
-                    if is_local_player {
-                        commands.entity(player_entity).insert(LocalPlayer);
-                    }
-
-                    lobby.players.insert(id, player_entity);
-                }
-            }
-            ServerMessages::PlayerDisconnected { id } => {
-                debug!(target: "net_client", "Player {} disconnected.", id);
-                if let Some(player_entity) = lobby.players.remove(&id) {
-                    commands.entity(player_entity).despawn_recursive();
-                }
-            }
-        }
-    }
-
-    while let Some(message) = client.receive_message(ServerChannel::PlayerTransform) {
-        let players: HashMap<ClientId, PlayerState> = bincode::deserialize(&message).unwrap();
-        for (player_id, playerstate) in players.iter() {
-            let is_local_player = *player_id == transport.client_id();
-            if let Some(player_entity) = lobby.players.get(player_id) {
-                if let Ok((_, _, children)) = query.get(*player_entity) {
-                    let camera_entity = children.iter().next().unwrap(); // todo find camera
-                    let mut tr = query_transform.get_mut(*player_entity).unwrap();
-                    if !is_local_player
-                        && !matches!(settings.network_mode, NetworkMode::ClientAndServer)
-                    {
-                        tr.translation = playerstate.position;
-                        tr.rotation = Quat::from_axis_angle(Vec3::Y, playerstate.rotation_body);
-                        let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
-                        tr_camera.rotation =
-                            Quat::from_axis_angle(Vec3::X, playerstate.rotation_camera);
-                    } else if matches!(settings.network_mode, NetworkMode::Client) {
-                        tr.translation = playerstate.position;
-                    }
-                }
-            }
-        }
-    }
-}
-*/
-
-pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
+pub fn client_receive_universe(mut client: ResMut<RenetClient>, mut universe: ResMut<Universe>) {
     while let Some(message) = client.receive_message(ServerChannel::Universe) {
         let server_message: SyncUniverse = bincode::deserialize(&message).unwrap();
         debug!(target: "net_client", "{:?}", server_message.chunks.len());
@@ -210,6 +139,50 @@ pub fn client_sync_universe(mut client: ResMut<RenetClient>, mut universe: ResMu
                 }
                 universe.chunks.insert(*pos, chunk);
             }
+        }
+    }
+}
+
+pub fn client_send_player_state(
+    mut client: ResMut<RenetClient>,
+    transforms: Query<&Transform>,
+    query: Query<(Entity, &LocalPlayer, &Children)>,
+) {
+    let mut players: HashMap<PlayerId, PlayerState> = HashMap::new();
+    for (entity, player, children) in query.iter() {
+        let tr = transforms.get(entity).unwrap();
+        let camera_entity = children.iter().next().unwrap();
+        let tr_camera = transforms.get(*camera_entity).unwrap();
+        let playerstate = PlayerState {
+            position: tr.translation,
+            rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
+            rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
+        };
+        players.insert(player.id.clone(), playerstate);
+    }
+
+    let message = bincode::serialize(&players).unwrap();
+    client.send_message(ClientChannel::PlayerStates, message);
+}
+
+pub fn client_receive_player_replica(
+    mut client: ResMut<RenetClient>,
+    local_id: Res<LocalPlayerId>,
+    mut players_replica: ResMut<PlayersReplica>,
+) {
+    let Some(local_id) = local_id.id.as_ref() else {
+        panic!("client is opened without a local id");
+    };
+
+    while let Some(message) = client.receive_message(ServerChannel::PlayerReplica) {
+        let players: HashMap<PlayerId, PlayerReplica> = bincode::deserialize(&message).unwrap();
+        for (player_id, playerstate) in players.into_iter() {
+            if &player_id == local_id {
+                // ignore replicas of the local players
+                continue;
+            }
+
+            players_replica.players.insert(player_id, playerstate);
         }
     }
 }

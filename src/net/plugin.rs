@@ -1,7 +1,9 @@
 use super::{
     client::*,
-    server::{server_receive_client_messages, server_sync_universe, setup_open_server},
-    LocalPlayerId, NetPlayerSpawned, PlayersChunkReplication,
+    server::{
+        server_receive_client_messages, server_receive_player_state, server_send_player_replica, server_send_universe, setup_open_server
+    },
+    LocalPlayerId, NetPlayerSpawned, PlayersChunkReplication, PlayersReplica, PlayersState,
 };
 use crate::{server::server_update_system, settings::McrsSettings, Lobby};
 use bevy::prelude::*;
@@ -35,6 +37,8 @@ impl Plugin for NetPlugin {
         app.add_plugins((RenetServerPlugin, NetcodeServerPlugin));
 
         app.init_resource::<Lobby>();
+        app.init_resource::<PlayersReplica>();
+        app.init_resource::<PlayersState>();
         app.init_resource::<PlayersChunkReplication>();
         app.insert_resource(local_id);
 
@@ -46,16 +50,27 @@ impl Plugin for NetPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (client_receive_server_messages).in_set(FixedNetSet::Receive),
-                client_sync_universe.chain().in_set(FixedNetSet::Send),
+                (
+                    client_receive_server_messages,
+                    client_receive_player_replica,
+                    client_receive_universe,
+                )
+                    .in_set(FixedNetSet::Receive),
+                client_send_player_state.chain().in_set(FixedNetSet::Send),
             )
                 .run_if(client_connected),
         );
         app.add_systems(
             FixedUpdate,
             (
-                (server_update_system, server_receive_client_messages).in_set(FixedNetSet::Receive),
-                server_sync_universe.chain().in_set(FixedNetSet::Send),
+                (
+                    server_update_system,
+                    server_receive_client_messages,
+                    server_receive_player_state,
+                )
+                    .in_set(FixedNetSet::Receive),
+                (server_send_universe.chain(), server_send_player_replica)
+                    .in_set(FixedNetSet::Send),
             )
                 .run_if(resource_exists::<RenetServer>),
         );

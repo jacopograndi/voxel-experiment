@@ -71,7 +71,7 @@ pub struct NetPlayerSpawned {
     pub data: SerdePlayer,
 }
 
-/// Marker component that identifies the replicated entities of remotely connected players
+/// Marker component that identifies the replicated entity of a remotely connected player
 #[derive(Debug, Component)]
 pub struct RemotePlayer {
     pub id: PlayerId,
@@ -80,6 +80,12 @@ pub struct RemotePlayer {
 /// Marker component that identifies the local player entity
 #[derive(Debug, Component, Clone)]
 pub struct LocalPlayer {
+    pub id: PlayerId,
+}
+
+/// Marker component that identifies an entity of a player
+#[derive(Debug, Component)]
+pub struct Player {
     pub id: PlayerId,
 }
 
@@ -138,7 +144,6 @@ pub enum ClientMessages {
 /// Defines the different channels to which data is sent from the clients to the server
 pub enum ClientChannel {
     ClientMessages,
-    PlayerInput,
     PlayerStates,
 }
 
@@ -146,8 +151,7 @@ impl From<ClientChannel> for u8 {
     fn from(channel_id: ClientChannel) -> Self {
         match channel_id {
             ClientChannel::ClientMessages => 0,
-            ClientChannel::PlayerInput => 2,
-            ClientChannel::PlayerStates => 2,
+            ClientChannel::PlayerStates => 1,
         }
     }
 }
@@ -157,13 +161,6 @@ impl ClientChannel {
         vec![
             ChannelConfig {
                 channel_id: Self::ClientMessages.into(),
-                max_memory_usage_bytes: 10 * 1024 * 1024,
-                send_type: SendType::ReliableOrdered {
-                    resend_time: Duration::from_millis(200),
-                },
-            },
-            ChannelConfig {
-                channel_id: Self::PlayerInput.into(),
                 max_memory_usage_bytes: 10 * 1024 * 1024,
                 send_type: SendType::ReliableOrdered {
                     resend_time: Duration::from_millis(200),
@@ -182,8 +179,7 @@ impl ClientChannel {
 pub enum ServerChannel {
     ServerMessages,
     ClientMessages,
-    PlayerTransform,
-    PlayerStates,
+    PlayerReplica,
     Universe,
 }
 
@@ -192,9 +188,8 @@ impl From<ServerChannel> for u8 {
         match channel_id {
             ServerChannel::ServerMessages => 0,
             ServerChannel::ClientMessages => 1,
-            ServerChannel::PlayerTransform => 2,
-            ServerChannel::PlayerStates => 3,
-            ServerChannel::Universe => 4,
+            ServerChannel::PlayerReplica => 2,
+            ServerChannel::Universe => 3,
         }
     }
 }
@@ -217,12 +212,7 @@ impl ServerChannel {
                 },
             },
             ChannelConfig {
-                channel_id: Self::PlayerTransform.into(),
-                max_memory_usage_bytes: 10 * 1024 * 1024,
-                send_type: SendType::Unreliable,
-            },
-            ChannelConfig {
-                channel_id: Self::PlayerStates.into(),
+                channel_id: Self::PlayerReplica.into(),
                 max_memory_usage_bytes: 10 * 1024 * 1024,
                 send_type: SendType::Unreliable,
             },
@@ -252,8 +242,27 @@ struct SyncUniverse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PlayerState {
-    position: Vec3,
-    rotation_body: f32,
-    rotation_camera: f32,
+pub struct PlayerReplica {
+    pub position: Vec3,
+    pub rotation_body: f32,
+    pub rotation_camera: f32,
+    // Todo: hand
+}
+
+#[derive(Debug, Clone, Resource, Default)]
+pub struct PlayersReplica {
+    pub players: HashMap<PlayerId, PlayerReplica>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerState {
+    pub position: Vec3,
+    pub rotation_body: f32,
+    pub rotation_camera: f32,
+    // also includes the broken blocks, inventory and hand content
+}
+
+#[derive(Debug, Clone, Resource, Default)]
+pub struct PlayersState {
+    pub players: HashMap<PlayerId, PlayerState>,
 }

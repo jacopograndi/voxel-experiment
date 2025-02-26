@@ -1,10 +1,11 @@
 use crate::{
     debug::{DebugOptions, WidgetBlockDebug},
-    get_single_event, read_player,
+    get_single_event, player, read_player,
     settings::McrsSettings,
     Db, LevelOwned, LevelReady, LevelReadyEvent, Lobby, LocalPlayer, LocalPlayerId,
-    NetPlayerSpawned, NetworkMode, PlayerHand, PlayerId, PlayerInput, PlayerInputBuffer,
-    RemotePlayer, SerdePlayer, ServerChannel, ServerMessages, UniverseChange, UniverseChanges,
+    NetPlayerSpawned, NetworkMode, Player, PlayerHand, PlayerId, PlayerInput, PlayerInputBuffer,
+    PlayersReplica, PlayersState, RemotePlayer, SerdePlayer, ServerChannel, ServerMessages,
+    UniverseChange, UniverseChanges,
 };
 use bevy::{prelude::*, utils::HashMap};
 use bevy_egui::{egui, EguiContexts};
@@ -82,6 +83,94 @@ pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
 pub struct LobbySpawnedPlayers {
     pub local_players: HashMap<PlayerId, Entity>,
     pub remote_players: HashMap<PlayerId, Entity>,
+}
+
+pub fn apply_players_replica(
+    mut commands: Commands,
+    query: Query<(Entity, &RemotePlayer, &Children)>,
+    mut query_transform: Query<&mut Transform>,
+    players_replica: Res<PlayersReplica>,
+    mut spawned: ResMut<LobbySpawnedPlayers>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (player_id, replica) in players_replica.players.iter() {
+        let rotation_body = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
+        let rotation_head = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+        if let Some(player_entity) = spawned.remote_players.get(player_id) {
+            if let Ok((_, _, children)) = query.get(*player_entity) {
+                // update existing replica
+                let camera_entity = children.iter().next().unwrap();
+
+                let mut tr = query_transform.get_mut(*player_entity).unwrap();
+                tr.translation = replica.position;
+                tr.rotation = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
+
+                let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
+                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+            }
+        } else {
+            // spawn a new remote player replica
+            let serde_player = SerdePlayer {
+                name: player_id.name.clone(),
+                translation: replica.position,
+                body_rotation: rotation_body,
+                camera_rotation: rotation_head,
+            };
+            let entity = spawn_remote_player(
+                &mut commands,
+                serde_player,
+                player_id.clone(),
+                &mut meshes,
+                &mut materials,
+            );
+            spawned.remote_players.insert(player_id.clone(), entity);
+        }
+    }
+}
+
+pub fn apply_players_state(
+    mut commands: Commands,
+    query: Query<(Entity, &RemotePlayer, &Children)>,
+    mut query_transform: Query<&mut Transform>,
+    players_state: Res<PlayersState>,
+    mut spawned: ResMut<LobbySpawnedPlayers>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (player_id, replica) in players_state.players.iter() {
+        let rotation_body = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
+        let rotation_head = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+        if let Some(player_entity) = spawned.remote_players.get(player_id) {
+            if let Ok((_, _, children)) = query.get(*player_entity) {
+                // update existing replica
+                let camera_entity = children.iter().next().unwrap();
+
+                let mut tr = query_transform.get_mut(*player_entity).unwrap();
+                tr.translation = replica.position;
+                tr.rotation = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
+
+                let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
+                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+            } else {
+                // spawn a new remote player replica
+                let serde_player = SerdePlayer {
+                    name: player_id.name.clone(),
+                    translation: replica.position,
+                    body_rotation: rotation_body,
+                    camera_rotation: rotation_head,
+                };
+                let entity = spawn_remote_player(
+                    &mut commands,
+                    serde_player,
+                    player_id.clone(),
+                    &mut meshes,
+                    &mut materials,
+                );
+                spawned.remote_players.insert(player_id.clone(), entity);
+            }
+        }
+    }
 }
 
 pub fn spawn_players_client(
@@ -245,13 +334,13 @@ pub fn get_or_spawn_player(db: &Db, player_name: &str) -> SerdePlayer {
 pub fn spawn_remote_player(
     commands: &mut Commands,
     serde_player: SerdePlayer,
-    player_id: PlayerId,
+    id: PlayerId,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) -> Entity {
     info!(
         "Spawning remote player for {:?} named {}",
-        player_id, serde_player.name
+        id, serde_player.name
     );
 
     commands
@@ -262,7 +351,8 @@ pub fn spawn_remote_player(
                 ..default()
             },
             LevelOwned,
-            RemotePlayer { id: player_id },
+            RemotePlayer { id: id.clone() },
+            Player { id: id.clone() },
             Rigidbody {
                 size: Vec3::new(0.5, 1.8, 0.5),
             },
@@ -283,10 +373,8 @@ pub fn spawn_remote_player(
             },
             Mesh3d(meshes.add(Cuboid::new(0.5, 1.8, 0.5))),
             MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
-            // spawn body
         ))
         .with_children(|parent| {
-            // spawn head
             parent.spawn((
                 Transform::from_xyz(0.0, 0.5, 0.0).with_rotation(serde_player.camera_rotation),
                 Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
@@ -312,7 +400,8 @@ pub fn spawn_local_player(
                 ..default()
             },
             LevelOwned,
-            LocalPlayer { id },
+            LocalPlayer { id: id.clone() },
+            Player { id: id.clone() },
             PlayerInputBuffer::default(),
             Rigidbody {
                 size: Vec3::new(0.5, 1.8, 0.5),
