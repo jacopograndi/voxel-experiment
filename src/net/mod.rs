@@ -8,7 +8,7 @@ use mcrs_universe::{chunk::ChunkVersion, CHUNK_VOLUME};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
 
-use crate::SerdePlayer;
+use crate::{SerdePlayer, UniverseChange};
 
 const PROTOCOL_ID: u64 = 7;
 pub const DEFAULT_NETWORK_ADDRESS: &str = "127.0.0.1";
@@ -259,7 +259,8 @@ pub struct PlayerState {
     pub position: Vec3,
     pub rotation_body: f32,
     pub rotation_camera: f32,
-    // also includes the broken blocks, inventory and hand content
+    pub universe_changes: Vec<UniverseChange>,
+    // Todo: also includes inventory and hand content
 }
 
 #[derive(Debug, Clone, Resource, Default)]

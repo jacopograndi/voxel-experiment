@@ -64,6 +64,7 @@ fn main() -> AppExit {
 
     app.add_plugins((McrsUniversePlugin, McrsPhysicsPlugin, SaveLoadPlugin));
     app.init_resource::<UniverseChanges>();
+    app.init_resource::<PlayerUniverseChanges>();
     app.init_resource::<LightSources>();
     app.init_resource::<ChunkGenerationRequest>();
     app.init_resource::<SunBeams>();

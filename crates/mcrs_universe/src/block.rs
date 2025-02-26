@@ -9,7 +9,7 @@ use crate::{is_default, HasNameId, MAX_LIGHT};
 
 /// 1 cubic meter ingame
 #[repr(C)]
-#[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Pod, Zeroable, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Block {
     pub id: BlockId,
     pub properties: FlagBank,

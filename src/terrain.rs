@@ -14,6 +14,7 @@ use mcrs_universe::{
     Blueprints, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME, MAX_LIGHT,
 };
 use noise::{HybridMulti, MultiFractal, NoiseFn, Seedable};
+use serde::{Deserialize, Serialize};
 
 // Todo: refactor this big file into lighting, generation and modification modules
 
@@ -22,7 +23,7 @@ const BLOCK_GENERATION_LOW_THRESHOLD: usize = 1000;
 const MAX_BLOCK_GENERATION_PER_FRAME: usize = 20000;
 const MAX_SUN_BEAM_EXTENSION: i32 = 100000;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UniverseChange {
     Add { pos: IVec3, block: Block },
     Remove { pos: IVec3 },
@@ -341,8 +342,7 @@ impl ChunkGenerationRequest {
         &'a mut self,
         pass: &'a GenerationPass,
     ) -> impl Iterator<Item = (&'a IVec3, &'a mut ChunkGenerationState)> {
-        self
-            .requested
+        self.requested
             .iter_mut()
             .filter(|(_, state)| state.pass == *pass)
     }

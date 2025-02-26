@@ -4,7 +4,7 @@ use super::{
     PROTOCOL_ID,
 };
 use crate::net::SyncUniverse;
-use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings};
+use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings, PlayerUniverseChanges};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_renet::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
@@ -147,17 +147,24 @@ pub fn client_send_player_state(
     mut client: ResMut<RenetClient>,
     transforms: Query<&Transform>,
     query: Query<(Entity, &LocalPlayer, &Children)>,
+    mut player_changes: ResMut<PlayerUniverseChanges>,
 ) {
     let mut players: HashMap<PlayerId, PlayerState> = HashMap::new();
     for (entity, player, children) in query.iter() {
         let tr = transforms.get(entity).unwrap();
         let camera_entity = children.iter().next().unwrap();
         let tr_camera = transforms.get(*camera_entity).unwrap();
+
+        let mut universe_changes = vec![];
+        universe_changes.append(&mut player_changes.queue);
+
         let playerstate = PlayerState {
             position: tr.translation,
             rotation_camera: tr_camera.rotation.to_euler(EulerRot::YXZ).1,
             rotation_body: tr.rotation.to_euler(EulerRot::YXZ).0,
+            universe_changes,
         };
+
         players.insert(player.id.clone(), playerstate);
     }
 

@@ -133,30 +133,33 @@ pub fn apply_players_state(
     mut commands: Commands,
     query: Query<(Entity, &RemotePlayer, &Children)>,
     mut query_transform: Query<&mut Transform>,
-    players_state: Res<PlayersState>,
+    mut players_state: ResMut<PlayersState>,
     mut spawned: ResMut<LobbySpawnedPlayers>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut universe_changes: ResMut<UniverseChanges>,
 ) {
-    for (player_id, replica) in players_state.players.iter() {
-        let rotation_body = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
-        let rotation_head = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+    for (player_id, state) in players_state.players.iter_mut() {
+        universe_changes.queue.append(&mut state.universe_changes);
+
+        let rotation_body = Quat::from_axis_angle(Vec3::Y, state.rotation_body);
+        let rotation_head = Quat::from_axis_angle(Vec3::X, state.rotation_camera);
         if let Some(player_entity) = spawned.remote_players.get(player_id) {
             if let Ok((_, _, children)) = query.get(*player_entity) {
                 // update existing replica
                 let camera_entity = children.iter().next().unwrap();
 
                 let mut tr = query_transform.get_mut(*player_entity).unwrap();
-                tr.translation = replica.position;
-                tr.rotation = Quat::from_axis_angle(Vec3::Y, replica.rotation_body);
+                tr.translation = state.position;
+                tr.rotation = Quat::from_axis_angle(Vec3::Y, state.rotation_body);
 
                 let mut tr_camera = query_transform.get_mut(*camera_entity).unwrap();
-                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, replica.rotation_camera);
+                tr_camera.rotation = Quat::from_axis_angle(Vec3::X, state.rotation_camera);
             } else {
                 // spawn a new remote player replica
                 let serde_player = SerdePlayer {
                     name: player_id.name.clone(),
-                    translation: replica.position,
+                    translation: state.position,
                     body_rotation: rotation_body,
                     camera_rotation: rotation_head,
                 };
@@ -437,17 +440,20 @@ pub fn spawn_local_player(
         .id()
 }
 
+#[derive(Resource, Default, Clone, Debug)]
+pub struct PlayerUniverseChanges {
+    pub queue: Vec<UniverseChange>,
+}
+
 pub fn terrain_editing(
     camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
     mut player_query: Query<(&mut PlayerInputBuffer, &PlayerHand, &Transform, &Rigidbody)>,
     universe: Res<Universe>,
     bp: Res<Blueprints>,
-    mut gizmos: Gizmos,
-    mut contexts: EguiContexts,
-    mut hide_red_cube: Local<bool>,
-    mut changes: ResMut<UniverseChanges>,
-    debug_options: Res<DebugOptions>,
+    mut universe_changes: ResMut<UniverseChanges>,
+    mut player_changes: ResMut<PlayerUniverseChanges>,
 ) {
+    let mut changes = vec![];
     for (_cam, tr, parent) in camera_query.iter() {
         let Ok((mut input, hand, tr_player, rigidbody)) = player_query.get_mut(parent.get()) else {
             continue;
@@ -473,7 +479,7 @@ pub fn terrain_editing(
                                 rigidbody.size,
                                 block_pos,
                             ) {
-                                changes.queue.push(UniverseChange::Add {
+                                changes.push(UniverseChange::Add {
                                     pos: hit.grid_pos + hit.normal(),
                                     block: Block::new(bp.blocks.get(&block_id)),
                                 });
@@ -481,9 +487,7 @@ pub fn terrain_editing(
                         }
                     }
                     PlayerInput::Mining(true) => {
-                        changes
-                            .queue
-                            .push(UniverseChange::Remove { pos: hit.grid_pos });
+                        changes.push(UniverseChange::Remove { pos: hit.grid_pos });
                     }
                     _ => {}
                 };
@@ -491,62 +495,8 @@ pub fn terrain_editing(
         }
 
         input.buffer.clear();
-
-        if !debug_options.active {
-            return;
-        }
-
-        egui::Window::new("Debug Player Raycast Hit")
-            .anchor(egui::Align2::LEFT_CENTER, egui::Vec2::new(5.0, 0.0))
-            .show(contexts.ctx_mut(), |ui| {
-                if let Some(hit) = &hit_option {
-                    ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
-                    if !*hide_red_cube {
-                        ui.add(WidgetBlockDebug::new(
-                            hit.grid_pos + hit.normal(),
-                            &universe,
-                            &bp,
-                        ));
-                    }
-                }
-                ui.checkbox(&mut hide_red_cube, "Hide the facing cube in red");
-            });
-
-        if let Some(hit) = &hit_option {
-            let intersection = hit.final_position();
-
-            gizmos.cuboid(
-                Transform::from_translation(intersection).with_scale(Vec3::splat(0.01)),
-                Color::BLACK,
-            );
-
-            let center_pos = hit.grid_pos.as_vec3() + Vec3::splat(0.5);
-            gizmos.cuboid(
-                Transform::from_translation(center_pos).with_scale(Vec3::splat(1.001)),
-                Color::BLACK,
-            );
-
-            if !*hide_red_cube {
-                let block_pos = hit.grid_pos + hit.normal();
-                if !intersect_aabb_block(tr_player.translation, rigidbody.size, block_pos) {
-                    gizmos.cuboid(
-                        Transform::from_translation(center_pos + hit.normal().as_vec3())
-                            .with_scale(Vec3::splat(1.001)),
-                        Color::srgb(1.0, 0.0, 0.0),
-                    );
-                } else {
-                    gizmos.cuboid(
-                        Transform::from_translation(center_pos + hit.normal().as_vec3())
-                            .with_scale(Vec3::splat(1.001)),
-                        Color::srgb(0.5, 0.0, 0.0),
-                    );
-                }
-                gizmos.arrow(
-                    intersection,
-                    intersection + hit.normal().as_vec3() * 0.5,
-                    Color::srgb(1.0, 0.0, 0.0),
-                );
-            }
-        }
     }
+
+    universe_changes.queue.extend(changes.iter().cloned());
+    player_changes.queue.extend(changes.iter().cloned());
 }

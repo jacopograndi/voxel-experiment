@@ -12,6 +12,8 @@ use bevy_egui::{egui, EguiContexts};
 use bevy_renet::netcode::{NetcodeClientTransport, NetcodeServerTransport};
 use mcrs_physics::{
     character::{CameraController, CharacterController, Rigidbody, Velocity},
+    intersect::intersect_aabb_block,
+    raycast::{cast_ray, RayFinite},
     TickStep,
 };
 use mcrs_universe::{universe::Universe, Blueprints, CHUNK_SIDE};
@@ -50,6 +52,7 @@ impl Plugin for DebugDiagnosticPlugin {
                     debug_camera_toggle,
                     debug_camera_movement,
                     debug_chunks,
+                    debug_terrain_editing,
                 )
                     .run_if(debug_active),
             ),
@@ -686,5 +689,83 @@ pub fn debug_chunks(
             Transform::from_translation(center).with_scale(scale),
             Color::srgb(0.0, 0.5, 0.0),
         );
+    }
+}
+
+pub fn debug_terrain_editing(
+    camera_query: Query<(&CameraController, &GlobalTransform, &Parent)>,
+    mut player_query: Query<(&Transform, &Rigidbody)>,
+    universe: Res<Universe>,
+    bp: Res<Blueprints>,
+    mut gizmos: Gizmos,
+    mut contexts: EguiContexts,
+    mut hide_red_cube: Local<bool>,
+) {
+    for (_cam, tr, parent) in camera_query.iter() {
+        let Ok((tr_player, rigidbody)) = player_query.get_mut(parent.get()) else {
+            continue;
+        };
+
+        let hit_option = cast_ray(
+            RayFinite {
+                position: tr.translation(),
+                direction: tr.forward().as_vec3(),
+                reach: 4.5,
+            },
+            &universe,
+        );
+
+        egui::Window::new("Debug Player Raycast Hit")
+            .anchor(egui::Align2::LEFT_CENTER, egui::Vec2::new(5.0, 0.0))
+            .show(contexts.ctx_mut(), |ui| {
+                if let Some(hit) = &hit_option {
+                    ui.add(WidgetBlockDebug::new(hit.grid_pos, &universe, &bp));
+                    if !*hide_red_cube {
+                        ui.add(WidgetBlockDebug::new(
+                            hit.grid_pos + hit.normal(),
+                            &universe,
+                            &bp,
+                        ));
+                    }
+                }
+                ui.checkbox(&mut hide_red_cube, "Hide the facing cube in red");
+            });
+
+        if let Some(hit) = &hit_option {
+            let intersection = hit.final_position();
+
+            gizmos.cuboid(
+                Transform::from_translation(intersection).with_scale(Vec3::splat(0.01)),
+                Color::BLACK,
+            );
+
+            let center_pos = hit.grid_pos.as_vec3() + Vec3::splat(0.5);
+            gizmos.cuboid(
+                Transform::from_translation(center_pos).with_scale(Vec3::splat(1.001)),
+                Color::BLACK,
+            );
+
+            if !*hide_red_cube {
+                let block_pos = hit.grid_pos + hit.normal();
+                if !intersect_aabb_block(tr_player.translation, rigidbody.size, block_pos) {
+                    gizmos.cuboid(
+                        Transform::from_translation(center_pos + hit.normal().as_vec3())
+                            .with_scale(Vec3::splat(1.001)),
+                        Color::srgb(1.0, 0.0, 0.0),
+                    );
+                } else {
+                    gizmos.cuboid(
+                        Transform::from_translation(center_pos + hit.normal().as_vec3())
+                            .with_scale(Vec3::splat(1.001)),
+                        Color::srgb(0.5, 0.0, 0.0),
+                    );
+                }
+                gizmos.arrow(
+                    intersection,
+                    intersection + hit.normal().as_vec3() * 0.5,
+                    Color::srgb(1.0, 0.0, 0.0),
+                );
+            }
+        }
     }
 }
