@@ -169,7 +169,7 @@ impl ClientChannel {
             ChannelConfig {
                 channel_id: Self::PlayerStates.into(),
                 max_memory_usage_bytes: 10 * 1024 * 1024,
-                send_type: SendType::Unreliable,
+                send_type: SendType::ReliableOrdered { resend_time: Duration::from_millis(200) },
             },
         ]
     }

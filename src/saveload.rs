@@ -33,8 +33,7 @@ impl Plugin for SaveLoadPlugin {
                 (open_level, save_level, close_level, is_level_ready)
                     .chain()
                     .in_set(FixedMainSet::SaveLoad),
-            )
-            .add_systems(Startup, auto_open_level);
+            );
     }
 }
 
@@ -96,12 +95,6 @@ pub struct SaveLevelEvent;
 
 #[derive(Event, Debug, Clone)]
 pub struct LevelReadyEvent;
-
-pub fn auto_open_level(mut event_writer: EventWriter<OpenLevelEvent>, settings: Res<McrsSettings>) {
-    event_writer.send(OpenLevelEvent {
-        level_name: settings.open_level_name.clone(),
-    });
-}
 
 pub fn open_level(
     event_reader: EventReader<OpenLevelEvent>,

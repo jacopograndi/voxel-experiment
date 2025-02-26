@@ -130,6 +130,8 @@ fn main() -> AppExit {
             .run_if(in_state(AppState::Playing)),
     );
 
+    app.add_systems(Startup, auto_open_level);
+
     app.run()
 }
 
@@ -194,5 +196,16 @@ pub fn load_texture_check_finished(
             panic!();
         }
         _ => {}
+    }
+}
+
+pub fn auto_open_level(mut event_writer: EventWriter<OpenLevelEvent>, settings: Res<McrsSettings>) {
+    match settings.network_mode {
+        NetworkMode::Client => {}
+        _ => {
+            event_writer.send(OpenLevelEvent {
+                level_name: settings.open_level_name.clone(),
+            });
+        }
     }
 }

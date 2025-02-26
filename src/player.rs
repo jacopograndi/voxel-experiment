@@ -201,6 +201,9 @@ pub fn spawn_players_client(
             spawned.remote_players.insert(id.clone(), entity);
         }
     }
+
+    // Todo: despawn far away players
+    // Todo: despawn disconnected players
 }
 
 pub fn spawn_players_server(
@@ -213,6 +216,8 @@ pub fn spawn_players_server(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut server: ResMut<RenetServer>,
+    mut players_state: ResMut<PlayersState>,
+    mut players_replica: ResMut<PlayersReplica>,
 ) {
     let (Some(db), Some(_)) = (db, level_ready.as_ref()) else {
         return;
@@ -269,6 +274,8 @@ pub fn spawn_players_server(
     }
     for id in to_remove {
         spawned.remote_players.remove(&id);
+        players_state.players.remove(&id);
+        players_replica.players.remove(&id);
     }
 }
 
