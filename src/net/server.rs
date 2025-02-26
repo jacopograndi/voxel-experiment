@@ -70,6 +70,7 @@ pub fn server_update_system(
     mut server_events: EventReader<ServerEvent>,
     mut lobby: ResMut<Lobby>,
     mut server: ResMut<RenetServer>,
+    mut players_chunk_replication: ResMut<PlayersChunkReplication>,
 ) {
     for event in server_events.read() {
         match event {
@@ -98,6 +99,7 @@ pub fn server_update_system(
                 );
 
                 if let Some(player_id) = lobby.connections.remove(client_id) {
+                    players_chunk_replication.players.remove(&player_id);
                     lobby.remote_players.retain(|p| *p != player_id);
                     let message = bincode::serialize(&ServerMessages::PlayerDisconnected {
                         id: player_id.clone(),
