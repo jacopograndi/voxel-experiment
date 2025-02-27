@@ -1,6 +1,6 @@
 use super::{
     connection_config, Lobby, LocalPlayerId, NetPlayerSpawned, NetworkMode, PlayerId,
-    PlayerReplica, PlayerState, PlayersReplica, RemotePlayer, ServerChannel, ServerMessages, PORT,
+    PlayerReplica, PlayerState, PlayersReplica, ServerChannel, ServerMessages, PORT,
     PROTOCOL_ID,
 };
 use crate::net::SyncUniverse;
@@ -8,7 +8,7 @@ use crate::{ClientChannel, ClientMessages, LocalPlayer, NetSettings, PlayerUnive
 use bevy::{prelude::*, utils::HashMap};
 use bevy_renet::{
     netcode::{ClientAuthentication, NetcodeClientTransport},
-    renet::{ClientId, RenetClient},
+    renet::{ RenetClient},
 };
 use mcrs_universe::CHUNK_VOLUME;
 use mcrs_universe::{chunk::Chunk, universe::Universe};

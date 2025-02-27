@@ -1,12 +1,10 @@
 use crate::{
-    settings::McrsSettings,
     terrain::{get_spawn_chunks, UniverseChanges},
-    FixedMainSet, LightSources, SunBeam, SunBeams,
+    FixedMainSet, LightSources, Player, SunBeam, SunBeams,
 };
 use bevy::{prelude::*, utils::HashSet};
 use bytemuck::{Pod, Zeroable};
 use mcrs_physics::{
-    character::{CameraController, Character},
     TickStep,
 };
 use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
@@ -224,8 +222,8 @@ pub fn save_level(
     event_reader: EventReader<SaveLevelEvent>,
     level: Option<Res<Level>>,
     universe: Res<Universe>,
-    players_query: Query<&Transform, With<Character>>,
-    camera_query: Query<(&Transform, &Parent), With<CameraController>>,
+    players_query: Query<(Entity, &Player, &Children)>,
+    query_transform: Query<&Transform>,
     sun_beams: Res<SunBeams>,
     existing_db: Option<ResMut<Db>>,
 ) {
@@ -246,15 +244,13 @@ pub fn save_level(
     info!("saving to: {:?}", get_save_path());
 
     let mut serde_players = vec![];
-    for (camera_tr, parent) in camera_query.iter() {
-        let body_tr = players_query
-            .get(parent.get())
-            .expect("Players should have a body");
+    for (player_entity, player, children) in players_query.iter() {
+        let player_tr = query_transform.get(player_entity).unwrap();
+        let camera_tr = query_transform.get(children[0]).unwrap();
         let player = SerdePlayer {
-            // Todo: handle player names
-            name: "Nameless".to_string(),
-            translation: body_tr.translation,
-            body_rotation: body_tr.rotation,
+            name: player.id.name.clone(),
+            translation: player_tr.translation,
+            body_rotation: player_tr.rotation,
             camera_rotation: camera_tr.rotation,
         };
         serde_players.push(player);

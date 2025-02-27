@@ -2,6 +2,10 @@
 release:
     cargo r --release
 
+# Run a release build with a large view distance
+far:
+    cargo r --release -- --view-distance 256 --load-distance 288
+
 # Run a release build with some tracing
 dev:
     RUST_BACKTRACE=1 RUST_LOG="debug" cargo r --release

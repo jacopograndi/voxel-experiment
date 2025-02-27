@@ -10,8 +10,7 @@ pub struct McrsCameraPlugin;
 
 impl Plugin for McrsCameraPlugin {
     fn build(&self, app: &mut App) {
-        // Temp: don't grab initially for multiplayer tests
-        //app.add_systems(Startup, initial_grab_cursor);
+        app.add_systems(Startup, initial_grab_cursor);
         app.add_systems(Update, (camera_controller_movement, cursor_grab));
         app.add_systems(PostUpdate, lock_cursor_position);
     }

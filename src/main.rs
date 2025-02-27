@@ -1,6 +1,5 @@
 use bevy::{asset::LoadState, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use bevy_egui::EguiPlugin;
-use bevy_renet::client_connected;
 use camera::McrsCameraPlugin;
 use clap::Parser;
 
@@ -60,6 +59,7 @@ fn main() -> AppExit {
     ));
     app.insert_resource::<NetSettings>(settings.clone().into());
     app.insert_resource::<RenderSettings>(settings.clone().into());
+    app.insert_resource(ClearColor(Color::srgb(1.0, 1.0, 1.0)));
     app.insert_resource(settings.clone());
 
     app.add_plugins((McrsUniversePlugin, McrsPhysicsPlugin, SaveLoadPlugin));

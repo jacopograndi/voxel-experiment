@@ -1,14 +1,14 @@
 use crate::{
-    debug::{DebugOptions, WidgetBlockDebug},
-    get_single_event, player, read_player,
-    settings::McrsSettings,
-    Db, LevelOwned, LevelReady, LevelReadyEvent, Lobby, LocalPlayer, LocalPlayerId,
-    NetPlayerSpawned, NetworkMode, Player, PlayerHand, PlayerId, PlayerInput, PlayerInputBuffer,
-    PlayersReplica, PlayersState, RemotePlayer, SerdePlayer, ServerChannel, ServerMessages,
-    UniverseChange, UniverseChanges,
+    get_single_event, read_player, settings::McrsSettings, Db, LevelOwned, LevelReady,
+    LevelReadyEvent, Lobby, LocalPlayer, LocalPlayerId, NetPlayerSpawned, NetworkMode, Player,
+    PlayerHand, PlayerId, PlayerInput, PlayerInputBuffer, PlayersReplica, PlayersState,
+    RemotePlayer, SerdePlayer, ServerChannel, ServerMessages, UniverseChange, UniverseChanges,
 };
-use bevy::{prelude::*, utils::HashMap};
-use bevy_egui::{egui, EguiContexts};
+use bevy::{
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
+    prelude::*,
+    utils::HashMap,
+};
 use mcrs_physics::{
     character::{CameraController, Character, CharacterController, Friction, Rigidbody, Velocity},
     intersect::intersect_aabb_block,
@@ -18,7 +18,7 @@ use mcrs_render::{camera::VoxelCameraBundle, settings::RenderMode};
 use mcrs_universe::{
     block::{Block, BlockId},
     universe::Universe,
-    Blueprints,
+    Blueprints, CHUNK_SIDE,
 };
 use renet::RenetServer;
 use std::time::Duration;
@@ -28,10 +28,30 @@ pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
         fov: 1.57,
         ..default()
     });
+
+    // Remove a chunk to the fog max distance to hide the chunk seams
+    let view_chop =
+        (settings.view_distance_blocks as i32 - CHUNK_SIDE as i32).max(CHUNK_SIDE as i32);
+    let fog = DistanceFog {
+        color: Color::srgba(1.0, 1.0, 1.0, 1.0),
+        falloff: FogFalloff::Linear {
+            start: view_chop as f32 * 0.4,
+            end: view_chop as f32,
+        },
+        ..default()
+    };
+
     match settings.render_mode {
         RenderMode::RasterizeOnly => {
             camera_pivot.with_children(|pivot| {
-                pivot.spawn((projection, Camera3d::default(), Msaa::Off));
+                pivot.spawn((
+                    projection,
+                    Msaa::Off,
+                    fog,
+                    DebandDither::Disabled,
+                    Tonemapping::None,
+                    Camera3d::default(),
+                ));
             });
         }
         RenderMode::RaytraceOnly => {
@@ -61,7 +81,10 @@ pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
                     Msaa::Off,
                 ));
                 pivot.spawn((
-                    projection,
+                    projection.clone(),
+                    fog.clone(),
+                    DebandDither::Disabled,
+                    Tonemapping::None,
                     Camera {
                         order: 1,
                         clear_color: ClearColorConfig::None,
@@ -74,6 +97,7 @@ pub fn spawn_camera(mut camera_pivot: EntityCommands, settings: &McrsSettings) {
                     },
                     Msaa::Off,
                 ));
+                pivot.spawn((projection, Msaa::Off, fog));
             });
         }
     }

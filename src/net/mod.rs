@@ -2,7 +2,7 @@ pub mod client;
 pub mod plugin;
 pub mod server;
 
-use bevy::{prelude::*, utils::HashSet};
+use bevy::{prelude::*, };
 use bevy_renet::renet::{ChannelConfig, ClientId, ConnectionConfig, SendType};
 use mcrs_universe::{chunk::ChunkVersion, CHUNK_VOLUME};
 use serde::{Deserialize, Serialize};
