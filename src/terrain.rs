@@ -1,6 +1,7 @@
 use crate::{
-    chemistry::lighting::*, read_chunk, read_sun_beams, settings::McrsSettings, write_chunk,
-    write_sun_beams_region, Db, Level, LocalPlayer, TABLE_BLOCKS, TABLE_SUN_BEAMS,
+    chemistry::lighting::*, read_chunk, read_sun_beams, settings::McrsSettings,
+    terrain_generation::sun_beams::SunBeams, write_chunk, write_sun_beams_region, Db, Level,
+    LocalPlayer, TABLE_BLOCKS, TABLE_SUN_BEAMS,
 };
 use bevy::{
     prelude::*,
@@ -49,76 +50,6 @@ pub struct LightSources {
 #[derive(Resource, Default, Clone, Debug)]
 pub struct UniverseChanges {
     pub queue: Vec<UniverseChange>,
-}
-
-#[derive(Default, Clone, Debug)]
-pub struct SunBeam {
-    pub bottom: i32,
-    pub top: i32,
-}
-
-impl SunBeam {
-    fn new(start: i32, end: i32) -> Self {
-        Self {
-            bottom: start,
-            top: end,
-        }
-    }
-
-    pub fn new_top(xz: &IVec2) -> Self {
-        let sun_height = get_sun_heightfield(*xz);
-        Self::new(sun_height, sun_height)
-    }
-
-    // Extend an existing beam with another adjacent or overlapping one.
-    pub fn extend(&mut self, new_beam: SunBeam) {
-        assert!(
-            self.top + 1 >= new_beam.bottom && new_beam.top >= self.bottom - 1,
-            "not adjacent: {:?}, {:?}",
-            self,
-            new_beam
-        );
-        self.bottom = self.bottom.min(new_beam.bottom);
-        self.top = self.top.max(new_beam.top);
-    }
-
-    /// If `at` is inside the beam, return the two parts of the beam:
-    /// ```(self.start..=at, (at+1)..=self.end)```
-    pub fn cut(&mut self, at: i32) -> Option<(SunBeam, SunBeam)> {
-        if (self.bottom..=self.top).contains(&at) {
-            let lower = SunBeam::new(self.bottom, at);
-            let higher = SunBeam::new(at + 1, self.top);
-            self.bottom = (at + 1).min(self.top);
-            Some((lower, higher))
-        } else {
-            None
-        }
-    }
-
-    pub fn contains(&self, at: &i32) -> bool {
-        (self.bottom..=self.top).contains(at)
-    }
-}
-
-#[derive(Resource, Default, Clone, Debug)]
-pub struct SunBeams {
-    pub beams: HashMap<IVec2, SunBeam>,
-}
-
-impl SunBeams {
-    pub fn get_at_mut<'a>(&'a mut self, xz: &'a IVec2) -> &'a mut SunBeam {
-        self.beams.entry(*xz).or_insert(SunBeam::new_top(xz))
-    }
-
-    pub fn extend_beam(&mut self, xz: &IVec2, new_beam: SunBeam) {
-        let sun_beam = self.get_at_mut(xz);
-        sun_beam.extend(new_beam);
-    }
-
-    pub fn cut_beam(&mut self, xz: &IVec2, at: i32) -> Option<(SunBeam, SunBeam)> {
-        let sun_beam = self.get_at_mut(xz);
-        sun_beam.cut(at)
-    }
 }
 
 pub fn apply_terrain_changes(
@@ -432,6 +363,7 @@ pub fn requested_chunks<'a>(
     requested
 }
 
+/*
 // Todo: split this function
 pub fn chunk_generation(
     mut universe: ResMut<Universe>,
@@ -851,61 +783,4 @@ pub fn chunk_generation(
     })
     .expect("db write failed");
 }
-
-pub struct GeneratorCrazyHill {
-    terrain_noise: noise::Exponent<f64, HybridMulti<noise::Perlin>, 2>,
-    sponge_noise: HybridMulti<noise::Perlin>,
-}
-
-impl GeneratorCrazyHill {
-    fn new(seed: u32) -> Self {
-        Self {
-            terrain_noise: noise::Exponent::new(
-                HybridMulti::<noise::Perlin>::default()
-                    .set_frequency(0.001)
-                    .set_octaves(4)
-                    .set_seed(seed),
-            ),
-            sponge_noise: HybridMulti::<noise::Perlin>::default()
-                .set_frequency(0.003)
-                .set_octaves(5)
-                .set_persistence(0.5)
-                .set_seed(seed),
-        }
-    }
-
-    fn gen_block(&self, pos: IVec3, bp: &Blueprints) -> Block {
-        // create an envelope of 3d noise in -192..192
-        // squish that envelope in the y direction using a 2d perlin noise
-
-        let dpos = pos.as_dvec3();
-
-        let block;
-        let caves: f64 = -128.0;
-        let sky: f64 = 128.0;
-        let mid = (sky + caves) * 0.5;
-        let amp = (sky - caves).abs() * 0.5;
-        if dpos.y > sky {
-            block = bp.blocks.get_named("Air");
-        } else if dpos.y < caves {
-            block = bp.blocks.get_named("Stone");
-        } else {
-            let flatness = self.terrain_noise.get(dpos.xz().to_array());
-            let flatness_norm = flatness * 0.5 + 0.5;
-            if dpos.y < mid - amp * flatness_norm {
-                block = bp.blocks.get_named("Stone");
-            } else if dpos.y > mid + amp * flatness_norm {
-                block = bp.blocks.get_named("Air");
-            } else {
-                let sample = self.sponge_noise.get(dpos.to_array());
-                if sample > 1.0 - flatness_norm {
-                    block = bp.blocks.get_named("Stone");
-                } else {
-                    block = bp.blocks.get_named("Air");
-                }
-            }
-        }
-
-        Block::new(block)
-    }
-}
+*/

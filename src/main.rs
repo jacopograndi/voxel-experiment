@@ -18,6 +18,7 @@ mod player;
 mod saveload;
 mod settings;
 mod terrain;
+mod terrain_generation;
 mod ui;
 
 use debug::DebugDiagnosticPlugin;
@@ -29,6 +30,7 @@ use renet::RenetServer;
 use saveload::*;
 use settings::{Args, McrsSettings};
 use terrain::*;
+use terrain_generation::plugin::TerrainGenerationPlugin;
 use ui::*;
 
 #[derive(SystemSet, Clone, Debug, Hash, PartialEq, Eq)]
@@ -67,17 +69,12 @@ fn main() -> AppExit {
     app.init_resource::<PlayerUniverseChanges>();
     app.init_resource::<LightSources>();
     app.init_resource::<ChunkGenerationRequest>();
-    app.init_resource::<SunBeams>();
     app.init_resource::<LobbySpawnedPlayers>();
 
-    app.add_plugins(NetPlugin);
+    app.add_plugins((NetPlugin, TerrainGenerationPlugin));
     app.add_systems(
         FixedUpdate,
-        (
-            chunk_generation,
-            apply_terrain_changes,
-            apply_lighting_sources,
-        )
+        (apply_terrain_changes, apply_lighting_sources)
             .chain()
             .in_set(FixedMainSet::Terrain)
             .run_if(in_state(AppState::Playing)),

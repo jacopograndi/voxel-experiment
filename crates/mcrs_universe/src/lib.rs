@@ -41,13 +41,13 @@ impl Plugin for McrsUniversePlugin {
     }
 }
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Clone)]
 pub struct Blueprints {
     pub blocks: BlueprintList<BlockId, BlockBlueprint>,
     pub ghosts: BlueprintList<GhostId, GhostBlueprint>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BlueprintList<ID, BL> {
     list: HashMap<ID, BL>,
     name2id: HashMap<String, ID>,

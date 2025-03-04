@@ -1,12 +1,11 @@
 use crate::{
     terrain::{get_spawn_chunks, UniverseChanges},
-    FixedMainSet, LightSources, Player, SunBeam, SunBeams,
+    terrain_generation::sun_beams::{SunBeam, SunBeams},
+    FixedMainSet, LightSources, Player,
 };
 use bevy::{prelude::*, utils::HashSet};
 use bytemuck::{Pod, Zeroable};
-use mcrs_physics::{
-    TickStep,
-};
+use mcrs_physics::TickStep;
 use mcrs_universe::{chunk::Chunk, universe::Universe, CHUNK_AREA, CHUNK_SIDE, CHUNK_VOLUME};
 use miniz_oxide::{deflate::compress_to_vec, inflate::decompress_to_vec_with_limit};
 use redb::{Database, Error, ReadTransaction, Table, TableDefinition, WriteTransaction};
